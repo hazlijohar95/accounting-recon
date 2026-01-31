@@ -56,3 +56,8 @@ venv/
 # Rust
 target/
 Cargo.lock
+
+# Claude Code / Agent skills
+.agent/
+.agents/
+.claude/
