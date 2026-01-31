@@ -257,12 +257,14 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
   const parentRef = useRef<HTMLDivElement>(null)
   const setShowPaywall = useSetShowPaywall()
 
-  // Guard action helper - shows paywall and returns true if blocked
+  // Guard action - placeholder for future subscription validation
+  // For now, allow all actions (no blocking)
   const guardAction = () => {
-    if (isDemo) {
-      setShowPaywall(true)
-      return true
-    }
+    // TODO: Add subscription validation later
+    // if (!hasActiveSubscription) {
+    //   setShowPaywall(true)
+    //   return true
+    // }
     return false
   }
 

@@ -82,12 +82,14 @@ export function WorkspaceView() {
     setMounted(true)
   }, [])
 
-  // Guard action for demo mode - shows paywall and returns true if blocked
+  // Guard action - placeholder for future subscription validation
+  // For now, allow all actions (no blocking)
   const guardAction = () => {
-    if (isDemo) {
-      setShowPaywall(true)
-      return true
-    }
+    // TODO: Add subscription validation later
+    // if (!hasActiveSubscription) {
+    //   setShowPaywall(true)
+    //   return true
+    // }
     return false
   }
 

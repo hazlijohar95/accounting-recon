@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   useAppStore,
   useMatchesSafe,
@@ -64,6 +65,7 @@ export function ReportsView() {
 }
 
 function ReportsViewContent() {
+  const router = useRouter()
   // Mode-aware selectors - automatically return correct data based on isDemo
   const matches = useMatchesSafe()
   const cashTransactions = useCashTransactionsSafe()
@@ -72,6 +74,23 @@ function ReportsViewContent() {
   // Actions and UI state still from store
   const { setShowPaywall, isDemo, selectedCompanyId } = useAppStore()
   const [selectedReport, setSelectedReport] = useState<ReportType>('summary')
+
+  // Empty state for Real mode with no data
+  const hasNoData = !isDemo && matches.length === 0 && cashTransactions.length === 0 && accrualTransactions.length === 0
+
+  if (hasNoData) {
+    return (
+      <BrandedEmptyState
+        variant="upload"
+        title="No reports available yet"
+        description="Upload and reconcile your bank statements and invoices to generate reports."
+        action={{
+          label: 'Upload Documents',
+          onClick: () => router.push('/upload'),
+        }}
+      />
+    )
+  }
 
   // Derived loading state from data instead of fake setTimeout
   const hasData = useMemo(() =>
