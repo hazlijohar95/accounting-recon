@@ -1,0 +1,9 @@
+date,description,amount,reference,category
+2025-01-15,Payment from ABC Company,5000.00,INV-001,Revenue
+2025-01-16,Utility Bill Payment,-250.00,UTL-JAN,Utilities
+2025-01-17,Office Supplies,-120.50,PO-2025-001,Office Expenses
+2025-01-18,Client Deposit,2500.00,DEP-0018,Revenue
+2025-01-19,Salary Payment,-3500.00,SAL-JAN,Payroll
+2025-01-20,Internet Service,-99.00,ISP-JAN,Utilities
+2025-01-21,Sales Collection,8750.00,INV-002,Revenue
+2025-01-22,Rent Payment,-2000.00,RENT-JAN,Rent

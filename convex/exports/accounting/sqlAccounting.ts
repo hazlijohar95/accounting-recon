@@ -1,0 +1,139 @@
+// SQL Accounting Export Format (Malaysian Accounting Software)
+import { formatDateAccounting, generateDocNumber } from "../utils/excel";
+import { escapeCSVField, cleanDescription, generateFileName } from "../utils/formatting";
+import type { Doc, Id } from "../../_generated/dataModel";
+
+interface ExportData {
+  session: Doc<"reconciliationSessions">;
+  company: Doc<"companies">;
+  matches: Array<{
+    _id: Id<"matchedPairs">;
+    confidence: "high" | "medium" | "low";
+    confidenceScore: number;
+    matchLayer: 1 | 2 | 3 | 4 | 5;
+    status: "pending" | "approved" | "rejected";
+    cashTransaction: Doc<"transactions"> | null;
+    accrualDocument: Doc<"accrualDocuments"> | null;
+    accrualTransaction: Doc<"transactions"> | null;
+  }>;
+  transactions: Doc<"transactions">[];
+  accrualDocuments: Doc<"accrualDocuments">[];
+  suspenseItems: Doc<"suspenseItems">[];
+}
+
+interface AccountingOptions {
+  accountCodes?: {
+    bankAccount?: string;
+    receivables?: string;
+    payables?: string;
+    revenue?: string;
+    expenses?: string;
+  };
+  includeJournalEntries?: boolean;
+}
+
+/**
+ * SQL Accounting Import Format:
+ * Date,Doc No,Account,Description,Debit,Credit,Project,Tax
+ *
+ * Example:
+ * 15/01/2025,JV001,4100,Sales Revenue,0,15000,PROJ1,SR
+ */
+export function generateSQLAccountingExport(
+  data: ExportData,
+  options: AccountingOptions
+): { content: string; fileName: string; mimeType: string } {
+  const { session, matches } = data;
+
+  // Default account codes for Malaysian Chart of Accounts
+  const accounts = {
+    bankAccount: options.accountCodes?.bankAccount || "1100",
+    receivables: options.accountCodes?.receivables || "1200",
+    payables: options.accountCodes?.payables || "2100",
+    revenue: options.accountCodes?.revenue || "4100",
+    expenses: options.accountCodes?.expenses || "5100",
+  };
+
+  // Header row
+  const headers = ["Date", "Doc No", "Account", "Description", "Debit", "Credit", "Project", "Tax"];
+  const rows: string[] = [headers.join(",")];
+
+  // Generate journal entries for approved matches
+  const approvedMatches = matches.filter(
+    (m) => m.status === "approved" && m.cashTransaction
+  );
+
+  let docIndex = 1;
+  for (const match of approvedMatches) {
+    const cash = match.cashTransaction!;
+    const docNo = generateDocNumber("JV", docIndex);
+    const date = formatDateAccounting(cash.date);
+    const description = cleanDescription(cash.description).substring(0, 60);
+    const amount = Math.abs(cash.amount);
+
+    if (cash.amount > 0) {
+      // Receipt: Debit Bank, Credit Receivables
+      rows.push(
+        [
+          date,
+          docNo,
+          accounts.bankAccount,
+          escapeCSVField(description),
+          amount.toFixed(2),
+          "0.00",
+          "",
+          "",
+        ].join(",")
+      );
+      rows.push(
+        [
+          date,
+          docNo,
+          accounts.receivables,
+          escapeCSVField(description),
+          "0.00",
+          amount.toFixed(2),
+          "",
+          "",
+        ].join(",")
+      );
+    } else {
+      // Payment: Debit Payables, Credit Bank
+      rows.push(
+        [
+          date,
+          docNo,
+          accounts.payables,
+          escapeCSVField(description),
+          amount.toFixed(2),
+          "0.00",
+          "",
+          "",
+        ].join(",")
+      );
+      rows.push(
+        [
+          date,
+          docNo,
+          accounts.bankAccount,
+          escapeCSVField(description),
+          "0.00",
+          amount.toFixed(2),
+          "",
+          "",
+        ].join(",")
+      );
+    }
+
+    docIndex++;
+  }
+
+  const content = rows.join("\n");
+  const fileName = generateFileName("SQL_Accounting_Import", "csv", session.name);
+
+  return {
+    content,
+    fileName,
+    mimeType: "text/csv",
+  };
+}

@@ -1,0 +1,8 @@
+date,description,amount,doc_number,counterparty,doc_type,due_date,tax_amount
+2025-01-10,Monthly consulting services,5000.00,INV-001,ABC Company,sales_invoice,2025-02-10,300.00
+2025-01-12,Office equipment purchase,2500.00,PI-2025-001,Office Depot,purchase_invoice,2025-02-12,150.00
+2025-01-15,Software subscription renewal,1200.00,INV-002,TechCorp Solutions,sales_invoice,2025-02-15,72.00
+2025-01-18,Marketing services,3500.00,PI-2025-002,Creative Agency,purchase_invoice,2025-02-18,210.00
+2025-01-20,Daily sales summary,850.00,POS-20250120,Walk-in Customers,pos_report,,51.00
+2025-01-22,Credit card settlement,2340.00,SET-20250122,Visa/MC,settlement,,0.00
+2025-01-25,Petty cash receipt,45.00,RC-001,Local Supplies,receipt,,0.00

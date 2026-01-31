@@ -1,0 +1,11 @@
+<svg width="180" height="48" viewBox="0 0 180 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Logo Mark -->
+  <rect x="8" y="8" width="8" height="32" fill="#fafafa"/>
+  <rect x="16" y="8" width="16" height="8" fill="#fafafa"/>
+  <rect x="32" y="8" width="8" height="12" fill="#fafafa"/>
+  <rect x="16" y="20" width="16" height="8" fill="#fafafa"/>
+  <rect x="24" y="28" width="8" height="4" fill="#fafafa"/>
+  <rect x="32" y="32" width="8" height="8" fill="#fafafa"/>
+  <!-- Text -->
+  <text x="56" y="32" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#fafafa" letter-spacing="0.05em">reconcile</text>
+</svg>

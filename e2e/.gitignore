@@ -1,0 +1,10 @@
+# Playwright auth state
+.auth/user.json
+
+# Test results
+test-results/
+playwright-report/
+
+# Screenshots and videos
+screenshots/
+videos/

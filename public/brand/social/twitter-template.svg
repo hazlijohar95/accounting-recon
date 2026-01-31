@@ -1,0 +1,24 @@
+<svg width="1200" height="600" viewBox="0 0 1200 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="600" fill="#0a0a0a"/>
+
+  <!-- Logo and text horizontal layout -->
+  <g transform="translate(400, 250)">
+    <!-- Logo Mark -->
+    <rect x="0" y="0" width="12" height="48" fill="#fafafa"/>
+    <rect x="12" y="0" width="24" height="12" fill="#fafafa"/>
+    <rect x="36" y="0" width="12" height="18" fill="#fafafa"/>
+    <rect x="12" y="18" width="24" height="12" fill="#fafafa"/>
+    <rect x="24" y="30" width="12" height="6" fill="#fafafa"/>
+    <rect x="36" y="36" width="12" height="12" fill="#fafafa"/>
+
+    <!-- Text -->
+    <text x="72" y="34" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" fill="#fafafa" letter-spacing="0.05em">reconcile</text>
+  </g>
+
+  <!-- Tagline -->
+  <text x="600" y="350" font-family="system-ui, sans-serif" font-size="16" fill="#717171" text-anchor="middle">Intelligent cash-accrual reconciliation</text>
+
+  <!-- Bottom accent -->
+  <rect x="0" y="590" width="1200" height="10" fill="#fafafa"/>
+</svg>

@@ -1,0 +1,33 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#0a0a0a"/>
+
+  <!-- Grid pattern -->
+  <defs>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <rect width="60" height="60" fill="none"/>
+      <rect x="0" y="0" width="1" height="60" fill="#1a1a1a"/>
+      <rect x="0" y="0" width="60" height="1" fill="#1a1a1a"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#grid)" opacity="0.5"/>
+
+  <!-- Logo Mark (centered) -->
+  <g transform="translate(500, 200)">
+    <rect x="8" y="8" width="16" height="64" fill="#fafafa"/>
+    <rect x="24" y="8" width="32" height="16" fill="#fafafa"/>
+    <rect x="56" y="8" width="16" height="24" fill="#fafafa"/>
+    <rect x="24" y="40" width="32" height="16" fill="#fafafa"/>
+    <rect x="40" y="56" width="16" height="8" fill="#fafafa"/>
+    <rect x="56" y="64" width="16" height="16" fill="#fafafa"/>
+  </g>
+
+  <!-- Brand name -->
+  <text x="600" y="380" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="36" fill="#fafafa" text-anchor="middle" letter-spacing="0.1em">reconcile</text>
+
+  <!-- Tagline -->
+  <text x="600" y="430" font-family="system-ui, sans-serif" font-size="18" fill="#717171" text-anchor="middle">Change the way you reconcile.</text>
+
+  <!-- Border accent -->
+  <rect x="0" y="620" width="1200" height="10" fill="#fafafa"/>
+</svg>
