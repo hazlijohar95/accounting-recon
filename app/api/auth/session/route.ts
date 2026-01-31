@@ -22,7 +22,15 @@ function verifySession(signedSession: string): SessionData | null {
   }
   try {
     const decoded = Buffer.from(signedSession, 'base64').toString('utf-8')
-    const [payload, signature] = decoded.split('.')
+
+    // Find the LAST dot (which separates JSON payload from hex signature)
+    // Cannot use split('.') because the JSON payload may contain dots (e.g., in email addresses)
+    const lastDotIndex = decoded.lastIndexOf('.')
+    if (lastDotIndex === -1) {
+      return null
+    }
+    const payload = decoded.substring(0, lastDotIndex)
+    const signature = decoded.substring(lastDotIndex + 1)
 
     if (!payload || !signature) {
       return null

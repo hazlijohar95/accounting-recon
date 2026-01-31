@@ -7,7 +7,7 @@ import {
   Transaction,
   AccrualDocument,
   MatchConfidence,
-  useAccrualDocuments,
+  useAccrualDocumentsSafe,
   useCreateManualMatch,
   useIsDemo,
 } from '@/lib/store'
@@ -43,7 +43,8 @@ const AMOUNT_TOLERANCE = 0.15
  * - Fade-in animation with reduced-motion support
  */
 export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: ManualMatchModalProps) {
-  const accrualDocuments = useAccrualDocuments()
+  // Mode-aware selector - automatically returns correct data based on isDemo
+  const accrualDocuments = useAccrualDocumentsSafe()
   const createManualMatch = useCreateManualMatch()
   const isDemo = useIsDemo()
   const modalRef = useRef<HTMLDivElement>(null)

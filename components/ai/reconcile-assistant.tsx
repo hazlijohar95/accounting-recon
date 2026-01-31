@@ -3,7 +3,15 @@
 import * as React from 'react'
 import { useChat, useCompletion, UIMessage } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useAppStore, useIsDemo, useMatches, MatchPair, Transaction } from '@/lib/store'
+import {
+  useAppStore,
+  useIsDemo,
+  useMatches,
+  useCashTransactionsSafe,
+  useAccrualDocumentsSafe,
+  MatchPair,
+  Transaction,
+} from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { X, Send, Brain, HelpCircle, Search, ChevronUp, Maximize2, Minimize2 } from 'lucide-react'
 import { ChatMessage, TypingIndicator, AnalysisMessage, MatchResult } from './chat-message'
@@ -67,7 +75,10 @@ export function ReconcileAssistant({
   const isDemo = useIsDemo()
   const storeMatches = useMatches()
   const matches = propMatches ?? storeMatches
-  const { setShowPaywall, cashTransactions, accrualDocuments } = useAppStore()
+  // Mode-aware selectors - automatically return correct data based on isDemo
+  const cashTransactions = useCashTransactionsSafe()
+  const accrualDocuments = useAccrualDocumentsSafe()
+  const { setShowPaywall } = useAppStore()
 
   const [isExpanded, setIsExpanded] = React.useState(false)
   const [isMaximized, setIsMaximized] = React.useState(false)

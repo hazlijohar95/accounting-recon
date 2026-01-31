@@ -27,7 +27,17 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAppStore, MatchPair, Transaction, MatchConfidence } from '@/lib/store'
+import {
+  useAppStore,
+  useMatchesSafe,
+  useCashTransactionsSafe,
+  useAccrualTransactionsSafe,
+  useAccrualDocumentsSafe,
+  useActiveSessionSafe,
+  MatchPair,
+  Transaction,
+  MatchConfidence,
+} from '@/lib/store'
 import { confidenceToPercent } from '@/lib/matching-utils'
 import { useDemoGuard } from '@/hooks/useDemoGuard'
 import { Check, X, AlertCircle, Play, ArrowDown, CheckCircle2, Banknote, FileText, Search, Keyboard, Filter, ChevronDown, DollarSign } from 'lucide-react'
@@ -82,17 +92,14 @@ export function ReconcileView() {
 
 function ReconcileViewContent() {
   const router = useRouter()
-  const {
-    matches,
-    cashTransactions,
-    accrualTransactions,
-    accrualDocuments,
-    approveMatch,
-    rejectMatch,
-    showCelebration,
-    setShowCelebration,
-    activeSession,
-  } = useAppStore()
+  // Mode-aware selectors - automatically return correct data based on isDemo
+  const matches = useMatchesSafe()
+  const cashTransactions = useCashTransactionsSafe()
+  const accrualTransactions = useAccrualTransactionsSafe()
+  const accrualDocuments = useAccrualDocumentsSafe()
+  const activeSession = useActiveSessionSafe()
+  // Actions still from store (they operate on current mode's data)
+  const { approveMatch, rejectMatch, showCelebration, setShowCelebration } = useAppStore()
   const { isDemo, guardAction } = useDemoGuard()
   const toast = useToast()
   const [activeTab, setActiveTab] = useState<Tab>('pending')

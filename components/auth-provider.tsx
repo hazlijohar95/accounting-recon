@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useCallback, ReactNode, useState, useEffect } from 'react'
+import { useAppStore } from '@/lib/store'
 
 
 // User type for auth state
@@ -84,6 +85,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     fetchSession()
   }, [fetchSession])
+
+  // Auto-switch to Real mode when user logs in
+  useEffect(() => {
+    if (user && !isLoading) {
+      const state = useAppStore.getState()
+      if (state.isDemo) {
+        console.log('[Auth] User authenticated, switching to Real mode')
+        state.toggleMode() // toggleMode() switches Demo→Real when isDemo is true
+      }
+    }
+  }, [user, isLoading])
 
   // Redirect to login
   const login = useCallback(() => {

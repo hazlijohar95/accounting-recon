@@ -696,7 +696,27 @@ export const useAppStore = create<AppState>()(
     {
       name: 'reconciled-sidebar',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ sidebarCollapsed: state.sidebarCollapsed }),
+      partialize: (state) => ({
+        sidebarCollapsed: state.sidebarCollapsed,
+        isDemo: state.isDemo,
+      }),
+      onRehydrateStorage: () => (state) => {
+        // After hydration, if isDemo is false, ALWAYS swap to real data.
+        // The store initializes with demo data as defaults, so we must swap
+        // regardless of what data appears to be loaded.
+        if (state && !state.isDemo) {
+          console.log('[Store] Rehydrated with isDemo=false, swapping to real data')
+          useAppStore.setState({
+            cashTransactions: state.realCashTransactions,
+            accrualTransactions: state.realAccrualTransactions,
+            accrualDocuments: [],
+            suspenseItems: [],
+            matches: state.realMatches,
+            sessions: state.realSessions,
+            activeSession: state.realActiveSession,
+          })
+        }
+      },
     }
   )
 )
@@ -843,4 +863,45 @@ export const useDemoWorkspaceData = () => useAppStore(
     rows: state.demoRows,
     guardAction: state.guardAction,
   }))
+)
+
+// =============================================================================
+// MODE-AWARE SELECTORS (auto-switch between demo/real data based on isDemo)
+// =============================================================================
+// These selectors automatically return the correct data based on the current mode.
+// Use these in views to ensure proper data isolation between Demo and Real modes.
+
+/** Returns cash transactions - demo data in Demo mode, real data in Real mode */
+export const useCashTransactionsSafe = () => useAppStore((state) =>
+  state.isDemo ? state.cashTransactions : state.realCashTransactions
+)
+
+/** Returns accrual transactions - demo data in Demo mode, real data in Real mode */
+export const useAccrualTransactionsSafe = () => useAppStore((state) =>
+  state.isDemo ? state.accrualTransactions : state.realAccrualTransactions
+)
+
+/** Returns matches - demo data in Demo mode, real data in Real mode */
+export const useMatchesSafe = () => useAppStore((state) =>
+  state.isDemo ? state.matches : state.realMatches
+)
+
+/** Returns accrual documents - demo data in Demo mode, empty in Real mode */
+export const useAccrualDocumentsSafe = () => useAppStore((state) =>
+  state.isDemo ? state.accrualDocuments : []
+)
+
+/** Returns suspense items - demo data in Demo mode, empty in Real mode */
+export const useSuspenseItemsSafe = () => useAppStore((state) =>
+  state.isDemo ? state.suspenseItems : []
+)
+
+/** Returns sessions - demo data in Demo mode, real data in Real mode */
+export const useSessionsSafe = () => useAppStore((state) =>
+  state.isDemo ? state.sessions : state.realSessions
+)
+
+/** Returns active session - demo data in Demo mode, real data in Real mode */
+export const useActiveSessionSafe = () => useAppStore((state) =>
+  state.isDemo ? state.activeSession : state.realActiveSession
 )

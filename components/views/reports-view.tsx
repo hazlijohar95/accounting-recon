@@ -1,7 +1,13 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { useAppStore } from '@/lib/store'
+import {
+  useAppStore,
+  useMatchesSafe,
+  useCashTransactionsSafe,
+  useAccrualTransactionsSafe,
+  useActiveSessionSafe,
+} from '@/lib/store'
 import { useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useRecentActivity } from '@/lib/convex-hooks'
@@ -58,7 +64,13 @@ export function ReportsView() {
 }
 
 function ReportsViewContent() {
-  const { matches, cashTransactions, accrualTransactions, activeSession, setShowPaywall, isDemo, selectedCompanyId } = useAppStore()
+  // Mode-aware selectors - automatically return correct data based on isDemo
+  const matches = useMatchesSafe()
+  const cashTransactions = useCashTransactionsSafe()
+  const accrualTransactions = useAccrualTransactionsSafe()
+  const activeSession = useActiveSessionSafe()
+  // Actions and UI state still from store
+  const { setShowPaywall, isDemo, selectedCompanyId } = useAppStore()
   const [selectedReport, setSelectedReport] = useState<ReportType>('summary')
 
   // Derived loading state from data instead of fake setTimeout

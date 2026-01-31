@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { WorkOS } from '@workos-inc/node'
 import crypto from 'crypto'
 
@@ -86,10 +85,11 @@ export async function GET(request: Request) {
       expiresAt: Date.now() + SESSION_MAX_AGE * 1000,
     }
 
-    // Set signed session cookie
+    // Set signed session cookie on the redirect response
+    // Note: Must set cookie on response object, not via cookies() when redirecting
     const signedSession = signSession(sessionData)
-    const cookieStore = await cookies()
-    cookieStore.set(SESSION_COOKIE_NAME, signedSession, {
+    const response = NextResponse.redirect(new URL('/dashboard', request.url))
+    response.cookies.set(SESSION_COOKIE_NAME, signedSession, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -97,8 +97,8 @@ export async function GET(request: Request) {
       path: '/',
     })
 
-    // Redirect to dashboard or home
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    console.log('[Auth Callback] Session cookie set for user:', sessionData.email)
+    return response
   } catch (error) {
     console.error('Callback error:', error)
     return NextResponse.redirect(new URL('/?error=auth_failed', request.url))

@@ -20,7 +20,16 @@
 
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAppStore, useIsDemo, useSelectedCompanyId } from '@/lib/store'
+import {
+  useAppStore,
+  useIsDemo,
+  useSelectedCompanyId,
+  useCashTransactionsSafe,
+  useAccrualTransactionsSafe,
+  useMatchesSafe,
+  useActiveSessionSafe,
+  useSessionsSafe,
+} from '@/lib/store'
 import {
   useMonthlyCashFlow,
   useExpenseBreakdown,
@@ -96,9 +105,15 @@ const demoTopExpenses: TopExpense[] = [
  */
 export function DashboardView() {
   const router = useRouter()
-  const { cashTransactions, accrualTransactions, matches, activeSession, sessions } = useAppStore()
   const isDemo = useIsDemo()
   const selectedCompanyId = useSelectedCompanyId()
+
+  // Mode-aware selectors - automatically return correct data based on isDemo
+  const cashTransactions = useCashTransactionsSafe()
+  const accrualTransactions = useAccrualTransactionsSafe()
+  const matches = useMatchesSafe()
+  const activeSession = useActiveSessionSafe()
+  const sessions = useSessionsSafe()
 
   // Get companyId for real data queries (skip in demo mode or when no company selected)
   const companyId = isDemo ? undefined : selectedCompanyId ?? undefined

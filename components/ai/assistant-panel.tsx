@@ -3,7 +3,13 @@
 import * as React from 'react'
 import { useChat, useCompletion, UIMessage } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useAppStore, useIsDemo, useMatches } from '@/lib/store'
+import {
+  useAppStore,
+  useIsDemo,
+  useMatches,
+  useCashTransactionsSafe,
+  useAccrualDocumentsSafe,
+} from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { X, Send, Sparkles, Maximize2, Minimize2, Command, Brain, HelpCircle, Search } from 'lucide-react'
 import { ChatMessage, TypingIndicator, AnalysisMessage, MatchResult } from './chat-message'
@@ -29,7 +35,10 @@ function getMessageText(message: UIMessage): string {
 export function AssistantPanel({ sessionId, companyName, className }: AssistantPanelProps) {
   const isDemo = useIsDemo()
   const matches = useMatches()
-  const { setShowPaywall, cashTransactions, accrualDocuments } = useAppStore()
+  // Mode-aware selectors - automatically return correct data based on isDemo
+  const cashTransactions = useCashTransactionsSafe()
+  const accrualDocuments = useAccrualDocumentsSafe()
+  const { setShowPaywall } = useAppStore()
   const [isOpen, setIsOpen] = React.useState(false)
   const [isExpanded, setIsExpanded] = React.useState(false)
   const [input, setInput] = React.useState('')

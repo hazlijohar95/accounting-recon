@@ -215,20 +215,25 @@ export function AppSidebar() {
               </NavTooltip>
             </div>
           ) : !isDemo ? (
-            // Sign in button
-            <NavTooltip label="Sign in" show={isCollapsed}>
-              <button
-                type="button"
-                onClick={() => {
-                  console.log('[AppSidebar] Sign in button clicked!')
-                  login()
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2 text-foreground hover:bg-secondary/50 transition-colors"
-              >
-                <IconSignIn size={16} className="shrink-0" />
-                <span className="text-xs font-medium sidebar-label">Sign in</span>
-              </button>
-            </NavTooltip>
+            // Sign in button - key ensures proper React mounting
+            <button
+              key="signin-button"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                console.log('[AppSidebar] Sign in button clicked!')
+                login()
+              }}
+              onPointerDown={() => {
+                // Backup handler in case onClick doesn't fire
+                console.log('[AppSidebar] Sign in button pointer down')
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 text-foreground hover:bg-secondary/50 transition-colors cursor-pointer"
+              title="Sign in"
+            >
+              <IconSignIn size={16} className="shrink-0" />
+              <span className="text-xs font-medium sidebar-label">Sign in</span>
+            </button>
           ) : null}
         </div>
 
