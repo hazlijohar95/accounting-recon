@@ -57,7 +57,32 @@ venv/
 target/
 Cargo.lock
 
-# Claude Code / Agent skills
+# AI Coding Tools (skills/settings)
 .agent/
 .agents/
 .claude/
+.cline/
+.codebuddy/
+.codex/
+.commandcode/
+.continue/
+.crush/
+.cursor/
+.factory/
+.gemini/
+.goose/
+.kilocode/
+.kiro/
+.mcpjam/
+.mux/
+.neovate/
+.opencode/
+.openhands/
+.pi/
+.qoder/
+.qwen/
+.roo/
+.serena/
+.trae/
+.windsurf/
+.zencoder/
