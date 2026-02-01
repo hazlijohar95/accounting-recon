@@ -8,12 +8,17 @@ import { requireCompanyAccess, getOptionalAuth, verifyQueryResourceAccess, isPro
 import { filterUndefinedValues } from "./lib/validation";
 import { AuthErrors } from "./lib/errors";
 import { companyDocValidator, companyIdValidator } from "./lib/validators";
+import { authKit } from "./auth";
 
 // ============ QUERIES ============
 
 // Get a single company by ID
 export const get = query({
-  args: { id: v.id("companies") },
+  args: {
+    id: v.id("companies"),
+    // WorkOS user ID for auth fallback
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.union(companyDocValidator, v.null()),
   handler: async (ctx, args) => {
     const company = await ctx.db.get(args.id);
@@ -21,8 +26,8 @@ export const get = query({
       return null;
     }
 
-    // SECURITY: Verify ownership
-    const { allowed } = await verifyQueryResourceAccess(ctx, args.id);
+    // SECURITY: Verify ownership (with workosUserId fallback)
+    const { allowed } = await verifyQueryResourceAccess(ctx, args.id, args.workosUserId);
     if (!allowed) return null;
 
     return company;
@@ -34,16 +39,29 @@ export const listByOwner = query({
   args: {
     // Keep for backwards compatibility, but will be ignored if user is authenticated
     ownerId: v.optional(v.id("users")),
+    // WorkOS user ID for auth fallback (when Convex AuthKit can't verify frontend tokens)
+    workosUserId: v.optional(v.string()),
   },
   returns: v.array(companyDocValidator),
   handler: async (ctx, args) => {
-    // Try to get authenticated user
-    const user = await getOptionalAuth(ctx);
+    // Try to get authenticated user (with workosUserId fallback)
+    const user = await getOptionalAuth(ctx, args.workosUserId);
+    const shouldLog = !isProductionMode();
+    if (shouldLog) {
+      console.log('[listByOwner] getOptionalAuth returned:', user?._id ?? 'null');
+    }
 
-    // If authenticated, use that user's ID; otherwise fall back to provided ownerId (for demo mode)
-    const ownerIdToUse = user?._id ?? args.ownerId;
+    // If authenticated, use that user's ID; otherwise fall back to provided ownerId (dev/demo only)
+    const ownerIdToUse = user?._id ?? (!isProductionMode() ? args.ownerId : undefined);
+
+    if (shouldLog) {
+      console.log('[listByOwner] ownerIdToUse:', ownerIdToUse ?? 'null');
+    }
 
     if (!ownerIdToUse) {
+      if (shouldLog) {
+        console.log('[listByOwner] No owner ID, returning empty');
+      }
       return [];
     }
 
@@ -52,6 +70,10 @@ export const listByOwner = query({
       .withIndex("by_owner", (q) => q.eq("ownerId", ownerIdToUse))
       .filter((q) => q.eq(q.field("isDeleted"), false))
       .collect();
+
+    if (shouldLog) {
+      console.log('[listByOwner] Found companies:', companies.length);
+    }
     return companies;
   },
 });
@@ -106,14 +128,108 @@ export const create = mutation({
     currency: v.string(),
     // Keep ownerId for backwards compatibility (demo mode), but prefer auth context
     ownerId: v.optional(v.id("users")),
+    // For just-in-time user creation when webhook hasn't arrived yet
+    userEmail: v.optional(v.string()),
+    userName: v.optional(v.string()),
+    // WorkOS user ID for creating user record when Convex Auth isn't configured
+    workosUserId: v.optional(v.string()),
   },
-  returns: companyIdValidator,
+  returns: v.object({
+    companyId: companyIdValidator,
+    ownerId: v.id("users"),
+  }),
   handler: async (ctx, args) => {
-    // Get owner from auth context, falling back to provided ownerId for demo mode
-    const user = await getOptionalAuth(ctx);
+    console.log('[Company Create] Starting with args:', {
+      name: args.name,
+      userEmail: args.userEmail,
+      workosUserId: args.workosUserId,
+      ownerId: args.ownerId,
+    });
+
+    // Step 1: Try to get authenticated user from AuthKit (the token)
+    let authUser: { id: string } | null = null;
+    try {
+      authUser = await authKit.getAuthUser(ctx);
+      console.log('[Company Create] AuthKit user:', authUser?.id ?? 'null');
+    } catch (e) {
+      console.warn('[Company Create] AuthKit not configured or failed:', e);
+    }
+
+    // Step 2: Find user in our database by WorkOS ID from token
+    let user = null;
+    if (authUser?.id) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_workos", (q) => q.eq("workosId", authUser!.id))
+        .first();
+      console.log('[Company Create] User found by workosId from token:', user?._id ?? 'null');
+    }
+
+    // Step 3: JIT user creation - always create if not found and we have identity info
+    if (!user) {
+      // Determine the WorkOS ID to use (prefer token, fall back to args)
+      const effectiveWorkosId = authUser?.id ?? args.workosUserId;
+      const effectiveEmail = args.userEmail;
+
+      console.log('[Company Create] No user found, attempting JIT creation:', {
+        effectiveWorkosId,
+        effectiveEmail,
+      });
+
+      if (effectiveWorkosId && effectiveEmail) {
+        // Check if user exists by WorkOS ID (in case token lookup failed but user exists)
+        const existingByWorkos = await ctx.db
+          .query("users")
+          .withIndex("by_workos", (q) => q.eq("workosId", effectiveWorkosId))
+          .first();
+
+        if (existingByWorkos) {
+          user = existingByWorkos;
+          console.log('[Company Create] Found existing user by workosId:', user._id);
+        } else {
+          // Check if user exists by email
+          const existingByEmail = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", effectiveEmail))
+            .first();
+
+          if (existingByEmail) {
+            // Link existing user to WorkOS ID
+            await ctx.db.patch(existingByEmail._id, { workosId: effectiveWorkosId });
+            user = await ctx.db.get(existingByEmail._id);
+            console.log('[Company Create] Linked workosId to existing user:', user?._id);
+          } else {
+            // Create new user record
+            const newUserId = await ctx.db.insert("users", {
+              email: effectiveEmail,
+              name: args.userName,
+              workosId: effectiveWorkosId,
+              createdAt: Date.now(),
+            });
+            user = await ctx.db.get(newUserId);
+            console.log('[Company Create] Created new user:', newUserId);
+          }
+        }
+      } else if (effectiveEmail) {
+        // No WorkOS ID available - check by email only (for demo/dev mode)
+        const existingByEmail = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", effectiveEmail))
+          .first();
+        if (existingByEmail) {
+          user = existingByEmail;
+          console.log('[Company Create] Found user by email (no workosId):', user._id);
+        }
+      }
+    }
+
+    // Fall back to provided ownerId (demo mode only)
     const ownerId = user?._id ?? args.ownerId;
 
+    console.log('[Company Create] Final ownerId:', ownerId ?? 'null');
+
     if (!ownerId) {
+      console.error('[Company Create] AUTH FAILED - no user found or created');
       return AuthErrors.unauthorized("Please sign in to create a company");
     }
 
@@ -180,7 +296,9 @@ export const create = mutation({
       updatedAt: now,
       isDeleted: false,
     });
-    return companyId;
+
+    console.log('[Company Create] Success, returning companyId:', companyId, 'ownerId:', ownerId);
+    return { companyId, ownerId };
   },
 });
 

@@ -360,6 +360,56 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  errors: {
+    document: {
+      componentName?: string;
+      count: number;
+      fingerprint: string;
+      firstSeenAt: number;
+      isResolved: boolean;
+      lastSeenAt: number;
+      message: string;
+      metadata?: any;
+      resolvedAt?: number;
+      resolvedBy?: Id<"users">;
+      stack?: string;
+      type: "uncaught" | "promise" | "boundary" | "api" | "convex" | "manual";
+      url: string;
+      userAgent?: string;
+      userId?: Id<"users">;
+      _id: Id<"errors">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "componentName"
+      | "count"
+      | "fingerprint"
+      | "firstSeenAt"
+      | "isResolved"
+      | "lastSeenAt"
+      | "message"
+      | "metadata"
+      | "resolvedAt"
+      | "resolvedBy"
+      | "stack"
+      | "type"
+      | "url"
+      | "userAgent"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_created: ["lastSeenAt", "_creationTime"];
+      by_fingerprint: ["fingerprint", "_creationTime"];
+      by_resolved: ["isResolved", "lastSeenAt", "_creationTime"];
+      by_type: ["type", "lastSeenAt", "_creationTime"];
+      by_user: ["userId", "lastSeenAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   matchedPairs: {
     document: {
       accrualDocumentId?: Id<"accrualDocuments">;

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireCompanyAccess } from "./lib/auth";
+import { verifyQueryCompanyAccess } from "./lib/auth";
 
 // Return validators for analytics
 const monthlyFlowReturnValidator = v.array(
@@ -50,8 +50,9 @@ export const getMonthlyCashFlow = query({
   },
   returns: monthlyFlowReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Require authenticated user with access to this company
-    await requireCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify user has access (returns empty if not authorized)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    if (!allowed) return [];
 
     const transactions = await ctx.db
       .query("transactions")
@@ -113,8 +114,9 @@ export const getExpenseBreakdown = query({
   },
   returns: expenseBreakdownReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Require authenticated user with access to this company
-    await requireCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify user has access (returns empty if not authorized)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    if (!allowed) return [];
 
     const transactions = await ctx.db
       .query("transactions")
@@ -181,8 +183,9 @@ export const getTopExpenses = query({
   },
   returns: topExpenseReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Require authenticated user with access to this company
-    await requireCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify user has access (returns empty if not authorized)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    if (!allowed) return [];
 
     const transactions = await ctx.db
       .query("transactions")
@@ -211,8 +214,9 @@ export const getReconciliationStats = query({
   },
   returns: reconStatsReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Require authenticated user with access to this company
-    await requireCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify user has access (returns default if not authorized)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    if (!allowed) return { matched: 0, pending: 0, suspense: 0, total: 0, matchRate: 0 };
 
     const transactions = await ctx.db
       .query("transactions")
@@ -256,8 +260,9 @@ export const getRecentActivity = query({
   },
   returns: recentActivityReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Require authenticated user with access to this company
-    await requireCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify user has access (returns empty if not authorized)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    if (!allowed) return [];
 
     // Get recent transactions as activity
     const transactions = await ctx.db

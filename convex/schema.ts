@@ -445,4 +445,39 @@ export default defineSchema({
     value: v.number(),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  // ============================================================================
+  // Self-Hosted Error Monitoring
+  // ============================================================================
+
+  // Application errors table - stores client and server errors for monitoring
+  errors: defineTable({
+    message: v.string(),
+    stack: v.optional(v.string()),
+    type: v.union(
+      v.literal("uncaught"),      // window.onerror
+      v.literal("promise"),       // unhandledrejection
+      v.literal("boundary"),      // React error boundary
+      v.literal("api"),           // API/fetch errors
+      v.literal("convex"),        // Convex mutation/query errors
+      v.literal("manual")         // Manually logged errors
+    ),
+    url: v.string(),              // Page URL where error occurred
+    userAgent: v.optional(v.string()),
+    userId: v.optional(v.id("users")),
+    componentName: v.optional(v.string()), // For boundary errors
+    metadata: v.optional(v.any()),         // Additional context
+    fingerprint: v.string(),               // Hash for deduplication
+    count: v.number(),                     // Occurrence count (for deduped errors)
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    isResolved: v.boolean(),
+    resolvedAt: v.optional(v.number()),
+    resolvedBy: v.optional(v.id("users")),
+  })
+    .index("by_created", ["lastSeenAt"])
+    .index("by_type", ["type", "lastSeenAt"])
+    .index("by_fingerprint", ["fingerprint"])
+    .index("by_resolved", ["isResolved", "lastSeenAt"])
+    .index("by_user", ["userId", "lastSeenAt"]),
 });

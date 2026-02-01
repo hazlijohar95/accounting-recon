@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { requireCompanyAccess, requireTransactionAccess, requireSessionAccess, verifyQueryCompanyAccess, verifyQuerySessionAccess, verifyQueryResourceAccess } from "./lib/auth";
-import { validateBulkSize } from "./lib/validation";
+import { validateAmount, validateBulkSize, validateDate } from "./lib/validation";
 import { MAX_BULK_IMPORT_SIZE } from "./lib/constants";
 import { BusinessErrors, ValidationErrors } from "./lib/errors";
 import { transactionDocValidator, transactionIdValidator } from "./lib/validators";
@@ -24,30 +24,48 @@ export const listByCompany = query({
     const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
     if (!allowed) return [];
 
-    let q = ctx.db
-      .query("transactions")
-      .withIndex("by_company", (q) => q.eq("companyId", args.companyId));
-
-    const transactions = await q.collect();
-
-    // Filter by type and status if provided
-    let filtered = transactions;
-    if (args.type) {
-      filtered = filtered.filter((t) => t.type === args.type);
-    }
-    if (args.status) {
-      filtered = filtered.filter((t) => t.status === args.status);
+    // Build query based on filters
+    let results;
+    if (args.type && args.status) {
+      results = await ctx.db
+        .query("transactions")
+        .withIndex("by_company_type_status", (idx) =>
+          idx
+            .eq("companyId", args.companyId)
+            .eq("type", args.type!)
+            .eq("status", args.status!)
+        )
+        .collect();
+    } else if (args.type) {
+      results = await ctx.db
+        .query("transactions")
+        .withIndex("by_type", (idx) =>
+          idx.eq("companyId", args.companyId).eq("type", args.type!)
+        )
+        .collect();
+    } else if (args.status) {
+      results = await ctx.db
+        .query("transactions")
+        .withIndex("by_status", (idx) =>
+          idx.eq("companyId", args.companyId).eq("status", args.status!)
+        )
+        .collect();
+    } else {
+      results = await ctx.db
+        .query("transactions")
+        .withIndex("by_company", (idx) => idx.eq("companyId", args.companyId))
+        .collect();
     }
 
     // Sort by date descending
-    filtered.sort((a, b) => b.date.localeCompare(a.date));
+    results.sort((a, b) => b.date.localeCompare(a.date));
 
     // Apply limit
     if (args.limit) {
-      filtered = filtered.slice(0, args.limit);
+      results = results.slice(0, args.limit);
     }
 
-    return filtered;
+    return results;
   },
 });
 
@@ -116,6 +134,9 @@ export const create = mutation({
     // Verify company ownership
     await requireCompanyAccess(ctx, args.companyId);
 
+    validateDate(args.date, "date");
+    validateAmount(args.amount, "amount");
+
     // If sessionId provided, verify session belongs to same company
     if (args.sessionId) {
       const { company } = await requireSessionAccess(ctx, args.sessionId);
@@ -178,6 +199,8 @@ export const createBulk = mutation({
     const ids: string[] = [];
 
     for (const txn of args.transactions) {
+      validateDate(txn.date, "date");
+      validateAmount(txn.amount, "amount");
       const id = await ctx.db.insert("transactions", {
         ...txn,
         status: "pending",
