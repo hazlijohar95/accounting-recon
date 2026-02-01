@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
+import Link from 'next/link'
 import {
   LandingHeader,
   RecommendationCard,
@@ -79,19 +80,46 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer accent - enhanced visibility */}
-      <footer className="relative z-10 h-12 md:h-16 flex flex-col items-center justify-center gap-2 pb-safe">
-        {/* Decorative line above tagline */}
+      {/* Footer */}
+      <footer className="relative z-10 py-4 md:py-6 flex flex-col items-center justify-center gap-3 pb-safe px-4">
+        {/* Decorative line */}
         <div
-          className="w-8 h-[1px] bg-muted-foreground/30 animate-fade-in"
+          className="w-8 h-[1px] bg-muted-foreground/20 animate-fade-in"
           style={{ animationDelay: '1100ms' }}
           aria-hidden="true"
         />
-        <p
-          className="text-xs text-muted-foreground/60 font-mono tracking-wide animate-fade-in"
+
+        {/* Legal links */}
+        <nav
+          className="flex items-center gap-4 md:gap-6 animate-fade-in"
           style={{ animationDelay: '1200ms' }}
         >
-          Automated reconciliation for modern finance teams
+          <Link
+            href="/terms"
+            className="text-[10px] md:text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors font-mono tracking-wide"
+          >
+            Terms
+          </Link>
+          <Link
+            href="/privacy"
+            className="text-[10px] md:text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors font-mono tracking-wide"
+          >
+            Privacy
+          </Link>
+          <Link
+            href="/pdpa"
+            className="text-[10px] md:text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors font-mono tracking-wide"
+          >
+            PDPA
+          </Link>
+        </nav>
+
+        {/* Copyright */}
+        <p
+          className="text-[10px] md:text-xs text-muted-foreground/40 font-mono tracking-wide animate-fade-in"
+          style={{ animationDelay: '1300ms' }}
+        >
+          © {new Date().getFullYear()} Cynco Sdn. Bhd. (1588139-X)
         </p>
       </footer>
     </div>
