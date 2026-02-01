@@ -13,6 +13,27 @@
   --sidebar-width-collapsed: 64px;
   --sidebar-transition: 500ms cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* Typography Scale */
+  --text-display: clamp(1.875rem, 5vw, 3.75rem);
+  --text-title: clamp(0.875rem, 2vw, 1rem);
+  --text-caption: 0.75rem;
+
+  /* Animation Timing Tokens */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Icon Sizing */
+  --icon-card: 24px;
+  --icon-card-md: 28px;
+  --icon-card-lg: 32px;
+
+  /* Interactive Surface */
+  --surface-interactive: var(--secondary);
+  --surface-interactive-hover: color-mix(in srgb, var(--foreground) 5%, var(--secondary));
+
   --background: #ffffff;
   --foreground: #0a0a0a;
   --card: #ffffff;
@@ -198,6 +219,10 @@
   --color-credit-light: var(--credit-light);
   --color-debit: var(--debit);
   --color-debit-light: var(--debit-light);
+
+  /* Interactive Surface */
+  --color-surface-interactive: var(--surface-interactive);
+  --color-surface-interactive-hover: var(--surface-interactive-hover);
 }
 
 @layer base {
@@ -207,6 +232,20 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Safe Area Insets for iPhone notch/home indicator */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* Touch manipulation utility */
+.touch-manipulation {
+  touch-action: manipulation;
 }
 
 /* Brand Animation Keyframes */
@@ -301,6 +340,89 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes card-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-card-entrance {
+  animation: card-entrance 400ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Mobile animation performance optimizations */
+@media (max-width: 640px) {
+  .animate-card-entrance {
+    animation-duration: 300ms;
+  }
+
+  .animate-hero-word {
+    animation-duration: 400ms;
+  }
+}
+
+/* Landing Card Hover Utilities */
+.landing-card {
+  --card-hover-lift: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --card-hover-scale: 1.01;
+  transition:
+    transform var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    border-color var(--duration-normal) var(--ease-out),
+    background-color var(--duration-normal) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform, box-shadow;
+}
+
+/* Release GPU resources on mobile */
+@media (max-width: 640px) {
+  .landing-card {
+    will-change: auto;
+  }
+}
+
+.landing-card:hover {
+  box-shadow: var(--card-hover-lift);
+}
+
+.landing-card:focus-visible {
+  box-shadow: var(--card-hover-lift);
+  transform: scale(var(--card-hover-scale));
+}
+
+.dark .landing-card {
+  --card-hover-lift: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Hero word entrance animation */
+@keyframes hero-word {
+  0% {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-hero-word {
+  opacity: 0;
+  animation: hero-word var(--duration-slow) var(--ease-out) both;
+}
+
+/* Hero word emphasis - for key word "reconcile" */
+.animate-hero-word-emphasis {
+  opacity: 0;
+  animation: hero-word var(--duration-slow) var(--ease-out) both;
+  font-weight: 500;
 }
 
 @keyframes check-draw {
@@ -689,18 +811,26 @@
   .animate-fade-in-up,
   .animate-scale-in,
   .animate-wipe-vertical,
-  .animate-wipe-horizontal {
+  .animate-wipe-horizontal,
+  .animate-card-entrance,
+  .animate-hero-word {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
 
-  .card-interactive:hover {
+  .card-interactive:hover,
+  .landing-card:hover,
+  .landing-card:focus-visible {
     transform: none;
   }
 
   .sidebar-label {
     transition: none;
+  }
+
+  .landing-card {
+    transition: border-color 0ms, background-color 0ms;
   }
 }
 
