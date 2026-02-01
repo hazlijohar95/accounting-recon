@@ -1,19 +1,6 @@
 export { LogoMark, LogoFull, LogoStacked } from './logo-mark'
-export {
-  IconSignIn,
-  IconSignOut,
-  IconUser,
-  IconPanelCollapse,
-  IconPanelExpand,
-  IconDemo,
-  IconReal,
-  IconSwitch,
-  IconArrowRight,
-  IconDashboard,
-  IconUpload,
-  IconReconcile,
-  IconReports,
-} from './geometric-icons'
+// Note: Icons are now exported from './icons' (pixel icon system)
+// Legacy geometric-icons.tsx kept for reference but no longer exported
 export { LogoAnimated, LogoAnimatedWithText } from './logo-animated'
 export { LoadingSpinner, LoadingDots } from './loading-spinner'
 export {
@@ -98,3 +85,6 @@ export type {
   Logo3DShowcaseProps,
   LogoRectangle,
 } from './3d'
+
+// Brand Icon System (Phosphor icons with geometric styling)
+export * from './icons'
