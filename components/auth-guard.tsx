@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { useAuth } from './auth-provider'
 import { useIsDemo } from '@/lib/store'
 import { LogoAnimatedWithText, LoadingSpinner } from '@/components/brand'
-import { LogIn } from 'lucide-react'
+import { IconSignIn } from '@/components/brand/icons'
 
 interface AuthGuardProps {
   children: ReactNode
@@ -72,7 +72,7 @@ export function AuthGuard({ children, fallback, requireAuth = false }: AuthGuard
           onClick={login}
           className="flex items-center gap-2 px-6 py-3 bg-foreground text-background rounded-xl font-medium hover:bg-foreground/90 transition-colors"
         >
-          <LogIn className="w-5 h-5" />
+          <IconSignIn size={20} />
           Sign in to continue
         </button>
 

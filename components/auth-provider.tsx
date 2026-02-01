@@ -1,24 +1,17 @@
 'use client'
 
-import { createContext, useContext, useCallback, ReactNode, useState, useEffect } from 'react'
+import { createContext, useContext, useCallback, ReactNode, useEffect } from 'react'
+import { useAuth as useAuthKitAuth, useAccessToken } from '@workos-inc/authkit-nextjs/components'
 import { useAppStore } from '@/lib/store'
 
-
 // User type for auth state
-// Note: id can be either a Convex user ID or WorkOS user ID during auth flow
 interface User {
-  id: string // Convex ID or WorkOS ID
+  id: string // WorkOS user ID
   email: string
   name?: string
   avatarUrl?: string
-  workosId?: string
+  workosId: string
 }
-
-// ID format validation - accepts both Convex IDs and WorkOS user IDs
-// Convex: alphanumeric with underscores/hyphens, 10-64 chars
-// WorkOS: user_XXXX format
-const isValidUserId = (id: string): boolean =>
-  /^[a-zA-Z0-9_-]{10,64}$/.test(id) || /^user_[a-zA-Z0-9]+$/.test(id)
 
 interface AuthContextValue {
   user: User | null
@@ -28,6 +21,7 @@ interface AuthContextValue {
   login: () => void
   logout: () => Promise<void>
   refresh: () => Promise<void>
+  getAccessToken: () => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -37,8 +31,9 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  // Use AuthKit's hooks for auth state
+  const { user: authKitUser, loading, signOut, refreshAuth } = useAuthKitAuth()
+  const { getAccessToken: getToken } = useAccessToken()
 
   // Check if WorkOS is configured
   const isAuthConfigured = Boolean(
@@ -46,56 +41,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
       process.env.NEXT_PUBLIC_WORKOS_CLIENT_ID
   )
 
-  // Fetch session on mount
-  const fetchSession = useCallback(async () => {
-    try {
-      const response = await fetch('/api/auth/session')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.user) {
-          // SECURITY: Validate ID format before using
-          if (!data.user.id || !isValidUserId(data.user.id)) {
-            console.error('Invalid user ID format from session:', data.user.id)
-            setUser(null)
-            return
-          }
-          setUser({
-            ...data.user,
-            id: data.user.id,
-          })
-        } else {
-          setUser(null)
-        }
-      } else {
-        // Handle 4xx/5xx responses - user is not authenticated
-        if (response.status !== 401) {
-          // Log unexpected errors (401 is expected for unauthenticated users)
-          console.warn('Session fetch returned status:', response.status)
-        }
-        setUser(null)
+  // Map AuthKit user to our User type
+  const user: User | null = authKitUser
+    ? {
+        id: authKitUser.id,
+        email: authKitUser.email,
+        name: authKitUser.firstName && authKitUser.lastName
+          ? `${authKitUser.firstName} ${authKitUser.lastName}`.trim()
+          : authKitUser.firstName || undefined,
+        avatarUrl: authKitUser.profilePictureUrl || undefined,
+        workosId: authKitUser.id,
       }
-    } catch (error) {
-      console.error('Failed to fetch session:', error)
-      setUser(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchSession()
-  }, [fetchSession])
+    : null
 
   // Auto-switch to Real mode when user logs in
   useEffect(() => {
-    if (user && !isLoading) {
+    if (user && !loading) {
       const state = useAppStore.getState()
       if (state.isDemo) {
         console.log('[Auth] User authenticated, switching to Real mode')
-        state.toggleMode() // toggleMode() switches Demo→Real when isDemo is true
+        state.toggleMode()
       }
     }
-  }, [user, isLoading])
+  }, [user, loading])
 
   // Redirect to login
   const login = useCallback(() => {
@@ -103,39 +71,53 @@ export function AuthProvider({ children }: AuthProviderProps) {
     window.location.href = '/api/auth/login'
   }, [])
 
-  // Logout and clear session
+  // Logout using AuthKit's signOut
   const logout = useCallback(async () => {
     try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' })
-      if (response.ok) {
-        setUser(null)
-        window.location.href = '/'
-      } else {
-        // Server error - still clear local state and redirect
-        // (cookie may be invalid anyway)
-        console.warn('Logout response not ok:', response.status)
-        setUser(null)
-        window.location.href = '/'
+      // Reset to demo mode on logout
+      const state = useAppStore.getState()
+      if (!state.isDemo) {
+        console.log('[Auth] Logging out, switching back to Demo mode')
+        state.toggleMode()
       }
+      // Use AuthKit's signOut - it handles the redirect
+      await signOut({ returnTo: '/' })
     } catch (error) {
-      // Network error - don't clear user state, let user retry
       console.error('Logout failed:', error)
+      // Fallback: redirect manually
+      window.location.href = '/api/auth/logout'
     }
-  }, [])
+  }, [signOut])
 
-  // Refresh session
+  // Refresh session using AuthKit's refreshAuth
   const refresh = useCallback(async () => {
-    await fetchSession()
-  }, [fetchSession])
+    try {
+      await refreshAuth()
+    } catch (error) {
+      console.error('[Auth] Refresh failed:', error)
+    }
+  }, [refreshAuth])
+
+  // Get access token for Convex authentication
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    try {
+      const token = await getToken()
+      return token || null
+    } catch (error) {
+      console.error('[Auth] Failed to get access token:', error)
+      return null
+    }
+  }, [getToken])
 
   const value: AuthContextValue = {
     user,
-    isLoading,
+    isLoading: loading,
     isAuthenticated: Boolean(user),
     isAuthConfigured,
     login,
     logout,
     refresh,
+    getAccessToken,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
