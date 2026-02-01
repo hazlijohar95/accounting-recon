@@ -28,19 +28,17 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
-  Plus,
-  Play,
-  Loader2,
-  AlertCircle,
-  Check,
-  MoreVertical,
-  Trash2,
-  Sparkles,
-  Type,
-  Hash,
-  RefreshCw,
-  X,
-} from 'lucide-react'
+  IconPlus,
+  IconPlay,
+  IconLoader,
+  IconWarningCircle,
+  IconCheck,
+  IconMoreVertical,
+  IconTrash,
+  IconSparkle,
+  IconHash,
+  IconText,
+} from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import { PremiumButton, ButtonSecondary, ButtonDanger } from '@/components/brand'
 import { useSetShowPaywall } from '@/lib/store'
@@ -53,6 +51,7 @@ interface WorksheetGridProps {
   columns: WorksheetColumn[]
   rows: WorksheetRow[]
   userId: Id<'users'>
+  workosUserId?: string
   isDemo?: boolean
 }
 
@@ -71,17 +70,17 @@ function CellStatusIndicator({ status, error }: { status?: string; error?: strin
       )}
       {status === 'running' && (
         <span title="Running">
-          <Loader2 size={12} className="text-chart-5 animate-spin" />
+          <IconLoader size={12} className="text-chart-5 animate-spin" />
         </span>
       )}
       {status === 'complete' && (
         <span title="Complete">
-          <Check size={12} className="text-success" />
+          <IconCheck size={12} className="text-success" />
         </span>
       )}
       {status === 'error' && (
         <span title={error || 'Error'}>
-          <AlertCircle size={12} className="text-destructive" />
+          <IconWarningCircle size={12} className="text-destructive" />
         </span>
       )}
     </div>
@@ -94,11 +93,11 @@ function CellStatusIndicator({ status, error }: { status?: string; error?: strin
 function ColumnTypeIcon({ type }: { type: string }) {
   switch (type) {
     case 'number':
-      return <Hash size={12} className="text-muted-foreground" />
+      return <IconHash size={12} className="text-muted-foreground" />
     case 'formula':
-      return <Sparkles size={12} className="text-chart-5" />
+      return <IconSparkle size={12} className="text-chart-5" />
     default:
-      return <Type size={12} className="text-muted-foreground" />
+      return <IconText size={12} className="text-muted-foreground" />
   }
 }
 
@@ -165,14 +164,14 @@ function AddColumnPopover({
             onClick={() => handleTypeSelect('text')}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary transition-colors text-left"
           >
-            <Type size={14} />
+            <IconText size={14} />
             Text Column
           </button>
           <button
             onClick={() => handleTypeSelect('number')}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary transition-colors text-left"
           >
-            <Hash size={14} />
+            <IconHash size={14} />
             Number Column
           </button>
           <div className="border-t border-border my-1" />
@@ -180,7 +179,7 @@ function AddColumnPopover({
             onClick={() => handleTypeSelect('formula')}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary transition-colors text-left"
           >
-            <Sparkles size={14} className="text-chart-5" />
+            <IconSparkle size={14} className="text-chart-5" />
             AI Formula Column
           </button>
         </div>
@@ -218,7 +217,7 @@ function AddColumnPopover({
       {step === 'formula' && (
         <div className="p-3 space-y-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Sparkles size={12} className="text-chart-5" />
+            <IconSparkle size={12} className="text-chart-5" />
             <span>AI prompt for "{name}"</span>
           </div>
           <input
@@ -253,7 +252,7 @@ function AddColumnPopover({
 /**
  * Main worksheet grid component.
  */
-export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = false }: WorksheetGridProps) {
+export function WorksheetGrid({ worksheetId, columns, rows, userId, workosUserId, isDemo = false }: WorksheetGridProps) {
   const parentRef = useRef<HTMLDivElement>(null)
   const setShowPaywall = useSetShowPaywall()
 
@@ -307,20 +306,20 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
       columnType: type,
       formula: formula ? `=ENRICH("${formula}")` : undefined,
       dataSource: type === 'formula' ? 'llm' : undefined,
-      userId,
+      workosUserId,
     })
   }
 
   const handleDeleteColumn = async (columnId: Id<'worksheetColumns'>) => {
     if (guardAction()) return
     if (!confirm('Delete this column?')) return
-    await deleteColumn({ columnId, userId })
+    await deleteColumn({ columnId, workosUserId })
     setColumnMenuOpen(null)
   }
 
   const handleAddRow = async () => {
     if (guardAction()) return
-    await addRow({ worksheetId, userId })
+    await addRow({ worksheetId, workosUserId })
   }
 
   const handleDeleteSelectedRows = async () => {
@@ -330,7 +329,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
 
     await deleteRows({
       rowIds: Array.from(selectedRows) as Id<'worksheetRows'>[],
-      userId,
+      workosUserId,
     })
     setSelectedRows(new Set())
   }
@@ -356,7 +355,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
         rowId: editingCell.rowId as Id<'worksheetRows'>,
         columnKey: editingCell.colKey,
         value: editValue,
-        userId,
+        workosUserId,
       })
     }
 
@@ -440,7 +439,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
 
     if (validRows.length > 0) {
       e.preventDefault()
-      await addRows({ worksheetId, rowsData: validRows, userId })
+      await addRows({ worksheetId, rowsData: validRows, workosUserId })
     }
   }
 
@@ -507,7 +506,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
                 className="p-1 opacity-0 group-hover:opacity-100 hover:bg-secondary transition-all"
                 title="Run AI enrichment"
               >
-                <Play size={10} />
+                <IconPlay size={10} />
               </button>
             )}
             <button
@@ -517,7 +516,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
               }}
               className="p-1 opacity-0 group-hover:opacity-100 hover:bg-secondary transition-all"
             >
-              <MoreVertical size={10} />
+              <IconMoreVertical size={10} />
             </button>
             {columnMenuOpen === col._id && (
               <div
@@ -529,7 +528,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
                     onClick={() => handleRunColumn(col)}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary transition-colors text-left"
                   >
-                    <Play size={12} />
+                    <IconPlay size={12} />
                     Run Enrichment
                   </button>
                 )}
@@ -537,7 +536,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
                   onClick={() => handleDeleteColumn(col._id)}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-destructive/10 text-destructive transition-colors text-left"
                 >
-                  <Trash2 size={12} />
+                  <IconTrash size={12} />
                   Delete Column
                 </button>
               </div>
@@ -628,7 +627,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
             }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium hover:bg-secondary transition-colors"
           >
-            <Plus size={12} />
+            <IconPlus size={12} />
             Column
           </button>
           <AddColumnPopover
@@ -644,7 +643,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
           onClick={handleAddRow}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium hover:bg-secondary transition-colors"
         >
-          <Plus size={12} />
+          <IconPlus size={12} />
           Row
         </button>
 
@@ -655,7 +654,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
               onClick={handleDeleteSelectedRows}
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
             >
-              <Trash2 size={12} />
+              <IconTrash size={12} />
               Delete ({selectedRows.size})
             </button>
           </>
@@ -758,7 +757,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors"
               >
-                <Plus size={12} />
+                <IconPlus size={12} />
                 Add Column
               </button>
             </div>
@@ -775,7 +774,7 @@ export function WorksheetGrid({ worksheetId, columns, rows, userId, isDemo = fal
               onClick={handleAddRow}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors"
             >
-              <Plus size={12} />
+              <IconPlus size={12} />
               Add Row
             </button>
           </div>

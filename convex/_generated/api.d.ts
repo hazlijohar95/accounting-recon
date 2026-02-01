@@ -473,13 +473,16 @@ export declare const api: {
         taxNumber?: string;
         taxRegistered?: boolean;
         tradingAs?: string;
+        userEmail?: string;
+        userName?: string;
+        workosUserId?: string;
       },
-      Id<"companies">
+      { companyId: Id<"companies">; ownerId: Id<"users"> }
     >;
     get: FunctionReference<
       "query",
       "public",
-      { id: Id<"companies"> },
+      { id: Id<"companies">; workosUserId?: string },
       {
         _creationTime: number;
         _id: Id<"companies">;
@@ -545,7 +548,7 @@ export declare const api: {
     listByOwner: FunctionReference<
       "query",
       "public",
-      { ownerId?: Id<"users"> },
+      { ownerId?: Id<"users">; workosUserId?: string },
       Array<{
         _creationTime: number;
         _id: Id<"companies">;
@@ -696,6 +699,72 @@ export declare const api: {
         id: Id<"documents">;
       },
       Id<"documents">
+    >;
+  };
+  errors: {
+    clearOldErrors: FunctionReference<
+      "mutation",
+      "public",
+      { daysOld: number },
+      any
+    >;
+    clearResolvedErrors: FunctionReference<"mutation", "public", {}, any>;
+    deleteError: FunctionReference<
+      "mutation",
+      "public",
+      { errorId: Id<"errors"> },
+      any
+    >;
+    getError: FunctionReference<
+      "query",
+      "public",
+      { errorId: Id<"errors"> },
+      any
+    >;
+    getErrorStats: FunctionReference<"query", "public", { days?: number }, any>;
+    listErrors: FunctionReference<
+      "query",
+      "public",
+      {
+        cursor?: string;
+        limit?: number;
+        search?: string;
+        showResolved?: boolean;
+        type?:
+          | "uncaught"
+          | "promise"
+          | "boundary"
+          | "api"
+          | "convex"
+          | "manual";
+      },
+      any
+    >;
+    logError: FunctionReference<
+      "mutation",
+      "public",
+      {
+        componentName?: string;
+        message: string;
+        metadata?: any;
+        stack?: string;
+        type: "uncaught" | "promise" | "boundary" | "api" | "convex" | "manual";
+        url: string;
+        userAgent?: string;
+      },
+      any
+    >;
+    resolveError: FunctionReference<
+      "mutation",
+      "public",
+      { errorId: Id<"errors"> },
+      any
+    >;
+    unresolveError: FunctionReference<
+      "mutation",
+      "public",
+      { errorId: Id<"errors"> },
+      any
     >;
   };
   exports: {
@@ -1452,6 +1521,11 @@ export declare const api: {
       Id<"reconciliationSessions">
     >;
   };
+  settings: {
+    deleteAccount: FunctionReference<"mutation", "public", {}, any>;
+    exportUserData: FunctionReference<"mutation", "public", {}, any>;
+    getUserPreferences: FunctionReference<"query", "public", {}, any>;
+  };
   suspenseItems: {
     create: FunctionReference<
       "mutation",
@@ -1798,7 +1872,7 @@ export declare const api: {
         dataSource?: string;
         formula?: string;
         name: string;
-        userId: Id<"users">;
+        workosUserId?: string;
         worksheetId: Id<"worksheets">;
       },
       any
@@ -1808,7 +1882,7 @@ export declare const api: {
       "public",
       {
         cells?: Record<string, any>;
-        userId: Id<"users">;
+        workosUserId?: string;
         worksheetId: Id<"worksheets">;
       },
       any
@@ -1818,7 +1892,7 @@ export declare const api: {
       "public",
       {
         rowsData: Array<Record<string, any>>;
-        userId: Id<"users">;
+        workosUserId?: string;
         worksheetId: Id<"worksheets">;
       },
       any
@@ -1826,7 +1900,7 @@ export declare const api: {
     createWorksheet: FunctionReference<
       "mutation",
       "public",
-      { name: string; userId: Id<"users">; workspaceId: Id<"workspaces"> },
+      { name: string; workosUserId?: string; workspaceId: Id<"workspaces"> },
       any
     >;
     createWorkspace: FunctionReference<
@@ -1836,38 +1910,38 @@ export declare const api: {
         companyId: Id<"companies">;
         description?: string;
         name: string;
-        userId: Id<"users">;
+        workosUserId?: string;
       },
       any
     >;
     deleteColumn: FunctionReference<
       "mutation",
       "public",
-      { columnId: Id<"worksheetColumns">; userId: Id<"users"> },
+      { columnId: Id<"worksheetColumns">; workosUserId?: string },
       any
     >;
     deleteRow: FunctionReference<
       "mutation",
       "public",
-      { rowId: Id<"worksheetRows">; userId: Id<"users"> },
+      { rowId: Id<"worksheetRows">; workosUserId?: string },
       any
     >;
     deleteRows: FunctionReference<
       "mutation",
       "public",
-      { rowIds: Array<Id<"worksheetRows">>; userId: Id<"users"> },
+      { rowIds: Array<Id<"worksheetRows">>; workosUserId?: string },
       any
     >;
     deleteWorksheet: FunctionReference<
       "mutation",
       "public",
-      { userId: Id<"users">; worksheetId: Id<"worksheets"> },
+      { workosUserId?: string; worksheetId: Id<"worksheets"> },
       any
     >;
     deleteWorkspace: FunctionReference<
       "mutation",
       "public",
-      { userId: Id<"users">; workspaceId: Id<"workspaces"> },
+      { workosUserId?: string; workspaceId: Id<"workspaces"> },
       any
     >;
     getWorksheetData: FunctionReference<
@@ -1900,8 +1974,8 @@ export declare const api: {
       {
         columnKey: string;
         rowId: Id<"worksheetRows">;
-        userId: Id<"users">;
         value: any;
+        workosUserId?: string;
       },
       any
     >;
@@ -1911,7 +1985,7 @@ export declare const api: {
       {
         description?: string;
         name?: string;
-        userId: Id<"users">;
+        workosUserId?: string;
         workspaceId: Id<"workspaces">;
       },
       any
@@ -2014,6 +2088,9 @@ export declare const internal: {
         uploadedAt: number;
       }>
     >;
+  };
+  errors: {
+    scheduledCleanup: FunctionReference<"mutation", "internal", {}, any>;
   };
   exports: {
     index: {

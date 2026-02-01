@@ -70,33 +70,43 @@ async function verifyQueryWorksheetAccess(
 /**
  * Require workspace access for mutations (throws if unauthorized).
  * Uses standard auth helpers from lib/auth.
+ *
+ * @param ctx - Mutation context
+ * @param workspaceId - Workspace ID to verify access for
+ * @param workosUserId - Optional fallback WorkOS user ID (for dev mode when JWT verification fails)
  */
 async function requireWorkspaceAccess(
   ctx: MutationCtx,
-  workspaceId: Id<"workspaces">
+  workspaceId: Id<"workspaces">,
+  workosUserId?: string
 ): Promise<{ user: Doc<"users">; workspace: Doc<"workspaces">; company: Doc<"companies"> }> {
   const workspace = await ctx.db.get(workspaceId);
   if (!workspace) {
     return ResourceErrors.notFound("Workspace", workspaceId);
   }
 
-  const { user, company } = await requireCompanyAccess(ctx, workspace.companyId);
+  const { user, company } = await requireCompanyAccess(ctx, workspace.companyId, workosUserId);
   return { user, workspace, company };
 }
 
 /**
  * Require worksheet access for mutations.
+ *
+ * @param ctx - Mutation context
+ * @param worksheetId - Worksheet ID to verify access for
+ * @param workosUserId - Optional fallback WorkOS user ID (for dev mode when JWT verification fails)
  */
 async function requireWorksheetAccess(
   ctx: MutationCtx,
-  worksheetId: Id<"worksheets">
+  worksheetId: Id<"worksheets">,
+  workosUserId?: string
 ): Promise<{ user: Doc<"users">; worksheet: Doc<"worksheets">; workspace: Doc<"workspaces">; company: Doc<"companies"> }> {
   const worksheet = await ctx.db.get(worksheetId);
   if (!worksheet) {
     return ResourceErrors.notFound("Worksheet", worksheetId);
   }
 
-  const { user, workspace, company } = await requireWorkspaceAccess(ctx, worksheet.workspaceId);
+  const { user, workspace, company } = await requireWorkspaceAccess(ctx, worksheet.workspaceId, workosUserId);
   return { user, worksheet, workspace, company };
 }
 
@@ -209,10 +219,11 @@ export const createWorkspace = mutation({
     companyId: v.id("companies"),
     name: v.string(),
     description: v.optional(v.string()),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify user has access to this company (derives user from auth context)
-    const { user } = await requireCompanyAccess(ctx, args.companyId);
+    const { user } = await requireCompanyAccess(ctx, args.companyId, args.workosUserId);
 
     // Validate name length
     if (args.name.length > 255) {
@@ -254,10 +265,11 @@ export const updateWorkspace = mutation({
     workspaceId: v.id("workspaces"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify user has access to this workspace
-    await requireWorkspaceAccess(ctx, args.workspaceId);
+    await requireWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
 
     // Validate input lengths
     if (args.name !== undefined && args.name.length > 255) {
@@ -282,10 +294,11 @@ export const updateWorkspace = mutation({
 export const deleteWorkspace = mutation({
   args: {
     workspaceId: v.id("workspaces"),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify user has access to this workspace
-    await requireWorkspaceAccess(ctx, args.workspaceId);
+    await requireWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
 
     // Get all worksheets
     const worksheets = await ctx.db
@@ -374,10 +387,11 @@ export const createWorksheet = mutation({
   args: {
     workspaceId: v.id("workspaces"),
     name: v.string(),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify user has access to this workspace
-    await requireWorkspaceAccess(ctx, args.workspaceId);
+    await requireWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
 
     // Validate name length
     if (args.name.length > 255) {
@@ -407,10 +421,11 @@ export const createWorksheet = mutation({
 export const deleteWorksheet = mutation({
   args: {
     worksheetId: v.id("worksheets"),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify user has access to this worksheet
-    await requireWorksheetAccess(ctx, args.worksheetId);
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
 
     // Delete all rows
     const rows = await ctx.db
@@ -459,10 +474,11 @@ export const addColumn = mutation({
     columnType: v.union(v.literal("text"), v.literal("number"), v.literal("formula")),
     formula: v.optional(v.string()),
     dataSource: v.optional(v.string()),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify user has access to this worksheet
-    await requireWorksheetAccess(ctx, args.worksheetId);
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
 
     // Validate inputs
     if (args.name.length > 255) {
@@ -510,13 +526,14 @@ export const addColumn = mutation({
 export const deleteColumn = mutation({
   args: {
     columnId: v.id("worksheetColumns"),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const column = await ctx.db.get(args.columnId);
     if (!column) return;
 
     // SECURITY: Verify user has access to this worksheet
-    await requireWorksheetAccess(ctx, column.worksheetId);
+    await requireWorksheetAccess(ctx, column.worksheetId, args.workosUserId);
 
     const columnKey = `col_${column.order}`;
 
@@ -561,10 +578,11 @@ export const addRow = mutation({
   args: {
     worksheetId: v.id("worksheets"),
     cells: v.optional(v.record(v.string(), v.any())),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify user has access to this worksheet
-    await requireWorksheetAccess(ctx, args.worksheetId);
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
 
     // Validate cells if provided
     if (args.cells) {
@@ -609,10 +627,11 @@ export const addRows = mutation({
   args: {
     worksheetId: v.id("worksheets"),
     rowsData: v.array(v.record(v.string(), v.any())),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify user has access to this worksheet
-    await requireWorksheetAccess(ctx, args.worksheetId);
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
 
     // Limit batch size to prevent DoS
     const MAX_BATCH_SIZE = 1000;
@@ -668,13 +687,14 @@ export const updateCell = mutation({
     rowId: v.id("worksheetRows"),
     columnKey: v.string(), // e.g., "col_0"
     value: v.any(),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const row = await ctx.db.get(args.rowId);
     if (!row) return;
 
     // SECURITY: Verify user has access to this worksheet
-    await requireWorksheetAccess(ctx, row.worksheetId);
+    await requireWorksheetAccess(ctx, row.worksheetId, args.workosUserId);
 
     // Validate column key format
     if (!args.columnKey.match(/^col_\d+$/)) {
@@ -702,13 +722,14 @@ export const updateCell = mutation({
 export const deleteRow = mutation({
   args: {
     rowId: v.id("worksheetRows"),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const row = await ctx.db.get(args.rowId);
     if (!row) return;
 
     // SECURITY: Verify user has access to this worksheet
-    await requireWorksheetAccess(ctx, row.worksheetId);
+    await requireWorksheetAccess(ctx, row.worksheetId, args.workosUserId);
 
     // Delete any pending agent jobs for this row
     const jobs = await ctx.db
@@ -731,6 +752,7 @@ export const deleteRow = mutation({
 export const deleteRows = mutation({
   args: {
     rowIds: v.array(v.id("worksheetRows")),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Limit batch size
@@ -750,7 +772,7 @@ export const deleteRows = mutation({
 
       // SECURITY: Verify access once (all rows should be from same worksheet)
       if (!hasVerifiedAccess) {
-        await requireWorksheetAccess(ctx, row.worksheetId);
+        await requireWorksheetAccess(ctx, row.worksheetId, args.workosUserId);
         hasVerifiedAccess = true;
       }
 

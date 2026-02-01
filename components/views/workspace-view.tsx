@@ -24,7 +24,7 @@ import {
   Logo3DLoading,
 } from '@/components/brand'
 import { WorksheetGrid } from '@/components/workspace/worksheet-grid'
-import { Plus, FolderOpen, Trash2, Table2, ArrowLeft, Sparkles, X } from 'lucide-react'
+import { IconPlus, IconFolder, IconTrash, IconTable, IconArrowLeft, IconSparkle, IconX, IconBuildings } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 
 /**
@@ -137,7 +137,7 @@ export function WorkspaceView() {
       const wsId = await createWorkspace({
         companyId,
         name: newWorkspaceName.trim(),
-        userId: user.id as Id<'users'>,
+        workosUserId: user.workosId,
       })
 
       setNewWorkspaceName('')
@@ -156,7 +156,7 @@ export function WorkspaceView() {
     try {
       await deleteWorkspace({
         workspaceId: wsId as Id<'workspaces'>,
-        userId: user.id as Id<'users'>,
+        workosUserId: user.workosId,
       })
       if (workspaceId === wsId) {
         router.push('/workspace')
@@ -185,7 +185,7 @@ export function WorkspaceView() {
       const sheetId = await createWorksheet({
         workspaceId: workspaceId as Id<'workspaces'>,
         name: name.trim(),
-        userId: user.id as Id<'users'>,
+        workosUserId: user.workosId,
       })
       router.push(`/workspace?ws=${workspaceId}&sheet=${sheetId}`)
     } catch (error) {
@@ -215,7 +215,7 @@ export function WorkspaceView() {
                 className="p-2 -m-2 hover:bg-secondary transition-colors"
                 aria-label="Back to worksheets"
               >
-                <ArrowLeft size={16} />
+                <IconArrowLeft size={16} />
               </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -238,6 +238,7 @@ export function WorkspaceView() {
                 columns={demoSheetData.columns as unknown as Parameters<typeof WorksheetGrid>[0]['columns']}
                 rows={demoSheetData.rows as unknown as Parameters<typeof WorksheetGrid>[0]['rows']}
                 userId={'demo-user' as Id<'users'>}
+                workosUserId={user?.workosId}
                 isDemo={true}
               />
             </div>
@@ -261,7 +262,7 @@ export function WorkspaceView() {
                   className="p-2 -m-2 hover:bg-secondary transition-colors"
                   aria-label="Back to workspaces"
                 >
-                  <ArrowLeft size={16} />
+                  <IconArrowLeft size={16} />
                 </button>
                 <div>
                   <div className="flex items-center gap-2">
@@ -275,7 +276,7 @@ export function WorkspaceView() {
               </div>
               <PremiumButton
                 onClick={handleAddWorksheet}
-                icon={<Plus size={14} />}
+                icon={<IconPlus size={14} />}
                 size="sm"
               >
                 Add Sheet
@@ -292,7 +293,7 @@ export function WorkspaceView() {
                   style={{ '--item-index': index } as React.CSSProperties}
                 >
                   <div className="flex items-start justify-between">
-                    <Table2 size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+                    <IconTable size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
                   </div>
                   <h3 className="mt-3 font-medium text-sm">{sheet.name}</h3>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -322,7 +323,7 @@ export function WorkspaceView() {
           </div>
           <PremiumButton
             onClick={handleStartCreating}
-            icon={<Plus size={14} />}
+            icon={<IconPlus size={14} />}
             size="sm"
           >
             New Workspace
@@ -332,7 +333,7 @@ export function WorkspaceView() {
         {/* Demo banner */}
         <div className="p-4 border border-chart-5/30 bg-chart-5/5">
           <div className="flex items-start gap-3">
-            <Sparkles size={16} className="text-chart-5 mt-0.5 shrink-0" />
+            <IconSparkle size={16} className="text-chart-5 mt-0.5 shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-medium mb-1">Exploring Demo Mode</p>
               <p className="text-xs text-muted-foreground">
@@ -353,7 +354,7 @@ export function WorkspaceView() {
               style={{ '--item-index': index } as React.CSSProperties}
             >
               <div className="flex items-start justify-between">
-                <FolderOpen size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+                <IconFolder size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -362,7 +363,7 @@ export function WorkspaceView() {
                   className="p-1.5 -m-1.5 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
                   aria-label="Delete workspace"
                 >
-                  <Trash2 size={14} />
+                  <IconTrash size={14} />
                 </button>
               </div>
               <h3 className="mt-3 font-medium text-sm">{workspace.name}</h3>
@@ -403,7 +404,32 @@ export function WorkspaceView() {
     )
   }
 
-  // Loading workspaces
+  // No company selected - user needs to create/select a company first
+  if (!companyId) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6 page-enter">
+        <div className="text-center max-w-md">
+          <IconBuildings size={48} className=" mx-auto text-muted-foreground/40 mb-4" />
+          <div className="flex items-center justify-center gap-1 mb-4">
+            <div className="w-6 h-0.5 bg-foreground/20" />
+            <div className="w-2 h-2 bg-foreground/40" />
+            <div className="w-6 h-0.5 bg-foreground/20" />
+          </div>
+          <h2 className="text-lg font-medium mb-2">No Company Selected</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Create or select a company to start using workspaces.
+          </p>
+          <ButtonSecondary
+            onClick={() => router.push('/settings')}
+          >
+            Go to Settings
+          </ButtonSecondary>
+        </div>
+      </div>
+    )
+  }
+
+  // Loading workspaces (only shows when companyId exists but data is fetching)
   if (workspaces === undefined) {
     return (
       <div className="p-6 space-y-6 animate-in fade-in duration-300">
@@ -438,7 +464,7 @@ export function WorkspaceView() {
             className="p-2 -m-2 hover:bg-secondary transition-colors"
             aria-label="Back to worksheets"
           >
-            <ArrowLeft size={16} />
+            <IconArrowLeft size={16} />
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-medium truncate">{workspaceData?.name}</h1>
@@ -458,6 +484,7 @@ export function WorkspaceView() {
             columns={worksheetData.columns}
             rows={worksheetData.rows}
             userId={user?.id as Id<'users'>}
+            workosUserId={user?.workosId}
           />
         </div>
       </div>
@@ -476,7 +503,7 @@ export function WorkspaceView() {
               className="p-2 -m-2 hover:bg-secondary transition-colors"
               aria-label="Back to workspaces"
             >
-              <ArrowLeft size={16} />
+              <IconArrowLeft size={16} />
             </button>
             <div>
               <h1 className="text-lg font-semibold">{workspaceData.name}</h1>
@@ -487,7 +514,7 @@ export function WorkspaceView() {
           </div>
           <PremiumButton
             onClick={handleAddWorksheet}
-            icon={<Plus size={14} />}
+            icon={<IconPlus size={14} />}
             size="sm"
           >
             Add Sheet
@@ -497,14 +524,14 @@ export function WorkspaceView() {
         {/* Worksheets grid */}
         {workspaceData.worksheets.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Table2 size={48} className="text-muted-foreground/30 mb-4" />
+            <IconTable size={48} className="text-muted-foreground/30 mb-4" />
             <h3 className="text-sm font-medium mb-2">No worksheets yet</h3>
             <p className="text-xs text-muted-foreground mb-4">
               Create a worksheet to start adding data
             </p>
             <PremiumButton
               onClick={handleAddWorksheet}
-              icon={<Plus size={14} />}
+              icon={<IconPlus size={14} />}
               size="sm"
             >
               Add Sheet
@@ -520,7 +547,7 @@ export function WorkspaceView() {
                 style={{ '--item-index': index } as React.CSSProperties}
               >
                 <div className="flex items-start justify-between">
-                  <Table2 size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+                  <IconTable size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
                 </div>
                 <h3 className="mt-3 font-medium text-sm">{sheet.name}</h3>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -548,7 +575,7 @@ export function WorkspaceView() {
         {!isCreating && (
           <PremiumButton
             onClick={handleStartCreating}
-            icon={<Plus size={14} />}
+            icon={<IconPlus size={14} />}
             size="sm"
           >
             New Workspace
@@ -569,7 +596,7 @@ export function WorkspaceView() {
               className="p-1 hover:bg-secondary transition-colors"
               aria-label="Cancel"
             >
-              <X size={14} className="text-muted-foreground" />
+              <IconX size={14} className="text-muted-foreground" />
             </button>
           </div>
           <div className="flex gap-2">
@@ -601,7 +628,7 @@ export function WorkspaceView() {
           </div>
           <div className="flex items-center justify-center gap-1 mb-4">
             <div className="w-6 h-0.5 bg-foreground/20" />
-            <Sparkles size={12} className="text-chart-5" />
+            <IconSparkle size={12} className="text-chart-5" />
             <div className="w-6 h-0.5 bg-foreground/20" />
           </div>
           <h3 className="text-sm font-medium mb-2">No workspaces yet</h3>
@@ -610,7 +637,7 @@ export function WorkspaceView() {
           </p>
           <PremiumButton
             onClick={handleStartCreating}
-            icon={<Plus size={14} />}
+            icon={<IconPlus size={14} />}
           >
             Create Workspace
           </PremiumButton>
@@ -628,7 +655,7 @@ export function WorkspaceView() {
               style={{ '--item-index': index } as React.CSSProperties}
             >
               <div className="flex items-start justify-between">
-                <FolderOpen size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+                <IconFolder size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -637,7 +664,7 @@ export function WorkspaceView() {
                   className="p-1.5 -m-1.5 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
                   aria-label="Delete workspace"
                 >
-                  <Trash2 size={14} />
+                  <IconTrash size={14} />
                 </button>
               </div>
               <h3 className="mt-3 font-medium text-sm">{workspace.name}</h3>
