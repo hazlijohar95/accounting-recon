@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Check, X } from 'lucide-react'
+import { IconCheck, IconX } from '@/components/brand/icons'
 
 interface AssistantActionButtonsProps {
   matchId: string
@@ -49,12 +49,12 @@ export function AssistantActionButtons({
         )}>
           {actionTaken === 'approved' ? (
             <>
-              <Check className="w-3 h-3" />
+              <IconCheck size={12} />
               <span>Match approved</span>
             </>
           ) : (
             <>
-              <X className="w-3 h-3" />
+              <IconX size={12} />
               <span>Match rejected</span>
             </>
           )}
@@ -78,7 +78,7 @@ export function AssistantActionButtons({
           'transition-all duration-150'
         )}
       >
-        <Check className="w-3 h-3" />
+        <IconCheck size={12} />
         Approve
       </button>
 
@@ -92,7 +92,7 @@ export function AssistantActionButtons({
           'transition-all duration-150'
         )}
       >
-        <X className="w-3 h-3" />
+        <IconX size={12} />
         Reject
       </button>
 
@@ -133,7 +133,7 @@ export function CreateMatchButton({
   if (isCreated) {
     return (
       <div className={cn('flex items-center gap-1.5 text-success text-xs', className)}>
-        <Check className="w-3 h-3" />
+        <IconCheck size={12} />
         <span>Manual match created</span>
       </div>
     )
@@ -151,7 +151,7 @@ export function CreateMatchButton({
         className
       )}
     >
-      <Check className="w-3 h-3" />
+      <IconCheck size={12} />
       Create Manual Match
     </button>
   )

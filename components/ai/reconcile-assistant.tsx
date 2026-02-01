@@ -13,7 +13,16 @@ import {
   Transaction,
 } from '@/lib/store'
 import { cn } from '@/lib/utils'
-import { X, Send, Brain, HelpCircle, Search, ChevronUp, Maximize2, Minimize2 } from 'lucide-react'
+import {
+  IconX,
+  IconSend,
+  IconBrain,
+  IconQuestion,
+  IconSearch,
+  IconCaretUp,
+  IconMaximize,
+  IconMinimize,
+} from '@/components/brand/icons'
 import { ChatMessage, TypingIndicator, AnalysisMessage, MatchResult } from './chat-message'
 import { AssistantActionButtons } from './assistant-action-buttons'
 import { LoadingSpinner } from '@/components/brand'
@@ -413,14 +422,14 @@ export function ReconcileAssistant({
               aria-label={isMaximized ? 'Minimize' : 'Maximize'}
               title={isMaximized ? 'Minimize' : 'Maximize'}
             >
-              {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              {isMaximized ? <IconMinimize size={16} /> : <IconMaximize size={16} />}
             </button>
             <button
               onClick={handleCollapse}
               className="assistant-close-btn"
               aria-label="Close assistant"
             >
-              <X className="w-4 h-4" />
+              <IconX size={16} />
             </button>
           </div>
         </header>
@@ -512,7 +521,7 @@ export function ReconcileAssistant({
               disabled={isAnalyzing}
               className="assistant-action-primary"
             >
-              <Brain className="w-3.5 h-3.5" />
+              <IconBrain size={14} />
               <span>Run AI Analysis</span>
               {isDemo && !BYPASS_PAYWALL && (
                 <span className="assistant-pro-badge">PRO</span>
@@ -523,7 +532,7 @@ export function ReconcileAssistant({
               onClick={() => handleQuickAction('Explain the current matches and their confidence levels')}
               className="assistant-action-secondary"
             >
-              <HelpCircle className="w-3.5 h-3.5" />
+              <IconQuestion size={14} />
               <span>Explain matches</span>
             </button>
 
@@ -531,7 +540,7 @@ export function ReconcileAssistant({
               onClick={() => handleQuickAction('Find potential matches for suspense items')}
               className="assistant-action-secondary"
             >
-              <Search className="w-3.5 h-3.5" />
+              <IconSearch size={14} />
               <span>Find matches</span>
             </button>
           </div>
@@ -580,7 +589,7 @@ export function ReconcileAssistant({
             className="assistant-expand-btn"
             aria-label="Expand panel"
           >
-            <ChevronUp className="w-4 h-4" />
+            <IconCaretUp size={16} />
           </button>
         )}
 
@@ -592,7 +601,7 @@ export function ReconcileAssistant({
             className="assistant-send-btn"
             aria-label="Send message"
           >
-            <Send className="w-4 h-4" />
+            <IconSend size={16} />
           </button>
         )}
       </form>

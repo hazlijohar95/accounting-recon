@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useCompletion } from '@ai-sdk/react'
 import { cn } from '@/lib/utils'
-import { Brain, CheckCircle2, XCircle, Loader2, X, Sparkles, Zap } from 'lucide-react'
+import { IconBrain, IconCheckCircle, IconXCircle, IconLoader, IconX, IconSparkle, IconLightning } from '@/components/brand/icons'
 import { MatchingStepIndicator } from '@/components/brand'
 
 interface Transaction {
@@ -158,7 +158,7 @@ export function MatchingReasoningOverlay({
             {/* Animated logo */}
             <div className="relative">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 shadow-lg shadow-amber-500/30 flex items-center justify-center">
-                <Brain className="w-7 h-7 text-white" />
+                <IconBrain size={28} className="text-white" />
               </div>
               {/* Pulse ring */}
               {isLoading && (
@@ -170,7 +170,7 @@ export function MatchingReasoningOverlay({
                 AI Matching Analysis
                 {isLoading && (
                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-300 rounded-full">
-                    <Zap className="w-3 h-3" />
+                    <IconLightning size={12} />
                     Processing
                   </span>
                 )}
@@ -187,7 +187,7 @@ export function MatchingReasoningOverlay({
               onClick={handleClose}
               className="p-2.5 hover:bg-slate-800 rounded-xl transition-colors duration-200"
             >
-              <X className="w-5 h-5 text-slate-400" />
+              <IconX size={20} className="text-slate-400" />
             </button>
           </div>
         </div>
@@ -199,12 +199,12 @@ export function MatchingReasoningOverlay({
             <div className="px-6 py-3 border-b border-slate-700/30 bg-slate-800/30">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <IconSparkle size={16} className="text-amber-400" />
                   <span className="text-sm font-medium text-white">AI Reasoning</span>
                 </div>
                 {isLoading && (
                   <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <IconLoader size={12} className="animate-spin" />
                     <span>Analyzing transactions...</span>
                   </div>
                 )}
@@ -227,7 +227,7 @@ export function MatchingReasoningOverlay({
                 </pre>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                  <Brain className="w-12 h-12 mb-4 opacity-30" />
+                  <IconBrain size={48} className="mb-4 opacity-30" />
                   <p>Initializing AI analysis...</p>
                 </div>
               )}
@@ -247,7 +247,7 @@ export function MatchingReasoningOverlay({
               {matches.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-slate-500 text-sm">
                   <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center mb-3">
-                    <CheckCircle2 className="w-5 h-5 opacity-30" />
+                    <IconCheckCircle size={20} className="opacity-30" />
                   </div>
                   <p>Matches will appear here</p>
                 </div>
@@ -324,11 +324,11 @@ function MatchResultCard({ match, index }: { match: ParsedMatch; index: number }
           {match.cashId}
         </span>
         {isMatch ? (
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+          <IconCheckCircle size={20} className="text-emerald-400 flex-shrink-0" />
         ) : isReview ? (
-          <Loader2 className="w-5 h-5 text-amber-400 flex-shrink-0" />
+          <IconLoader size={20} className="text-amber-400 flex-shrink-0" />
         ) : (
-          <XCircle className="w-5 h-5 text-slate-500 flex-shrink-0" />
+          <IconXCircle size={20} className="text-slate-500 flex-shrink-0" />
         )}
       </div>
 

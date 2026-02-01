@@ -11,7 +11,17 @@ import {
   useAccrualDocumentsSafe,
 } from '@/lib/store'
 import { cn } from '@/lib/utils'
-import { X, Send, Sparkles, Maximize2, Minimize2, Command, Brain, HelpCircle, Search } from 'lucide-react'
+import {
+  IconX,
+  IconSend,
+  IconSparkle,
+  IconMaximize,
+  IconMinimize,
+  IconCommand,
+  IconBrain,
+  IconQuestion,
+  IconSearch,
+} from '@/components/brand/icons'
 import { ChatMessage, TypingIndicator, AnalysisMessage, MatchResult } from './chat-message'
 
 interface AssistantPanelProps {
@@ -359,7 +369,7 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
       >
         {/* Icon */}
         <div className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800">
-          <Sparkles className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          <IconSparkle size={16} className="text-slate-500 dark:text-slate-400" />
         </div>
 
         {/* Placeholder text */}
@@ -369,7 +379,7 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
 
         {/* Keyboard shortcut hint */}
         <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-medium text-slate-400 dark:text-slate-500">
-          <Command className="w-3 h-3" />
+          <IconCommand size={12} />
           <span>K</span>
         </div>
 
@@ -404,7 +414,7 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-2.5">
           <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800">
-            <Sparkles className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <IconSparkle size={16} className="text-slate-500 dark:text-slate-400" />
           </div>
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
             AI Assistant
@@ -418,16 +428,16 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
             title={isExpanded ? 'Minimize' : 'Expand'}
           >
             {isExpanded ? (
-              <Minimize2 className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+              <IconMinimize size={16} className="text-slate-400 dark:text-slate-500" />
             ) : (
-              <Maximize2 className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+              <IconMaximize size={16} className="text-slate-400 dark:text-slate-500" />
             )}
           </button>
           <button
             onClick={() => setIsOpen(false)}
             className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors duration-150"
           >
-            <X className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+            <IconX size={16} className="text-slate-400 dark:text-slate-500" />
           </button>
         </div>
       </div>
@@ -489,7 +499,7 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
         {isAnalyzing && !analysisCompletion && (
           <div className="flex gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
             <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-              <Brain className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 animate-pulse" />
+              <IconBrain size={14} className="text-slate-500 dark:text-slate-400 animate-pulse" />
             </div>
             <div className="px-4 py-3 bg-white dark:bg-slate-800 rounded-2xl rounded-tl-md border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -522,7 +532,7 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
-              <Brain className="w-3 h-3" />
+              <IconBrain size={12} />
               Run AI Analysis
               {isDemo && !BYPASS_PAYWALL && (
                 <span className="ml-1 px-1.5 py-0.5 text-[9px] bg-white/20 dark:bg-slate-900/20 rounded">PRO</span>
@@ -531,8 +541,8 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
 
             {/* Secondary actions */}
             {[
-              { label: 'Explain matches', icon: HelpCircle },
-              { label: 'Find suspense matches', icon: Search },
+              { label: 'Explain matches', icon: IconQuestion },
+              { label: 'Find suspense matches', icon: IconSearch },
             ].map(({ label, icon: Icon }) => (
               <button
                 key={label}
@@ -548,7 +558,7 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
                   'transition-all duration-150'
                 )}
               >
-                <Icon className="w-3 h-3" />
+                <Icon size={12} />
                 {label}
               </button>
             ))}
@@ -601,7 +611,7 @@ export function AssistantPanel({ sessionId, companyName, className }: AssistantP
                   ]
             )}
           >
-            <Send className={cn('w-4 h-4', isPending && 'animate-pulse')} />
+            <IconSend size={16} className={cn(isPending && 'animate-pulse')} />
           </button>
         </div>
       </form>

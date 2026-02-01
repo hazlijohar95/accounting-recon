@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useChat, UIMessage } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useOnboardingState, useSetSelectedCompanyId } from '@/lib/store'
-import { X, Send, Building2, Loader2, Sparkles, CheckCircle2 } from 'lucide-react'
+import { IconX, IconSend, IconBuildings, IconLoader, IconSparkle, IconCheckCircle } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import { LogoAnimatedWithText } from '@/components/brand'
 import { useMutation } from 'convex/react'
@@ -67,7 +67,7 @@ export function OnboardingChatAI({ onComplete }: OnboardingChatAIProps) {
     if (isAuthenticated && user) {
       setIsCreatingCompany(true)
       try {
-        const companyId = await createCompany({
+        const { companyId } = await createCompany({
           name: args.companyName,
           industryCategory: args.industryCategory,
           taxRegistered: args.taxRegistered,
@@ -201,7 +201,7 @@ export function OnboardingChatAI({ onComplete }: OnboardingChatAIProps) {
             onClick={handleClose}
             className="relative p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors duration-200"
           >
-            <X className="w-5 h-5 text-slate-500" />
+            <IconX size={20} className="text-slate-500" />
           </button>
         </div>
 
@@ -210,7 +210,7 @@ export function OnboardingChatAI({ onComplete }: OnboardingChatAIProps) {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm shadow-amber-500/30">
-                <Sparkles className="w-3.5 h-3.5 text-white" />
+                <IconSparkle size={14} className="text-white" />
               </div>
               <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 tracking-wide">
                 AI Onboarding
@@ -243,7 +243,7 @@ export function OnboardingChatAI({ onComplete }: OnboardingChatAIProps) {
           {isCreatingCompany && (
             <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-                <Building2 className="w-5 h-5 text-white animate-pulse" />
+                <IconBuildings size={20} className="text-white animate-pulse" />
               </div>
               <div>
                 <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
@@ -260,7 +260,7 @@ export function OnboardingChatAI({ onComplete }: OnboardingChatAIProps) {
           {isComplete && !isCreatingCompany && (
             <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                <CheckCircle2 className="w-5 h-5 text-white" />
+                <IconCheckCircle size={20} className="text-white" />
               </div>
               <div>
                 <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
@@ -325,9 +325,9 @@ export function OnboardingChatAI({ onComplete }: OnboardingChatAIProps) {
               )}
             >
               {isPending ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <IconLoader size={20} className="animate-spin" />
               ) : (
-                <Send className="w-5 h-5" />
+                <IconSend size={20} />
               )}
             </button>
           </div>

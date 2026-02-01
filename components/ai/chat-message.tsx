@@ -1,7 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { Sparkles, User, CheckCircle2, AlertCircle, XCircle } from 'lucide-react'
+import { IconSparkle, IconUser, IconCheckCircle, IconWarningCircle, IconXCircle } from '@/components/brand/icons'
 import ReactMarkdown from 'react-markdown'
 
 interface ChatMessageProps {
@@ -44,9 +44,9 @@ export function ChatMessage({ role, content, isStreaming, className }: ChatMessa
         )}
       >
         {isUser ? (
-          <User className="w-3.5 h-3.5 text-background" />
+          <IconUser size={14} className="text-background" />
         ) : (
-          <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+          <IconSparkle size={14} className="text-muted-foreground" />
         )}
       </div>
 
@@ -127,7 +127,7 @@ export function TypingIndicator() {
     <div className="flex gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
       {/* Avatar - sharp corners */}
       <div className="flex-shrink-0 w-7 h-7 bg-secondary flex items-center justify-center">
-        <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+        <IconSparkle size={14} className="text-muted-foreground" />
       </div>
 
       {/* Typing bubble - sharp corners */}
@@ -181,11 +181,11 @@ export function MatchResultCard({ match }: { match: MatchResult }) {
       <div className="flex items-center justify-between mb-2 pt-1">
         <div className="flex items-center gap-2">
           {isMatch ? (
-            <CheckCircle2 className="w-4 h-4 text-success" />
+            <IconCheckCircle size={16} className="text-success" />
           ) : isReview ? (
-            <AlertCircle className="w-4 h-4 text-warning" />
+            <IconWarningCircle size={16} className="text-warning" />
           ) : (
-            <XCircle className="w-4 h-4 text-muted-foreground" />
+            <IconXCircle size={16} className="text-muted-foreground" />
           )}
           <span
             className={cn(
@@ -233,7 +233,7 @@ export function AnalysisMessage({ content, matches, isStreaming }: AnalysisMessa
     <div className="flex gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
       {/* Avatar - sharp corners */}
       <div className="flex-shrink-0 w-7 h-7 bg-secondary flex items-center justify-center">
-        <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+        <IconSparkle size={14} className="text-muted-foreground" />
       </div>
 
       {/* Content */}
