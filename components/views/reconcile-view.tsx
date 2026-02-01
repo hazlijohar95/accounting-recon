@@ -40,7 +40,21 @@ import {
 } from '@/lib/store'
 import { confidenceToPercent } from '@/lib/matching-utils'
 import { useDemoGuard } from '@/hooks/useDemoGuard'
-import { Check, X, AlertCircle, Play, ArrowDown, CheckCircle2, Banknote, FileText, Search, Keyboard, Filter, ChevronDown, DollarSign } from 'lucide-react'
+import {
+  IconCheck,
+  IconX,
+  IconWarningCircle,
+  IconPlay,
+  IconArrowDown,
+  IconCheckCircle,
+  IconBank,
+  IconFileText,
+  IconSearch,
+  IconCommand,
+  IconFilter,
+  IconCaretDown,
+  IconDollarSign,
+} from '@/components/brand/icons'
 import { useToast } from '@/components/ui/toast'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useRunMatching, usePreviewMatching, useApproveMatch, useRejectMatch } from '@/lib/convex-hooks'
@@ -553,21 +567,21 @@ function ReconcileViewContent() {
     switch (tab) {
       case 'pending':
         return {
-          icon: <FileText className="w-8 h-8 text-muted-foreground/40" />,
+          icon: <IconFileText size={32} className="text-muted-foreground/40" />,
           title: 'No pending matches',
           description: 'All matches have been reviewed. Run the matching engine to find new matches.',
           className: 'empty-state-pending',
         }
       case 'matched':
         return {
-          icon: <CheckCircle2 className="w-8 h-8 text-success/40" />,
+          icon: <IconCheckCircle size={32} className="text-success/40" />,
           title: 'No approved matches yet',
           description: 'Review and approve pending matches to see them here.',
           className: 'empty-state-matched',
         }
       case 'suspense':
         return {
-          icon: <AlertCircle className="w-8 h-8 text-warning/40" />,
+          icon: <IconWarningCircle size={32} className="text-warning/40" />,
           title: 'Nothing needs review',
           description: "Transactions we couldn't match automatically will appear here.",
           className: 'empty-state-suspense',
@@ -592,7 +606,7 @@ function ReconcileViewContent() {
               className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:bg-secondary/50 transition-colors"
               title="Keyboard shortcuts"
             >
-              <Keyboard className="w-3 h-3" />
+              <IconCommand size={12} />
               <span className="hidden sm:inline">?</span>
             </button>
           </div>
@@ -604,7 +618,7 @@ function ReconcileViewContent() {
                 onClick={() => handleRunMatching(false)}
                 disabled={isRunningMatching || isDemo}
                 loading={isRunningMatching}
-                icon={<Play className="w-3 h-3" />}
+                icon={<IconPlay size={12} />}
               >
                 {isRunningMatching ? 'Matching...' : 'Run Matching'}
               </ButtonPrimary>
@@ -620,7 +634,7 @@ function ReconcileViewContent() {
           <div className="flex items-center gap-3">
             {/* Search Input */}
             <div className="relative flex-1 max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+              <IconSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <input
                 type="text"
                 placeholder="Search transactions... (/)"
@@ -643,14 +657,14 @@ function ReconcileViewContent() {
                 (filters.matchLayers.length > 0 || filters.confidenceLevels.length > 0 || filters.minAmount !== null || filters.maxAmount !== null) && 'border-foreground'
               )}
             >
-              <Filter className="w-4 h-4" aria-hidden="true" />
+              <IconFilter size={16} aria-hidden="true" />
               Filters
               {(filters.matchLayers.length > 0 || filters.confidenceLevels.length > 0) && (
                 <span className="px-1.5 py-0.5 text-[10px] bg-foreground text-background rounded-full" aria-hidden="true">
                   {filters.matchLayers.length + filters.confidenceLevels.length}
                 </span>
               )}
-              <ChevronDown className={cn('w-3 h-3 transition-transform', showFilters && 'rotate-180')} aria-hidden="true" />
+              <IconCaretDown size={12} className={cn('transition-transform', showFilters && 'rotate-180')} aria-hidden="true" />
             </button>
 
             {/* Clear Filters */}
@@ -735,7 +749,7 @@ function ReconcileViewContent() {
                 <legend className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Amount Range</legend>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
-                    <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" aria-hidden="true" />
+                    <IconDollarSign size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                     <input
                       type="number"
                       placeholder="Min"
@@ -747,7 +761,7 @@ function ReconcileViewContent() {
                   </div>
                   <span className="text-muted-foreground" aria-hidden="true">-</span>
                   <div className="relative flex-1">
-                    <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" aria-hidden="true" />
+                    <IconDollarSign size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                     <input
                       type="number"
                       placeholder="Max"
@@ -789,7 +803,7 @@ function ReconcileViewContent() {
         {matchingResult && (
           <div className="px-4 py-3 bg-success/10 border-b border-success/20 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <CheckCircle2 className="w-4 h-4 text-success" />
+              <IconCheckCircle size={16} className="text-success" />
               <span className="text-sm font-medium text-success">Matching Complete</span>
               <span className="text-xs text-muted-foreground">
                 {matchingResult.totalMatches} matches found
@@ -927,8 +941,9 @@ function ReconcileViewContent() {
         />
       </div>
 
-      {/* Detail Panel */}
-      <div className="w-96 flex flex-col bg-background">
+      {/* Detail Panel - Fixed on desktop (lg+), Overlay on tablet/mobile */}
+      {/* Desktop: Side panel */}
+      <div className="hidden lg:flex w-96 flex-col bg-background border-l border-border">
         {selectedMatch ? (
           <>
             {/* Panel Header */}
@@ -940,7 +955,7 @@ function ReconcileViewContent() {
                 </div>
                 {selectedMatch.approved && (
                   <span className="flex items-center gap-1 text-xs text-success">
-                    <CheckCircle2 className="w-3 h-3" />
+                    <IconCheckCircle size={12} />
                     Approved
                   </span>
                 )}
@@ -965,7 +980,7 @@ function ReconcileViewContent() {
               {/* Cash Transaction Card */}
               <TransactionCard
                 label="Cash Transaction"
-                icon={<Banknote className="w-4 h-4" />}
+                icon={<IconBank size={16} />}
                 tx={selectedMatch.cashTransaction}
                 type="cash"
               />
@@ -973,14 +988,14 @@ function ReconcileViewContent() {
               {/* Arrow Connector */}
               <div className="arrow-connector">
                 <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center z-10">
-                  <ArrowDown className="w-4 h-4 text-muted-foreground" />
+                  <IconArrowDown size={16} className="text-muted-foreground" />
                 </div>
               </div>
 
               {/* Accrual Transaction Card */}
               <TransactionCard
                 label="Accrual Record"
-                icon={<FileText className="w-4 h-4" />}
+                icon={<IconFileText size={16} />}
                 tx={selectedMatch.accrualTransaction}
                 type="accrual"
               />
@@ -990,12 +1005,12 @@ function ReconcileViewContent() {
             {!selectedMatch.approved && (
               <div className="action-button-container">
                 <ButtonDanger size="md" className="flex-1 relative" onClick={() => handleReject(selectedMatch.id)}>
-                  <X className="w-4 h-4 mr-2" />
+                  <IconX size={16} className="mr-2" />
                   Reject
                   <span className="absolute -top-2 -right-1 px-1.5 py-0.5 text-[10px] bg-background border border-border text-muted-foreground font-mono">R</span>
                 </ButtonDanger>
                 <ButtonPrimary size="md" className="flex-1 relative" onClick={() => handleApprove(selectedMatch.id)}>
-                  <Check className="w-4 h-4 mr-2" />
+                  <IconCheck size={16} className="mr-2" />
                   Approve
                   <span className="absolute -top-2 -right-1 px-1.5 py-0.5 text-[10px] bg-background border border-border text-muted-foreground font-mono">A</span>
                 </ButtonPrimary>
@@ -1005,12 +1020,103 @@ function ReconcileViewContent() {
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
             <div className="w-16 h-16 mb-4 bg-secondary flex items-center justify-center">
-              <FileText className="w-6 h-6 text-muted-foreground/50" />
+              <IconFileText size={24} className="text-muted-foreground/50" />
             </div>
             <p className="text-sm text-muted-foreground">Select a match to view details</p>
           </div>
         )}
       </div>
+
+      {/* Mobile/Tablet: Slide-over panel overlay */}
+      {selectedMatch && (
+        <div className="lg:hidden fixed inset-0 z-40">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setSelectedMatch(null)}
+          />
+          {/* Panel */}
+          <div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-background border-l border-border flex flex-col animate-in slide-in-from-right duration-200">
+            {/* Close button for mobile */}
+            <button
+              onClick={() => setSelectedMatch(null)}
+              className="absolute top-4 right-4 z-10 p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+              aria-label="Close details"
+            >
+              <IconX size={20} />
+            </button>
+
+            {/* Panel Header */}
+            <div className="panel-header">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MatchLayerBadge layer={selectedMatch.matchLayer as MatchLayer} size="md" />
+                  <span className="text-sm font-medium">Match Detail</span>
+                </div>
+                {selectedMatch.approved && (
+                  <span className="flex items-center gap-1 text-xs text-success">
+                    <IconCheckCircle size={12} />
+                    Approved
+                  </span>
+                )}
+              </div>
+
+              {/* Confidence Gauge - Medium Size */}
+              <div className="flex justify-center py-2">
+                <ConfidenceGauge
+                  value={confidenceToPercent(selectedMatch.confidence)}
+                  size="md"
+                  animate={true}
+                  showLabel={true}
+                />
+              </div>
+            </div>
+
+            {/* Panel Content */}
+            <div className="flex-1 p-4 space-y-4 overflow-auto">
+              {/* Full-width Confidence Bar */}
+              <ConfidenceBar value={confidenceToPercent(selectedMatch.confidence)} animate={true} showValue={true} />
+
+              {/* Cash Transaction Card */}
+              <TransactionCard
+                label="Cash Transaction"
+                icon={<IconBank size={16} />}
+                tx={selectedMatch.cashTransaction}
+                type="cash"
+              />
+
+              {/* Arrow Connector */}
+              <div className="arrow-connector">
+                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center z-10">
+                  <IconArrowDown size={16} className="text-muted-foreground" />
+                </div>
+              </div>
+
+              {/* Accrual Transaction Card */}
+              <TransactionCard
+                label="Accrual Record"
+                icon={<IconFileText size={16} />}
+                tx={selectedMatch.accrualTransaction}
+                type="accrual"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            {!selectedMatch.approved && (
+              <div className="action-button-container">
+                <ButtonDanger size="md" className="flex-1" onClick={() => handleReject(selectedMatch.id)}>
+                  <IconX size={16} className="mr-2" />
+                  Reject
+                </ButtonDanger>
+                <ButtonPrimary size="md" className="flex-1" onClick={() => handleApprove(selectedMatch.id)}>
+                  <IconCheck size={16} className="mr-2" />
+                  Approve
+                </ButtonPrimary>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Manual Match Modal */}
       {manualMatchItem && (
@@ -1087,7 +1193,7 @@ const MatchRow = React.memo(function MatchRow({ match, selected, onClick, approv
 
         {/* Approved Icon */}
         {approved && (
-          <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" aria-label="Approved" />
+          <IconCheckCircle size={16} className="text-success flex-shrink-0" aria-label="Approved" />
         )}
       </div>
 
@@ -1135,7 +1241,7 @@ const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }: Suspe
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-6 h-6 bg-warning/10 flex items-center justify-center" aria-hidden="true">
-            <AlertCircle className="w-3.5 h-3.5 text-warning" />
+            <IconWarningCircle size={14} className="text-warning" />
           </div>
           <TruncatedText text={item.description} maxWidth="200px" className="text-sm" />
         </div>
@@ -1146,7 +1252,7 @@ const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }: Suspe
               aria-label={`Find match for ${item.description}`}
               className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
             >
-              <Search className="w-3 h-3" aria-hidden="true" />
+              <IconSearch size={12} aria-hidden="true" />
               Find Match
             </button>
           )}
@@ -1309,14 +1415,14 @@ function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <Keyboard className="w-5 h-5 text-muted-foreground" />
+            <IconCommand size={20} className="text-muted-foreground" />
             <h2 className="text-lg font-medium">Keyboard Shortcuts</h2>
           </div>
           <button
             onClick={onClose}
             className="p-1 text-muted-foreground hover:text-foreground transition-colors"
           >
-            <X className="w-5 h-5" />
+            <IconX size={20} />
           </button>
         </div>
 

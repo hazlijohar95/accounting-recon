@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { CheckCircle2 } from 'lucide-react'
+import { IconCheckCircle } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import { confidenceToPercent } from '@/lib/matching-utils'
 import { MatchLayerBadge, TruncatedText } from '@/components/brand'
@@ -67,7 +67,7 @@ export const MatchRow = React.memo(function MatchRow({
 
         {/* Approved Icon */}
         {approved && (
-          <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" aria-label="Approved" />
+          <IconCheckCircle size={16} className="text-success flex-shrink-0" aria-label="Approved" />
         )}
       </div>
 

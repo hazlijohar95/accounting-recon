@@ -12,7 +12,16 @@ import {
 import { useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useRecentActivity } from '@/lib/convex-hooks'
-import { Download, ChevronDown, CheckCircle2, XCircle, Upload, Play, Clock, FileText } from 'lucide-react'
+import {
+  IconDownload,
+  IconCaretDown,
+  IconCheckCircle,
+  IconXCircle,
+  IconUpload,
+  IconPlay,
+  IconClock,
+  IconFileText,
+} from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import {
   SkeletonTable,
@@ -242,7 +251,7 @@ function ReportsViewContent() {
         <div className="flex items-center gap-2">
           <ButtonSecondary
             size="sm"
-            icon={<Download className="w-3 h-3" />}
+            icon={<IconDownload size={12} />}
             loading={exportLoading === 'csv'}
             disabled={exportLoading !== null}
             onClick={() => handleExport('csv')}
@@ -251,7 +260,7 @@ function ReportsViewContent() {
           </ButtonSecondary>
           <ButtonPrimary
             size="sm"
-            icon={<Download className="w-3 h-3" />}
+            icon={<IconDownload size={12} />}
             loading={exportLoading === 'xlsx'}
             disabled={exportLoading !== null}
             onClick={() => handleExport('xlsx')}
@@ -263,7 +272,7 @@ function ReportsViewContent() {
           <div className="relative">
             <ButtonSecondary
               size="sm"
-              icon={<Download className="w-3 h-3" />}
+              icon={<IconDownload size={12} />}
               loading={exportLoading === 'accounting'}
               disabled={exportLoading !== null}
               onClick={(e) => {
@@ -272,7 +281,7 @@ function ReportsViewContent() {
               }}
             >
               Accounting
-              <ChevronDown className="w-3 h-3 ml-1" />
+              <IconCaretDown size={12} className="ml-1" />
             </ButtonSecondary>
 
             {showAccountingMenu && (
@@ -358,7 +367,7 @@ function ReportsViewContent() {
                 <StatCard
                   label="Pending"
                   value={pendingCount}
-                  icon={<Clock className="w-3 h-3" />}
+                  icon={<IconClock size={12} />}
                   animate
                 />
               </div>
@@ -374,7 +383,7 @@ function ReportsViewContent() {
                 <StatCard
                   label="Total"
                   value={totalTransactions}
-                  icon={<FileText className="w-3 h-3" />}
+                  icon={<IconFileText size={12} />}
                   animate
                 />
               </div>
@@ -580,13 +589,13 @@ function ReportsViewContent() {
                       key={activity.id}
                       icon={
                         activity.status === 'matched' ? (
-                          <CheckCircle2 className="w-4 h-4" />
+                          <IconCheckCircle size={16} />
                         ) : activity.status === 'suspense' ? (
-                          <XCircle className="w-4 h-4" />
+                          <IconXCircle size={16} />
                         ) : activity.type === 'inflow' ? (
-                          <Download className="w-4 h-4" />
+                          <IconDownload size={16} />
                         ) : (
-                          <Upload className="w-4 h-4" />
+                          <IconUpload size={16} />
                         )
                       }
                       iconBg={

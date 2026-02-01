@@ -2,7 +2,15 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useAppStore, useSetProcessingDocumentsCount, useIsDemo, useSelectedCompanyId, useSetShowPaywall } from '@/lib/store'
-import { FileText, AlertCircle, RefreshCw, X, FileUp, Trash2, Eye } from 'lucide-react'
+import {
+  IconFileText,
+  IconWarningCircle,
+  IconRefresh,
+  IconX,
+  IconCloudUpload,
+  IconTrash,
+  IconEye,
+} from '@/components/brand/icons'
 import { cn, formatFileSize } from '@/lib/utils'
 import { LoadingSpinner, SuccessCheckmark, LogoMark, BrandedEmptyState } from '@/components/brand'
 import { Id } from '@/convex/_generated/dataModel'
@@ -426,7 +434,7 @@ function UploadViewContent() {
           'relative transition-transform duration-200',
           isDragging && 'scale-110 -translate-y-1'
         )}>
-          <FileUp className="w-10 h-10 mx-auto text-muted-foreground" aria-hidden="true" />
+          <IconCloudUpload size={40} className="mx-auto text-muted-foreground" aria-hidden="true" />
         </div>
 
         <p className="mt-4 text-sm font-medium relative">
@@ -587,7 +595,7 @@ function FileItem({
       {/* File info */}
       <div className="flex items-start sm:items-center gap-3 min-w-0">
         <div className="flex-shrink-0 mt-0.5 sm:mt-0">
-          <FileText className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
+          <IconFileText size={20} className="text-muted-foreground" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate" title={file.name}>
@@ -624,7 +632,7 @@ function FileItem({
               className="p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-ring"
               aria-label={`Remove ${file.name}`}
             >
-              <X className="w-4 h-4" />
+              <IconX size={16} />
             </button>
           </div>
         )}
@@ -650,7 +658,7 @@ function FileItem({
               className="p-1 text-muted-foreground hover:text-foreground transition-colors focus-ring"
               aria-label="Cancel upload"
             >
-              <X className="w-4 h-4" />
+              <IconX size={16} />
             </button>
           </div>
         )}
@@ -677,7 +685,7 @@ function FileItem({
         {displayStatus === 'failed' && (
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-xs text-error">
-              <AlertCircle className="w-4 h-4" aria-hidden="true" />
+              <IconWarningCircle size={16} aria-hidden="true" />
               <span className="max-w-[150px] truncate" title={errorMessage}>
                 {errorMessage || 'Failed'}
               </span>
@@ -687,14 +695,14 @@ function FileItem({
               className="p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-ring"
               aria-label={`Retry upload for ${file.name}`}
             >
-              <RefreshCw className="w-4 h-4" />
+              <IconRefresh size={16} />
             </button>
             <button
               onClick={onRemove}
               className="p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-ring"
               aria-label={`Remove ${file.name}`}
             >
-              <X className="w-4 h-4" />
+              <IconX size={16} />
             </button>
           </div>
         )}
@@ -902,7 +910,7 @@ function DocumentListItem({
         onClick={onSelect}
         className="flex items-start gap-3 flex-1 text-left min-w-0 focus-ring"
       >
-        <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" aria-hidden="true" />
+        <IconFileText size={20} className="text-muted-foreground flex-shrink-0 mt-0.5" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate" title={document.fileName}>
             {document.fileName}
@@ -940,7 +948,7 @@ function DocumentListItem({
         className="p-1.5 text-muted-foreground hover:text-error transition-colors focus-ring"
         aria-label={`Delete ${document.fileName}`}
       >
-        <Trash2 className="w-4 h-4" />
+        <IconTrash size={16} />
       </button>
     </li>
   )
@@ -1054,7 +1062,7 @@ function DemoDocumentsList() {
             className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-secondary/20 transition-colors"
           >
             <div className="flex items-start gap-3 flex-1 min-w-0">
-              <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <IconFileText size={20} className="text-muted-foreground flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{doc.name}</p>
                 <p className="text-xs text-muted-foreground">
@@ -1084,7 +1092,7 @@ function DemoDocumentsList() {
               className="p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-ring"
               aria-label="View document"
             >
-              <Eye className="w-4 h-4" />
+              <IconEye size={16} />
             </button>
           </li>
         ))}

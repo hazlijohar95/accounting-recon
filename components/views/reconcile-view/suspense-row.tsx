@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { AlertCircle, Search } from 'lucide-react'
+import { IconWarningCircle, IconSearch } from '@/components/brand/icons'
 import { TruncatedText } from '@/components/brand'
 import type { Transaction } from '@/lib/store'
 
@@ -27,7 +27,7 @@ export const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-6 h-6 bg-warning/10 flex items-center justify-center" aria-hidden="true">
-            <AlertCircle className="w-3.5 h-3.5 text-warning" />
+            <IconWarningCircle size={14} className="text-warning" />
           </div>
           <TruncatedText text={item.description} maxWidth="200px" className="text-sm" />
         </div>
@@ -38,7 +38,7 @@ export const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }
               aria-label={`Find match for ${item.description}`}
               className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
             >
-              <Search className="w-3 h-3" aria-hidden="true" />
+              <IconSearch size={12} aria-hidden="true" />
               Find Match
             </button>
           )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { Keyboard, X } from 'lucide-react'
+import { IconCommand, IconX } from '@/components/brand/icons'
 import { Modal } from '@/components/ui'
 
 const keyboardShortcuts = [

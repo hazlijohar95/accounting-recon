@@ -36,7 +36,14 @@ import {
   useTopExpenses,
   useReconciliationStats,
 } from '@/lib/convex-hooks'
-import { Upload, CheckCircle2, ArrowRight, Loader2, FileText, Bell } from 'lucide-react'
+import {
+  IconUpload,
+  IconCheckCircle,
+  IconArrowRight,
+  IconLoader,
+  IconFileText,
+  IconBell,
+} from '@/components/brand/icons'
 import {
   ReconciliationProgress,
   DataSyncPulse,
@@ -153,7 +160,7 @@ export function DashboardView() {
         title: 'Get started with your first reconciliation',
         description: 'Upload your bank statements and invoices to begin matching transactions.',
         action: { label: 'Upload Documents', href: '/upload' },
-        icon: <Upload className="w-5 h-5" />,
+        icon: <IconUpload size={20} />,
       }
     }
 
@@ -163,7 +170,7 @@ export function DashboardView() {
         title: 'Processing your documents',
         description: 'We\'re extracting transactions from your documents. This usually completes in under a minute.',
         action: null,
-        icon: <Loader2 className="w-5 h-5 animate-spin" />,
+        icon: <IconLoader size={20} />,
       }
     }
 
@@ -173,7 +180,7 @@ export function DashboardView() {
         title: `${pendingCount} matches ready for review`,
         description: `Review and approve matched transactions. ${approvedCount} already approved.`,
         action: { label: 'Review Matches', href: '/reconcile' },
-        icon: <FileText className="w-5 h-5" />,
+        icon: <IconFileText size={20} />,
       }
     }
 
@@ -183,7 +190,7 @@ export function DashboardView() {
         title: 'Reconciliation complete!',
         description: `All ${approvedCount} matches approved. Export your reconciliation report.`,
         action: { label: 'Export Report', href: '/reports' },
-        icon: <CheckCircle2 className="w-5 h-5" />,
+        icon: <IconCheckCircle size={20} />,
       }
     }
 
@@ -288,7 +295,7 @@ export function DashboardView() {
                 className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
                 aria-label="Notifications"
               >
-                <Bell className="w-4 h-4" />
+                <IconBell size={16} />
                 {/* Notification dot */}
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full" />
               </button>
@@ -357,7 +364,7 @@ export function DashboardView() {
       >
         {isChartsLoading ? (
           <div className="h-[280px] flex items-center justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <IconLoader size={24} className="text-muted-foreground" />
           </div>
         ) : chartCashFlow.length > 0 ? (
           <CashFlowChart data={chartCashFlow} height={280} animate />
@@ -377,7 +384,7 @@ export function DashboardView() {
         >
           {isChartsLoading ? (
             <div className="h-[200px] flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              <IconLoader size={24} className="text-muted-foreground" />
             </div>
           ) : chartExpenses.length > 0 ? (
             <ExpenseChart data={chartExpenses} limit={5} animate />
@@ -411,7 +418,7 @@ export function DashboardView() {
                 <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Top Expenses</div>
                 {isChartsLoading ? (
                   <div className="py-4 flex justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    <IconLoader size={16} className="text-muted-foreground" />
                   </div>
                 ) : chartTopExpenses.length > 0 ? (
                   <TopExpensesList data={chartTopExpenses} limit={3} animate />
@@ -614,7 +621,7 @@ function NotificationDropdown({ state, onNavigate }: NotificationDropdownProps) 
                 className="mt-2 text-xs font-medium text-foreground hover:underline flex items-center gap-1"
               >
                 {state.action.label}
-                <ArrowRight className="w-3 h-3" />
+                <IconArrowRight size={12} />
               </button>
             )}
           </div>
