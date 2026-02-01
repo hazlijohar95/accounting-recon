@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     }
 
     // SECURITY: Rate limiting (5 matching requests per minute - expensive operation)
-    const rateLimitResult = checkRateLimit(
+    const rateLimitResult = await checkRateLimit(
       getRateLimitIdentifier(session),
       'matching',
       RateLimits.matching

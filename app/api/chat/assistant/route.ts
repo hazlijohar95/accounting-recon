@@ -4,26 +4,17 @@ import { reconciliationModel } from '@/lib/ai/bedrock-provider'
 import { ASSISTANT_SYSTEM_PROMPT } from '@/lib/ai/prompts'
 import { buildSafeContextString } from '@/lib/ai/sanitize'
 import { getSession } from '@/lib/auth-server'
-import { ConvexHttpClient } from 'convex/browser'
 import { api } from '@/convex/_generated/api'
 import { Id } from '@/convex/_generated/dataModel'
 import { z } from 'zod'
 import { validateCSRF } from '@/lib/csrf'
 import { checkRateLimit, RateLimits, createRateLimitHeaders, getRateLimitIdentifier } from '@/lib/rate-limit'
+import { getAuthedConvexClient } from '@/lib/convex-server'
 
 export const maxDuration = 30
 
 // SECURITY: Maximum messages per request to prevent context exhaustion
 const MAX_MESSAGES = 100
-
-// Initialize Convex client for server-side queries
-const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL
-function getConvexClient() {
-  if (!CONVEX_URL) {
-    throw new Error('NEXT_PUBLIC_CONVEX_URL is not configured')
-  }
-  return new ConvexHttpClient(CONVEX_URL)
-}
 
 interface AssistantContext {
   sessionId?: string
@@ -143,7 +134,7 @@ export async function POST(req: NextRequest) {
     }
 
     // SECURITY: Rate limiting (20 chat requests per minute)
-    const rateLimitResult = checkRateLimit(
+    const rateLimitResult = await checkRateLimit(
       getRateLimitIdentifier(session),
       'chat',
       RateLimits.chat
@@ -185,7 +176,7 @@ export async function POST(req: NextRequest) {
       systemPrompt += buildSafeContextString(context)
     }
 
-    const convex = getConvexClient()
+    const convex = await getAuthedConvexClient()
 
     const result = streamText({
       model: reconciliationModel,

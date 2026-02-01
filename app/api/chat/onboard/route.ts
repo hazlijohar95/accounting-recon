@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     }
 
     // SECURITY: Rate limiting (20 chat requests per minute)
-    const rateLimitResult = checkRateLimit(
+    const rateLimitResult = await checkRateLimit(
       getRateLimitIdentifier(session),
       'chat',
       RateLimits.chat

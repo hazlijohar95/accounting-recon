@@ -14,17 +14,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { ConvexHttpClient } from 'convex/browser';
 import { api } from '@/convex/_generated/api';
 import { Id } from '@/convex/_generated/dataModel';
 import crypto from 'crypto';
 import { getSession } from '@/lib/auth-server';
 import { validateCSRF } from '@/lib/csrf';
 import { checkRateLimit, RateLimits, createRateLimitHeaders, getRateLimitIdentifier } from '@/lib/rate-limit';
+import { getAuthedConvexClient } from '@/lib/convex-server';
 
 // Environment variables - validated at runtime in the handler
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'reconciled-documents';
-const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
 
 /**
  * Get validated R2 configuration at runtime
@@ -52,16 +51,6 @@ function getR2Config() {
       },
     }),
   };
-}
-
-/**
- * Get Convex client for server-side queries
- */
-function getConvexClient() {
-  if (!CONVEX_URL) {
-    throw new Error('NEXT_PUBLIC_CONVEX_URL is not configured');
-  }
-  return new ConvexHttpClient(CONVEX_URL);
 }
 
 // Allowed file types
@@ -159,7 +148,7 @@ export async function POST(request: NextRequest) {
     }
 
     // SECURITY: Rate limiting (10 uploads per minute)
-    const rateLimitResult = checkRateLimit(
+    const rateLimitResult = await checkRateLimit(
       getRateLimitIdentifier(session),
       'upload',
       RateLimits.upload
@@ -201,7 +190,7 @@ export async function POST(request: NextRequest) {
     }
 
     // SECURITY: Verify user owns this company
-    const convex = getConvexClient();
+    const convex = await getAuthedConvexClient();
     const company = await convex.query(api.companies.get, {
       id: companyId as Id<'companies'>,
     });

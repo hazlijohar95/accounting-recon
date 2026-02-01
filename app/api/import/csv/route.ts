@@ -6,12 +6,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { getSession } from "@/lib/auth-server";
 import { validateCSRF } from "@/lib/csrf";
 import { checkRateLimit, RateLimits, createRateLimitHeaders, getRateLimitIdentifier } from "@/lib/rate-limit";
+import { getAuthedConvexClient } from "@/lib/convex-server";
 
 // SECURITY: Maximum CSV file size (10MB)
 const MAX_CSV_SIZE = 10 * 1024 * 1024;
@@ -19,9 +19,6 @@ const MAX_CSV_SIZE = 10 * 1024 * 1024;
 // SECURITY: Maximum records per CSV import to prevent memory exhaustion
 // A 10MB CSV with 10-byte rows could have 1M records - this limits the impact
 const MAX_CSV_RECORDS = 10000;
-
-// Initialize Convex client
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 // Column mapping for flexible CSV headers
 const CASH_COLUMN_MAPPINGS: Record<string, string[]> = {
@@ -165,7 +162,7 @@ export async function POST(request: NextRequest) {
     }
 
     // SECURITY: Rate limiting (10 CSV imports per minute)
-    const rateLimitResult = checkRateLimit(
+    const rateLimitResult = await checkRateLimit(
       getRateLimitIdentifier(session),
       'csvImport',
       RateLimits.csvImport
@@ -176,6 +173,8 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: createRateLimitHeaders(rateLimitResult) }
       );
     }
+
+    const convex = await getAuthedConvexClient();
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
