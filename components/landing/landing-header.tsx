@@ -39,16 +39,21 @@ export function LandingHeader({ className }: LandingHeaderProps) {
         </div>
       </div>
 
-      {/* Auth buttons */}
-      <nav className="flex items-center gap-2 md:gap-3">
-        <Link href="/api/auth/login">
-          <PremiumButton variant="ghost" size="sm">
-            Sign In
-          </PremiumButton>
+      {/* Navigation */}
+      <nav className="flex items-center gap-3 md:gap-4">
+        <Link
+          href="/docs"
+          className={cn(
+            'text-xs md:text-sm font-mono text-muted-foreground',
+            'hover:text-foreground transition-colors',
+            'px-2 py-1'
+          )}
+        >
+          Docs
         </Link>
         <Link href="/api/auth/login">
           <PremiumButton variant="primary" size="sm">
-            Get Started
+            Reconcile Now
           </PremiumButton>
         </Link>
       </nav>
