@@ -51,13 +51,16 @@ beforeAll(() => {
   })
 })
 
-// Mock navigator.clipboard
+// Mock navigator.clipboard (configurable so userEvent.setup() can override)
 beforeAll(() => {
   Object.defineProperty(navigator, 'clipboard', {
     writable: true,
+    configurable: true,
     value: {
       writeText: vi.fn().mockResolvedValue(undefined),
       readText: vi.fn().mockResolvedValue(''),
+      read: vi.fn().mockResolvedValue([]),
+      write: vi.fn().mockResolvedValue(undefined),
     },
   })
 })

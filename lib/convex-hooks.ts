@@ -33,14 +33,17 @@ export function useCreateUser() {
 
 // ============ COMPANY HOOKS ============
 
-export function useCompany(id: Id<"companies"> | undefined) {
-  return useQuery(api.companies.get, id ? { id } : "skip");
+export function useCompany(id: Id<"companies"> | undefined, workosUserId?: string) {
+  return useQuery(api.companies.get, id ? { id, workosUserId } : "skip");
 }
 
-export function useUserCompanies(ownerId: Id<"users"> | undefined) {
+export function useUserCompanies(
+  ownerId: Id<"users"> | undefined,
+  workosUserId?: string
+) {
   return useQuery(
     api.companies.listByOwner,
-    ownerId ? { ownerId } : "skip"
+    ownerId || workosUserId ? { ownerId, workosUserId } : "skip"
   );
 }
 

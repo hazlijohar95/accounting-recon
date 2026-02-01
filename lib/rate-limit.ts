@@ -1,23 +1,123 @@
 /**
- * In-memory Rate Limiting Utility
+ * Rate Limiting Utility with Redis (Upstash) Support
  *
  * Provides sliding window rate limiting for API routes.
- * For multi-instance deployments, replace with Redis-backed solution
- * (e.g., @upstash/ratelimit).
+ * Uses Upstash Redis for production (scalable across instances),
+ * falls back to in-memory for development or when Redis is not configured.
  *
  * @module lib/rate-limit
  */
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface RateLimitConfig {
+  /** Maximum requests allowed in the window */
+  limit: number
+  /** Window duration in milliseconds */
+  windowMs: number
+}
+
+export interface RateLimitResult {
+  /** Whether the request is allowed */
+  success: boolean
+  /** Remaining requests in current window */
+  remaining: number
+  /** When the rate limit resets (unix timestamp ms) */
+  reset: number
+  /** Retry-After header value in seconds (only if blocked) */
+  retryAfter?: number
+}
+
+// =============================================================================
+// REDIS CLIENT (Upstash) - Lazy loaded
+// =============================================================================
+
+// Check if Redis is configured
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN
+const isRedisConfigured = Boolean(REDIS_URL && REDIS_TOKEN)
+
+// Lazy-loaded Upstash modules (types are `any` since packages may not be installed)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let RatelimitClass: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let RedisClass: any = null
+let upstashLoadAttempted = false
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let redis: any = null
+
+// Create Upstash rate limiters for different namespaces
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rateLimiters = new Map<string, any>()
+
+async function loadUpstash(): Promise<boolean> {
+  if (upstashLoadAttempted) return RatelimitClass !== null
+  upstashLoadAttempted = true
+
+  if (!isRedisConfigured) return false
+
+  try {
+    const [ratelimitModule, redisModule] = await Promise.all([
+      import('@upstash/ratelimit'),
+      import('@upstash/redis'),
+    ])
+    RatelimitClass = ratelimitModule.Ratelimit
+    RedisClass = redisModule.Redis
+
+    // Create Redis client
+    redis = new RedisClass({
+      url: REDIS_URL!,
+      token: REDIS_TOKEN!,
+    })
+
+    return true
+  } catch {
+    console.warn('[RateLimit] Upstash packages not installed, using in-memory rate limiting')
+    return false
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getUpstashRateLimiter(
+  namespace: string,
+  config: RateLimitConfig
+): Promise<any> {
+  if (!await loadUpstash() || !redis || !RatelimitClass) return null
+
+  const key = `${namespace}:${config.limit}:${config.windowMs}`
+  let limiter = rateLimiters.get(key)
+
+  if (!limiter) {
+    // Convert windowMs to seconds for Upstash
+    const windowSec = Math.ceil(config.windowMs / 1000)
+    limiter = new RatelimitClass({
+      redis,
+      limiter: RatelimitClass.slidingWindow(config.limit, `${windowSec} s`),
+      prefix: `ratelimit:${namespace}`,
+      analytics: true, // Enable analytics in Upstash dashboard
+    })
+    rateLimiters.set(key, limiter)
+  }
+
+  return limiter
+}
+
+// =============================================================================
+// IN-MEMORY FALLBACK (Development)
+// =============================================================================
 
 interface RateLimitEntry {
   count: number
   resetAt: number
 }
 
-// In-memory store for rate limits (per-instance)
+// In-memory store for rate limits (per-instance) - used when Redis not configured
 const rateLimitStore = new Map<string, RateLimitEntry>()
 
 // Cleanup old entries periodically (every 5 minutes)
-let cleanupInterval: NodeJS.Timeout | null = null
+let cleanupInterval: ReturnType<typeof setInterval> | null = null
 
 function startCleanup() {
   if (cleanupInterval) return
@@ -34,33 +134,7 @@ function startCleanup() {
 // Start cleanup on module load
 startCleanup()
 
-interface RateLimitConfig {
-  /** Maximum requests allowed in the window */
-  limit: number
-  /** Window duration in milliseconds */
-  windowMs: number
-}
-
-interface RateLimitResult {
-  /** Whether the request is allowed */
-  success: boolean
-  /** Remaining requests in current window */
-  remaining: number
-  /** When the rate limit resets (unix timestamp ms) */
-  reset: number
-  /** Retry-After header value in seconds (only if blocked) */
-  retryAfter?: number
-}
-
-/**
- * Check if a request is rate limited.
- *
- * @param identifier - Unique identifier (e.g., user ID, IP address)
- * @param namespace - Rate limit namespace (e.g., "upload", "chat")
- * @param config - Rate limit configuration
- * @returns Rate limit result
- */
-export function checkRateLimit(
+function checkInMemoryRateLimit(
   identifier: string,
   namespace: string,
   config: RateLimitConfig
@@ -104,6 +178,63 @@ export function checkRateLimit(
   }
 }
 
+// =============================================================================
+// PUBLIC API
+// =============================================================================
+
+/**
+ * Check if a request is rate limited.
+ *
+ * Uses Upstash Redis in production for distributed rate limiting,
+ * falls back to in-memory store for development.
+ *
+ * @param identifier - Unique identifier (e.g., user ID, IP address)
+ * @param namespace - Rate limit namespace (e.g., "upload", "chat")
+ * @param config - Rate limit configuration
+ * @returns Rate limit result
+ */
+export async function checkRateLimit(
+  identifier: string,
+  namespace: string,
+  config: RateLimitConfig
+): Promise<RateLimitResult> {
+  // Try Upstash first if configured
+  if (isRedisConfigured) {
+    const limiter = await getUpstashRateLimiter(namespace, config)
+    if (limiter) {
+      try {
+        const result = await limiter.limit(identifier)
+        return {
+          success: result.success,
+          remaining: result.remaining,
+          reset: result.reset,
+          retryAfter: result.success ? undefined : Math.ceil((result.reset - Date.now()) / 1000),
+        }
+      } catch (error) {
+        // Log error but fall back to in-memory on Redis failure
+        console.error('[RateLimit] Redis error, falling back to in-memory:', error)
+      }
+    }
+  }
+
+  // Fall back to in-memory rate limiting
+  return checkInMemoryRateLimit(identifier, namespace, config)
+}
+
+/**
+ * Synchronous rate limit check (for backwards compatibility).
+ * Uses in-memory store only - for async Redis support, use checkRateLimit.
+ *
+ * @deprecated Use checkRateLimit (async) for production
+ */
+export function checkRateLimitSync(
+  identifier: string,
+  namespace: string,
+  config: RateLimitConfig
+): RateLimitResult {
+  return checkInMemoryRateLimit(identifier, namespace, config)
+}
+
 /**
  * Pre-configured rate limiters for different API routes
  */
@@ -122,6 +253,12 @@ export const RateLimits = {
 
   /** Auth operations: 10 per minute */
   auth: { limit: 10, windowMs: 60 * 1000 },
+
+  /** Data export: 5 per hour (prevent abuse) */
+  export: { limit: 5, windowMs: 60 * 60 * 1000 },
+
+  /** Account deletion: 3 per day (prevent accidents) */
+  deleteAccount: { limit: 3, windowMs: 24 * 60 * 60 * 1000 },
 } as const
 
 /**
@@ -193,4 +330,11 @@ export function getClientIp(headers: Headers | { get: (key: string) => string | 
   if (realIp) return realIp
 
   return null
+}
+
+/**
+ * Check if Redis rate limiting is configured and available
+ */
+export function isRedisRateLimitingEnabled(): boolean {
+  return isRedisConfigured
 }

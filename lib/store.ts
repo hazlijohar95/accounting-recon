@@ -619,6 +619,8 @@ export const useAppStore = create<AppState>()(
       const demo = initDemoData()
       return {
         isDemo: true,
+        // Clear company selection (demo mode doesn't use companies)
+        selectedCompanyId: null,
         // Save current real data
         realCashTransactions: state.cashTransactions,
         realAccrualTransactions: state.accrualTransactions,
@@ -699,6 +701,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         isDemo: state.isDemo,
+        selectedCompanyId: state.selectedCompanyId,
       }),
       onRehydrateStorage: () => (state) => {
         // After hydration, if isDemo is false, ALWAYS swap to real data.
