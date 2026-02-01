@@ -1,7 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { Sparkles } from 'lucide-react'
+import { IconSparkle } from '@/components/brand/icons'
 
 export type MatchLayer = 1 | 2 | 3 | 4 | 5 | 6
 
@@ -46,7 +46,7 @@ export function MatchLayerBadge({ layer, size = 'sm', className }: MatchLayerBad
       )}
     >
       {config.hasIcon && (
-        <Sparkles className={cn(size === 'sm' ? 'w-2.5 h-2.5' : 'w-3 h-3')} />
+        <IconSparkle size={size === 'sm' ? 10 : 12} />
       )}
       {config.label}
     </span>

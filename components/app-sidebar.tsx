@@ -35,8 +35,9 @@ import {
   IconUpload,
   IconReconcile,
   IconReports,
+  IconSettings,
 } from '@/components/brand'
-import { Table2 } from 'lucide-react'
+import { IconTable } from '@/components/brand/icons'
 import { CompanySelector } from '@/components/company-selector'
 import { NavTooltip } from '@/components/nav-tooltip'
 import { useAuth } from '@/components/auth-provider'
@@ -47,7 +48,8 @@ const navItems: { href: string; label: string; icon: React.ReactNode }[] = [
   { href: '/upload', label: 'Upload', icon: <IconUpload size={16} /> },
   { href: '/reconcile', label: 'Reconcile', icon: <IconReconcile size={16} /> },
   { href: '/reports', label: 'Reports', icon: <IconReports size={16} /> },
-  { href: '/workspace', label: 'Workspace', icon: <Table2 size={16} /> },
+  { href: '/workspace', label: 'Workspace', icon: <IconTable size={16} /> },
+  { href: '/settings', label: 'Settings', icon: <IconSettings size={16} /> },
 ]
 
 /**
@@ -215,76 +217,68 @@ export function AppSidebar() {
               </NavTooltip>
             </div>
           ) : !isDemo ? (
-            // Sign in button - key ensures proper React mounting
-            <button
-              key="signin-button"
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                console.log('[AppSidebar] Sign in button clicked!')
-                login()
-              }}
-              onPointerDown={() => {
-                // Backup handler in case onClick doesn't fire
-                console.log('[AppSidebar] Sign in button pointer down')
-              }}
+            // Sign in - direct link bypasses any JS event issues
+            <a
+              href="/api/auth/login"
               className="w-full flex items-center gap-3 px-3 py-2 text-foreground hover:bg-secondary/50 transition-colors cursor-pointer"
               title="Sign in"
             >
               <IconSignIn size={16} className="shrink-0" />
               <span className="text-xs font-medium sidebar-label">Sign in</span>
-            </button>
+            </a>
           ) : null}
         </div>
 
-        {/* Mode toggle - single button with animated icon */}
-        <div className="px-2 pb-2">
-          <NavTooltip label={isDemo ? 'Switch to Real' : 'Switch to Demo'} show={isCollapsed}>
-            <button
-              type="button"
-              onClick={() => toggleMode()}
-              className="w-full group"
-              title={isDemo ? 'Switch to Real Mode' : 'Switch to Demo Mode'}
-            >
-              <div className="flex items-center gap-3 px-3 py-2 hover:bg-secondary/50 transition-colors">
-                {/* Animated mode icon */}
-                <span className="shrink-0 relative w-4 h-4">
-                  <span
-                    className={cn(
-                      "absolute inset-0 transition-all duration-300 ease-in-out text-muted-foreground group-hover:text-foreground",
-                      isDemo ? "opacity-100 scale-100" : "opacity-0 scale-75"
-                    )}
-                  >
-                    <IconDemo size={16} />
+        {/* Mode toggle - only show for unauthenticated users */}
+        {!isAuthenticated && (
+          <div className="px-2 pb-2">
+            <NavTooltip label={isDemo ? 'Switch to Real' : 'Switch to Demo'} show={isCollapsed}>
+              <button
+                type="button"
+                onClick={() => toggleMode()}
+                className="w-full group"
+                title={isDemo ? 'Switch to Real Mode' : 'Switch to Demo Mode'}
+              >
+                <div className="flex items-center gap-3 px-3 py-2 hover:bg-secondary/50 transition-colors">
+                  {/* Animated mode icon */}
+                  <span className="shrink-0 relative w-4 h-4">
+                    <span
+                      className={cn(
+                        "absolute inset-0 transition-all duration-300 ease-in-out text-muted-foreground group-hover:text-foreground",
+                        isDemo ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                      )}
+                    >
+                      <IconDemo size={16} />
+                    </span>
+                    <span
+                      className={cn(
+                        "absolute inset-0 transition-all duration-300 ease-in-out text-muted-foreground group-hover:text-foreground",
+                        !isDemo ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                      )}
+                    >
+                      <IconReal size={16} />
+                    </span>
                   </span>
-                  <span
-                    className={cn(
-                      "absolute inset-0 transition-all duration-300 ease-in-out text-muted-foreground group-hover:text-foreground",
-                      !isDemo ? "opacity-100 scale-100" : "opacity-0 scale-75"
-                    )}
-                  >
-                    <IconReal size={16} />
+
+                  {/* Mode label */}
+                  <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors sidebar-label">
+                    {isDemo ? 'Demo' : 'Real'}
                   </span>
-                </span>
+                </div>
+              </button>
+            </NavTooltip>
 
-                {/* Mode label */}
-                <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors sidebar-label">
-                  {isDemo ? 'Demo' : 'Real'}
-                </span>
-              </div>
-            </button>
-          </NavTooltip>
-
-          {/* Clear data - subtle text button */}
-          {!isDemo && hasRealData && !isCollapsed && (
-            <button
-              onClick={clearRealData}
-              className="w-full px-3 py-1 text-[10px] text-muted-foreground/60 hover:text-destructive transition-colors text-left sidebar-label"
-            >
-              Clear data
-            </button>
-          )}
-        </div>
+            {/* Clear data - subtle text button */}
+            {!isDemo && hasRealData && !isCollapsed && (
+              <button
+                onClick={clearRealData}
+                className="w-full px-3 py-1 text-[10px] text-muted-foreground/60 hover:text-destructive transition-colors text-left sidebar-label"
+              >
+                Clear data
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Collapse toggle - minimal bottom bar */}
         <div className="border-t border-border/50">

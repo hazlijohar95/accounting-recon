@@ -6,14 +6,14 @@ import { api } from '@/convex/_generated/api'
 import { Id } from '@/convex/_generated/dataModel'
 import { cn } from '@/lib/utils'
 import {
-  CheckCircle2,
-  XCircle,
-  Clock,
-  RefreshCw,
-  FileText,
-  AlertTriangle,
-  Loader2,
-} from 'lucide-react'
+  IconCheckCircle,
+  IconXCircle,
+  IconClock,
+  IconRefresh,
+  IconFileText,
+  IconWarning,
+  IconLoader,
+} from '@/components/brand/icons'
 import { LoadingSpinner } from '@/components/brand'
 import { useToast } from '@/components/ui/toast'
 
@@ -101,7 +101,7 @@ export function ExtractionStatus({
           {/* Processing */}
           {status === 'processing' && (
             <div className="flex items-center gap-2" role="status" aria-live="polite">
-              <Loader2 className="w-3 h-3 animate-spin text-info" aria-hidden="true" />
+              <IconLoader size={12} className="animate-spin text-info" aria-hidden="true" />
               <span>Extracting data from document...</span>
             </div>
           )}
@@ -123,7 +123,7 @@ export function ExtractionStatus({
 
               {document.extractedTransactionCount !== undefined && (
                 <div className="flex items-center gap-2">
-                  <FileText className="w-3 h-3" aria-hidden="true" />
+                  <IconFileText size={12} aria-hidden="true" />
                   <span>
                     <span className="font-medium text-foreground">
                       {document.extractedTransactionCount}
@@ -157,7 +157,7 @@ export function ExtractionStatus({
             <div className="space-y-2">
               {document.errorMessage && (
                 <div className="flex items-start gap-2 text-error">
-                  <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <IconWarning size={12} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
                   <span className="break-words">{document.errorMessage}</span>
                 </div>
               )}
@@ -165,7 +165,7 @@ export function ExtractionStatus({
                 onClick={handleRetry}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border hover:bg-secondary transition-colors focus-ring"
               >
-                <RefreshCw className="w-3 h-3" aria-hidden="true" />
+                <IconRefresh size={12} aria-hidden="true" />
                 Retry Extraction
               </button>
             </div>
@@ -226,38 +226,36 @@ function StatusIcon({
   status: string
   size?: number
 }) {
-  const iconStyle = { width: size, height: size }
-
   switch (status) {
     case 'pending':
       return (
-        <Clock
+        <IconClock
+          size={size}
           className="text-muted-foreground"
-          style={iconStyle}
           aria-hidden="true"
         />
       )
     case 'processing':
       return (
-        <Loader2
+        <IconLoader
+          size={size}
           className="text-info animate-spin"
-          style={iconStyle}
           aria-hidden="true"
         />
       )
     case 'completed':
       return (
-        <CheckCircle2
+        <IconCheckCircle
+          size={size}
           className="text-success"
-          style={iconStyle}
           aria-hidden="true"
         />
       )
     case 'failed':
       return (
-        <XCircle
+        <IconXCircle
+          size={size}
           className="text-error"
-          style={iconStyle}
           aria-hidden="true"
         />
       )

@@ -5,7 +5,7 @@ import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useAuth } from './auth-provider'
 import { useCompanyState, useIsDemo } from '@/lib/store'
-import { Building2, ChevronDown, Plus, Check } from 'lucide-react'
+import { IconBuildings, IconCaretDown, IconPlus, IconCheck } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import { Id } from '@/convex/_generated/dataModel'
 
@@ -25,15 +25,16 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
   const [isOpen, setIsOpen] = React.useState(false)
   const dropdownRef = React.useRef<HTMLDivElement>(null)
 
-  // Fetch companies from Convex (ownerId derived from auth context on backend)
+  // Fetch companies from Convex - pass workosUserId for auth fallback
   const convexCompanies = useQuery(
     api.companies.listByOwner,
-    user && !isDemo ? {} : 'skip'
+    user && !isDemo ? { workosUserId: user.workosId } : 'skip'
   )
 
   // Sync companies to store
   React.useEffect(() => {
     if (convexCompanies) {
+      console.log('[CompanySelector] Received companies from Convex:', convexCompanies.length)
       const mapped = convexCompanies.map((c: { _id: Id<'companies'>; name: string; code?: string }) => ({
         id: c._id,
         name: c.name,
@@ -43,10 +44,24 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
 
       // Auto-select first company if none selected
       if (!selectedCompanyId && mapped.length > 0) {
+        console.log('[CompanySelector] Auto-selecting first company:', mapped[0].id, mapped[0].name)
         setSelectedCompanyId(mapped[0].id)
       }
+    } else if (convexCompanies === undefined) {
+      console.log('[CompanySelector] Query loading...')
     }
   }, [convexCompanies, selectedCompanyId, setSelectedCompanyId, setCompanies])
+
+  // Log state changes
+  React.useEffect(() => {
+    console.log('[CompanySelector] State:', {
+      userId: user?.id,
+      isDemo,
+      selectedCompanyId,
+      companiesInStore: companies.length,
+      convexQueryResult: convexCompanies === undefined ? 'loading' : convexCompanies?.length ?? 0,
+    })
+  }, [user?.id, isDemo, selectedCompanyId, companies.length, convexCompanies])
 
   // Close dropdown on click outside
   React.useEffect(() => {
@@ -64,9 +79,27 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
     return null
   }
 
-  // Don't show if no companies loaded yet
-  if (!companies.length) {
-    return null
+  // Show loading skeleton while query is in flight (convexCompanies === undefined)
+  const isLoadingCompanies = convexCompanies === undefined
+  if (isLoadingCompanies) {
+    return (
+      <div className="h-10 bg-secondary/50 rounded-lg animate-pulse" />
+    )
+  }
+
+  // Show "create company" prompt only when query returned empty array (not undefined)
+  if (companies.length === 0 && convexCompanies?.length === 0) {
+    if (!onCreateNew) return null
+
+    return (
+      <button
+        onClick={onCreateNew}
+        className="flex items-center gap-2 w-full px-3 py-2 text-sm border border-border rounded-lg hover:bg-secondary transition-colors"
+      >
+        <IconPlus size={16} className="text-muted-foreground shrink-0" />
+        <span className="flex-1 text-left">Create your first company</span>
+      </button>
+    )
   }
 
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId)
@@ -77,13 +110,14 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 w-full px-3 py-2 text-sm border border-border rounded-lg hover:bg-secondary transition-colors"
       >
-        <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+        <IconBuildings size={16} className="text-muted-foreground shrink-0" />
         <span className="flex-1 text-left truncate">
           {selectedCompany?.name || 'Select company'}
         </span>
-        <ChevronDown
+        <IconCaretDown
+          size={16}
           className={cn(
-            'w-4 h-4 text-muted-foreground shrink-0 transition-transform',
+            'text-muted-foreground shrink-0 transition-transform',
             isOpen && 'rotate-180'
           )}
         />
@@ -103,7 +137,7 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
                 selectedCompanyId === company.id && 'bg-secondary'
               )}
             >
-              <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+              <IconBuildings size={16} className="text-muted-foreground shrink-0" />
               <div className="flex-1 text-left">
                 <div className="truncate">{company.name}</div>
                 {company.code && (
@@ -111,7 +145,7 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
                 )}
               </div>
               {selectedCompanyId === company.id && (
-                <Check className="w-4 h-4 text-foreground shrink-0" />
+                <IconCheck size={16} className="text-foreground shrink-0" />
               )}
             </button>
           ))}
@@ -126,7 +160,7 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
                 }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-secondary transition-colors text-muted-foreground"
               >
-                <Plus className="w-4 h-4 shrink-0" />
+                <IconPlus size={16} className="shrink-0" />
                 <span>Add new company</span>
               </button>
             </>

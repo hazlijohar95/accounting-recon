@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { X, Search, FileText, AlertCircle, ArrowDown } from 'lucide-react'
+import { IconX, IconSearch, IconFileText, IconWarningCircle, IconArrowDown } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import {
   Transaction,
@@ -214,7 +214,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 bg-blue-500/10 flex items-center justify-center">
-              <Search className="w-3.5 h-3.5 text-blue-500" />
+              <IconSearch size={14} className="text-blue-500" />
             </div>
             <div>
               <h2 id="modal-title" className="text-base font-medium">
@@ -230,7 +230,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
             className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             aria-label="Close modal"
           >
-            <X className="w-4 h-4" />
+            <IconX size={16} />
           </button>
         </div>
 
@@ -239,7 +239,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
           {/* Error Message */}
           {state.error && (
             <div className="p-3 border border-destructive/30 bg-destructive/5 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-              <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+              <IconWarningCircle size={16} className="text-destructive flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm text-destructive">{state.error}</p>
               </div>
@@ -247,7 +247,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
                 onClick={() => setState((s) => ({ ...s, error: null }))}
                 className="text-destructive/60 hover:text-destructive transition-colors"
               >
-                <X className="w-3 h-3" />
+                <IconX size={12} />
               </button>
             </div>
           )}
@@ -260,7 +260,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
             <div className="mt-2 p-3 border border-border bg-warning/5">
               <div className="flex items-start gap-3">
                 <div className="w-7 h-7 bg-warning/10 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-4 h-4 text-warning" />
+                  <IconWarningCircle size={16} className="text-warning" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
@@ -287,7 +287,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
               <div className="flex flex-col items-center gap-1">
                 <div className="w-px h-3 bg-border" />
                 <div className="w-6 h-6 border border-blue-500 bg-blue-500/10 flex items-center justify-center">
-                  <ArrowDown className="w-3 h-3 text-blue-500" />
+                  <IconArrowDown size={12} className="text-blue-500" />
                 </div>
                 <div className="w-px h-3 bg-border" />
               </div>
@@ -300,7 +300,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
               Search Candidates
             </span>
             <div className="mt-2 relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-foreground" />
+              <IconSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-foreground" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -315,7 +315,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
                   className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                   aria-label="Clear search"
                 >
-                  <X className="w-3 h-3" />
+                  <IconX size={12} />
                 </button>
               )}
             </div>
@@ -330,7 +330,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
               {candidates.length === 0 ? (
                 <div className="py-8 px-4 text-center">
                   <div className="w-12 h-12 mx-auto mb-3 border border-dashed border-muted-foreground/30 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-muted-foreground/40" />
+                    <IconFileText size={20} className="text-muted-foreground/40" />
                   </div>
                   <p className="text-sm text-muted-foreground">No matching candidates found</p>
                   <p className="text-xs text-muted-foreground/60 mt-1">

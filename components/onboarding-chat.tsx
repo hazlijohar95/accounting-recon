@@ -2,7 +2,13 @@
 
 import * as React from 'react'
 import { useOnboardingState, useSetSelectedCompanyId } from '@/lib/store'
-import { ArrowUp, Check, X, Building2 } from 'lucide-react'
+import {
+  IconArrowUp,
+  IconCheck,
+  IconX,
+  IconBuildings,
+  IconSparkle,
+} from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import { LogoAnimatedWithText } from '@/components/brand'
 import { useMutation } from 'convex/react'
@@ -10,6 +16,7 @@ import { api } from '@/convex/_generated/api'
 import { Id } from '@/convex/_generated/dataModel'
 import { useAuth } from './auth-provider'
 import { useOnboardingProgress, useSaveOnboardingProgress, useDeleteOnboardingProgress } from '@/lib/convex-hooks'
+import { ANIMATION_TIMINGS } from '@/constants/brand'
 
 interface Question {
   id: string
@@ -107,8 +114,6 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
   const createCompany = useMutation(api.companies.create)
 
   // Onboarding progress persistence hooks
-  // Only use stable user.id (not email) to avoid data consistency issues
-  // Progress is only persisted for authenticated users
   const userId = user?.id?.toString()
   const savedProgress = useOnboardingProgress(userId)
   const saveProgress = useSaveOnboardingProgress()
@@ -119,63 +124,64 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
   // Load saved progress when opening onboarding
   React.useEffect(() => {
     if (showOnboarding && savedProgress && !savedProgress.isCompleted && !hasLoadedProgress) {
-      // Restore saved progress
       setStep(savedProgress.currentStep)
       setOnboardingData(savedProgress.data as Record<string, string>)
       setHasLoadedProgress(true)
 
-      // Rebuild messages for restored progress
       const restoredMessages: Message[] = []
-      for (let i = 0; i <= savedProgress.currentStep && i < questions.length; i++) {
+      // Restore messages for COMPLETED steps only (not current step)
+      for (let i = 0; i < savedProgress.currentStep && i < questions.length; i++) {
         const q = questions[i]
-        // Add bot messages for each completed step
-        q.messages.forEach((msg) => {
-          restoredMessages.push({ id: `bot-${i}-${Date.now()}`, content: msg, type: 'bot' })
+        q.messages.forEach((msg, msgIdx) => {
+          // Use unique ID: step index + message index + random suffix
+          restoredMessages.push({ id: `bot-${i}-${msgIdx}-${Math.random().toString(36).slice(2)}`, content: msg, type: 'bot' })
         })
-        // Add user response if we have data for this step
         const fieldValue = savedProgress.data[q.field as keyof typeof savedProgress.data]
         if (fieldValue) {
-          restoredMessages.push({ id: `user-${i}-${Date.now()}`, content: fieldValue, type: 'user' })
+          restoredMessages.push({ id: `user-${i}-${Math.random().toString(36).slice(2)}`, content: fieldValue, type: 'user' })
         }
       }
       setMessages(restoredMessages)
 
-      // Start from current step's messages if not at last message
+      // Current step messages go to queue (will be displayed with typing animation)
       if (savedProgress.currentStep < questions.length) {
         setMessageQueue(questions[savedProgress.currentStep].messages)
       }
     }
   }, [showOnboarding, savedProgress, hasLoadedProgress, setOnboardingData])
 
-  // Reset on open (only if no saved progress)
+  // Track if onboarding was completed in this session
+  const [completedInSession, setCompletedInSession] = React.useState(false)
+
+  // Reset on open (only if no saved progress and not just completed)
   React.useEffect(() => {
-    if (showOnboarding && !savedProgress?.currentStep) {
+    if (showOnboarding && !savedProgress?.currentStep && !hasLoadedProgress && !completedInSession) {
       setStep(0)
       setMessages([])
       setInput('')
       setIsTyping(false)
       setShowInput(false)
       setMessageQueue(questions[0].messages)
-      setHasLoadedProgress(false)
     }
-  }, [showOnboarding, savedProgress])
+  }, [showOnboarding, savedProgress, hasLoadedProgress, completedInSession])
 
-  // Process message queue with calmer timing
+  // Process message queue with brand timings
   React.useEffect(() => {
     if (messageQueue.length === 0) {
-      // Done with messages, show input with smooth delay
       const timer = setTimeout(() => {
         setShowInput(true)
         inputRef.current?.focus()
-      }, 400)
+      }, ANIMATION_TIMINGS.standard) // 300ms
       return () => clearTimeout(timer)
     }
 
     setIsTyping(true)
     setShowInput(false)
 
-    // Calmer delays - slower for first message, consistent for subsequent
-    const delay = messageQueue.length === questions[step]?.messages.length ? 600 : 800
+    // Use medium timing (500ms) for message delays
+    const delay = messageQueue.length === questions[step]?.messages.length
+      ? ANIMATION_TIMINGS.medium  // 500ms for first message
+      : ANIMATION_TIMINGS.slow    // 800ms for subsequent
 
     const timer = setTimeout(() => {
       setIsTyping(false)
@@ -187,13 +193,17 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
     return () => clearTimeout(timer)
   }, [messageQueue, step])
 
-  // Auto scroll with smooth behavior
+  // Auto scroll with smooth behavior - also scroll when input/options appear
   React.useEffect(() => {
     const scrollEl = scrollRef.current
     if (scrollEl) {
-      scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: 'smooth' })
+      // Small delay to ensure DOM has rendered new content
+      const timer = setTimeout(() => {
+        scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: 'smooth' })
+      }, 50)
+      return () => clearTimeout(timer)
     }
-  }, [messages, isTyping])
+  }, [messages, isTyping, showInput])
 
   const findNextStep = React.useCallback((currentStep: number, data: Record<string, string>): number => {
     let nextStep = currentStep + 1
@@ -209,16 +219,25 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
   }, [])
 
   const handleCreateCompany = React.useCallback(async (data: Record<string, string>) => {
-    // Skip company creation if not authenticated (demo mode)
     if (!isAuthenticated || !user) {
-      console.log('Not authenticated, skipping company creation (demo mode)')
+      console.error('[Onboarding] Not authenticated - cannot create company')
+      setCreateError('Please sign in to create a company')
+      setIsCreating(false)
       return
     }
 
     setIsCreating(true)
     setCreateError(null)
+    console.log('[Onboarding] Creating company with data:', {
+      name: data.companyName,
+      userEmail: user?.email,
+      userName: user?.name,
+      userId: user?.id,
+      workosId: user?.workosId,
+      workosUserIdToSend: user?.workosId ?? user?.id,
+    })
     try {
-      const companyId = await createCompany({
+      const result = await createCompany({
         name: data.companyName || 'My Company',
         industryCategory: data.industryCategory,
         taxRegistered: data.taxRegistered === 'Yes',
@@ -226,21 +245,27 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
         primaryBank: data.primaryBank,
         fiscalYearEnd: data.fiscalYearEnd,
         currency: 'MYR',
-        // ownerId is derived from auth context on backend
+        userEmail: user?.email,
+        userName: user?.name,
+        workosUserId: user?.workosId ?? user?.id,
       })
-      // Set the newly created company as selected
+      // The mutation now returns { companyId, ownerId }
+      const { companyId } = result
+      console.log('[Onboarding] Company created successfully:', companyId)
+      console.log('[Onboarding] Setting selectedCompanyId in store:', companyId)
       setSelectedCompanyId(companyId)
+      setCompletedInSession(true) // Prevent reset effect from firing
 
-      // Clean up saved onboarding progress (no longer needed)
       if (userId) {
         deleteProgress(userId).catch((err) =>
-          console.error('Failed to delete onboarding progress:', err)
+          console.error('[Onboarding] Failed to delete onboarding progress:', err)
         )
       }
 
+      console.log('[Onboarding] Calling onComplete callback')
       onComplete?.(companyId)
     } catch (error) {
-      console.error('Failed to create company:', error)
+      console.error('[Onboarding] Failed to create company:', error)
       setCreateError(error instanceof Error ? error.message : 'Failed to create company. Please try again.')
     } finally {
       setIsCreating(false)
@@ -263,10 +288,9 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       setStep(nextStep)
       setTimeout(() => {
         setMessageQueue(questions[nextStep].messages)
-      }, 400)
+      }, ANIMATION_TIMINGS.standard) // 300ms
     }
 
-    // Save progress to backend (persists across browser close)
     if (userId) {
       saveProgress({
         userId,
@@ -283,7 +307,6 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       }).catch((err) => console.error('Failed to save onboarding progress:', err))
     }
 
-    // If this was the second-to-last step, create the company
     if (nextStep === questions.length - 1) {
       handleCreateCompany(newData)
     }
@@ -299,6 +322,8 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
 
   const handleClose = React.useCallback(() => {
     setShowOnboarding(false)
+    setCompletedInSession(false) // Reset for next time
+    setHasLoadedProgress(false)
   }, [setShowOnboarding])
 
   if (!showOnboarding) return null
@@ -307,42 +332,49 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop - calmer fade */}
+      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-500"
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-fade-in"
+        style={{ animationDuration: `${ANIMATION_TIMINGS.medium}ms` }}
         onClick={handleClose}
       />
 
-      {/* Modal - smoother entry */}
-      <div className="relative w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl flex flex-col max-h-[600px] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      {/* Modal - Fixed height container to prevent layout shifts */}
+      <div
+        className="relative w-full max-w-md bg-background border border-border shadow-2xl flex flex-col h-[520px] overflow-hidden animate-fade-in-up"
+        style={{ animationDuration: `${ANIMATION_TIMINGS.medium}ms` }}
+      >
+        {/* Header - Fixed 48px */}
+        <div className="flex items-center justify-between px-4 h-12 min-h-12 border-b border-border">
           <LogoAnimatedWithText size={20} animate={false} />
           <button
             onClick={handleClose}
-            className="p-1.5 hover:bg-secondary rounded-lg transition-colors duration-200"
+            className="p-1.5 hover:bg-secondary transition-colors"
+            style={{ transitionDuration: `${ANIMATION_TIMINGS.fast}ms` }}
           >
-            <X className="w-4 h-4 text-muted-foreground" />
+            <IconX size={16} className="text-muted-foreground" />
           </button>
         </div>
 
-        {/* Progress indicator */}
-        <div className="px-4 py-2 border-b border-border/50">
-          <div className="flex gap-1">
+        {/* Progress indicator - Fixed 28px, square segments */}
+        <div className="px-4 py-2 h-7 min-h-7 border-b border-border/50">
+          <div className="flex gap-0.5">
             {questions.map((_, i) => (
               <div
                 key={i}
                 className={cn(
-                  'h-1 flex-1 rounded-full transition-all duration-500 ease-out',
-                  i < step ? 'bg-foreground' : i === step ? 'bg-foreground/50' : 'bg-secondary'
+                  'h-1 flex-1 transition-all',
+                  i < step ? 'bg-foreground' :
+                  i === step ? 'bg-foreground/60' : 'bg-border'
                 )}
+                style={{ transitionDuration: `${ANIMATION_TIMINGS.medium}ms` }}
               />
             ))}
           </div>
         </div>
 
-        {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* Messages - Flexible height, scrollable */}
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 scrollbar-thin">
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -353,47 +385,53 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
             >
               <div
                 className={cn(
-                  'px-4 py-2.5 text-sm max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out',
+                  'px-4 py-2.5 text-sm max-w-[85%] animate-fade-in-up',
                   msg.type === 'bot'
-                    ? 'bg-secondary text-foreground rounded-2xl rounded-bl-md'
-                    : 'bg-foreground text-background rounded-2xl rounded-br-md'
+                    ? 'bg-secondary text-foreground rounded-sm'
+                    : 'bg-foreground text-background rounded-sm'
                 )}
+                style={{ animationDuration: `${ANIMATION_TIMINGS.standard}ms` }}
               >
                 {msg.content}
               </div>
             </div>
           ))}
 
-          {/* Typing indicator - calmer animation */}
+          {/* Typing indicator - Using brand's calm-typing animation */}
           {isTyping && (
-            <div className="flex justify-start animate-in fade-in duration-300">
-              <div className="bg-secondary rounded-2xl rounded-bl-md px-4 py-3">
+            <div
+              className="flex justify-start animate-fade-in"
+              style={{ animationDuration: `${ANIMATION_TIMINGS.standard}ms` }}
+            >
+              <div className="bg-secondary rounded-sm px-4 py-3 flex items-center gap-2">
+                <IconSparkle size={14} className="text-muted-foreground assistant-icon-cell" />
                 <div className="flex gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full assistant-typing-dot" />
                   <span
-                    className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-pulse"
-                    style={{ animationDuration: '1s' }}
+                    className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full assistant-typing-dot"
+                    style={{ animationDelay: '200ms' }}
                   />
                   <span
-                    className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-pulse"
-                    style={{ animationDuration: '1s', animationDelay: '200ms' }}
-                  />
-                  <span
-                    className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-pulse"
-                    style={{ animationDuration: '1s', animationDelay: '400ms' }}
+                    className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full assistant-typing-dot"
+                    style={{ animationDelay: '400ms' }}
                   />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Option buttons - calmer animation */}
+          {/* Option buttons - Grid layout for consistency, larger touch targets */}
           {showInput && currentQ?.inputType === 'select' && currentQ.options && (
-            <div className="flex flex-wrap gap-2 pt-2 animate-in fade-in duration-400 ease-out">
+            <div
+              className="grid grid-cols-2 gap-2 pt-2 animate-fade-in"
+              style={{ animationDuration: `${ANIMATION_TIMINGS.standard}ms` }}
+            >
               {currentQ.options.map((opt) => (
                 <button
                   key={opt}
                   onClick={() => advance(opt)}
-                  className="px-4 py-2 text-sm border border-border rounded-xl hover:bg-secondary hover:border-muted-foreground/30 transition-all duration-200 active:scale-[0.98]"
+                  className="h-12 px-4 text-sm font-medium border border-border hover:bg-secondary hover:border-foreground/20 transition-all active:scale-[0.98]"
+                  style={{ transitionDuration: `${ANIMATION_TIMINGS.fast}ms` }}
                 >
                   {opt}
                 </button>
@@ -401,18 +439,23 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
             </div>
           )}
 
-          {/* Yes/No buttons */}
+          {/* Yes/No buttons - Larger touch targets */}
           {showInput && currentQ?.inputType === 'yesno' && (
-            <div className="flex gap-3 pt-2 animate-in fade-in duration-400 ease-out">
+            <div
+              className="grid grid-cols-2 gap-3 pt-2 animate-fade-in"
+              style={{ animationDuration: `${ANIMATION_TIMINGS.standard}ms` }}
+            >
               <button
                 onClick={() => advance('Yes')}
-                className="flex-1 px-4 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary hover:border-muted-foreground/30 transition-all duration-200 active:scale-[0.98]"
+                className="h-12 px-4 text-sm font-medium border border-border hover:bg-secondary hover:border-foreground/20 transition-all active:scale-[0.98]"
+                style={{ transitionDuration: `${ANIMATION_TIMINGS.fast}ms` }}
               >
                 Yes
               </button>
               <button
                 onClick={() => advance('No')}
-                className="flex-1 px-4 py-2.5 text-sm border border-border rounded-xl hover:bg-secondary hover:border-muted-foreground/30 transition-all duration-200 active:scale-[0.98]"
+                className="h-12 px-4 text-sm font-medium border border-border hover:bg-secondary hover:border-foreground/20 transition-all active:scale-[0.98]"
+                style={{ transitionDuration: `${ANIMATION_TIMINGS.fast}ms` }}
               >
                 No
               </button>
@@ -420,11 +463,14 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
           )}
         </div>
 
-        {/* Input area */}
-        {showInput && (
-          <div className="p-3 border-t border-border animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">
-            {currentQ?.inputType === 'text' ? (
-              <div className="flex gap-2">
+        {/* Input area - Fixed 72px container, always present to prevent layout shift */}
+        <div className="h-[72px] min-h-[72px] p-3 border-t border-border">
+          {showInput ? (
+            currentQ?.inputType === 'text' ? (
+              <div
+                className="flex gap-2 h-full animate-fade-in"
+                style={{ animationDuration: `${ANIMATION_TIMINGS.standard}ms` }}
+              >
                 <input
                   ref={inputRef}
                   type="text"
@@ -432,37 +478,43 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                   placeholder={currentQ.placeholder}
-                  className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-muted-foreground/50 transition-colors duration-200"
+                  className="flex-1 bg-secondary border border-border px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-foreground/50 transition-colors"
+                  style={{ transitionDuration: `${ANIMATION_TIMINGS.fast}ms` }}
                   autoFocus
                 />
                 <button
                   onClick={handleSubmit}
                   disabled={!input.trim()}
                   className={cn(
-                    'px-4 rounded-xl transition-all duration-200 active:scale-[0.98]',
+                    'px-4 transition-all active:scale-[0.98]',
                     input.trim()
                       ? 'bg-foreground text-background hover:bg-foreground/90'
                       : 'bg-secondary text-muted-foreground cursor-not-allowed'
                   )}
+                  style={{ transitionDuration: `${ANIMATION_TIMINGS.fast}ms` }}
                 >
-                  <ArrowUp className="w-4 h-4" />
+                  <IconArrowUp size={16} />
                 </button>
               </div>
             ) : currentQ?.inputType === 'none' ? (
-              <>
+              <div
+                className="h-full animate-fade-in"
+                style={{ animationDuration: `${ANIMATION_TIMINGS.standard}ms` }}
+              >
                 <button
                   onClick={isLastStep ? handleClose : handleSubmit}
                   disabled={isCreating}
-                  className="w-full bg-foreground text-background py-3 rounded-xl text-sm font-medium hover:bg-foreground/90 transition-all duration-200 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full h-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-all active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
+                  style={{ transitionDuration: `${ANIMATION_TIMINGS.fast}ms` }}
                 >
                   {isCreating ? (
                     <>
-                      <Building2 className="w-4 h-4 animate-pulse" />
+                      <IconBuildings size={16} className="assistant-icon-cell" />
                       Setting up...
                     </>
                   ) : isLastStep ? (
                     <>
-                      <Check className="w-4 h-4" />
+                      <IconCheck size={16} />
                       Get Started
                     </>
                   ) : (
@@ -470,14 +522,20 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
                   )}
                 </button>
                 {createError && (
-                  <p className="mt-2 text-sm text-red-500 text-center animate-in fade-in duration-300">
+                  <p
+                    className="mt-2 text-sm text-destructive text-center animate-fade-in"
+                    style={{ animationDuration: `${ANIMATION_TIMINGS.standard}ms` }}
+                  >
                     {createError}
                   </p>
                 )}
-              </>
-            ) : null}
-          </div>
-        )}
+              </div>
+            ) : null
+          ) : (
+            // Empty placeholder to maintain height when input is hidden
+            <div className="h-full" />
+          )}
+        </div>
       </div>
     </div>
   )

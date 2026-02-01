@@ -1,7 +1,7 @@
 'use client'
 
 import { useAppStore } from '@/lib/store'
-import { X, Check } from 'lucide-react'
+import { IconX, IconCheck } from '@/components/brand/icons'
 
 const plans = [
   {
@@ -53,7 +53,7 @@ export function PaywallModal() {
             onClick={() => setShowPaywall(false)}
             className="p-2 hover:bg-secondary transition-colors"
           >
-            <X className="w-4 h-4" />
+            <IconX size={16} />
           </button>
         </div>
 
@@ -72,7 +72,7 @@ export function PaywallModal() {
                 <ul className="mt-4 space-y-2 flex-1">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-center gap-2 text-xs">
-                      <Check className="w-3 h-3 shrink-0" />
+                      <IconCheck size={12} className="shrink-0" />
                       {feature}
                     </li>
                   ))}

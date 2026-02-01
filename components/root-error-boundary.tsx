@@ -3,6 +3,7 @@
 import { ReactNode } from 'react'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { BrandedErrorState } from '@/components/brand'
+import { captureReactError } from '@/lib/sentry'
 
 interface RootErrorBoundaryProps {
   children: ReactNode
@@ -13,6 +14,7 @@ interface RootErrorBoundaryProps {
  *
  * Catches any unhandled errors in the React tree and displays
  * a full-page error fallback instead of a white screen.
+ * Errors are automatically reported to Sentry when configured.
  */
 export function RootErrorBoundary({ children }: RootErrorBoundaryProps) {
   return (
@@ -20,8 +22,8 @@ export function RootErrorBoundary({ children }: RootErrorBoundaryProps) {
       componentName="Application"
       fallback={<RootErrorFallback />}
       onError={(error, errorInfo) => {
-        // Log to error tracking service in production
-        console.error('Root error boundary caught error:', error, errorInfo)
+        // Log to Sentry (or console if not configured)
+        captureReactError(error, errorInfo, 'RootErrorBoundary')
       }}
     >
       {children}

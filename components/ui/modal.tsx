@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useCallback } from 'react'
-import { X } from 'lucide-react'
+import { IconX } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 
 interface ModalProps {
@@ -198,7 +198,7 @@ export function Modal({
                 className="p-1 text-muted-foreground hover:text-foreground transition-colors focus-ring"
                 aria-label="Close modal"
               >
-                <X className="w-5 h-5" />
+                <IconX size={20} />
               </button>
             )}
           </div>

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { X, CheckCircle2, AlertTriangle, Info, XCircle } from 'lucide-react'
+import { IconX, IconCheckCircle, IconWarning, IconInfo, IconXCircle } from '@/components/brand/icons'
 
 // Toast types and context
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -136,7 +136,7 @@ function ToastItem({ toast }: { toast: Toast }) {
     >
       {/* Icon */}
       <div className={cn('flex-shrink-0 mt-0.5', styles.icon)}>
-        <Icon className="w-5 h-5" aria-hidden="true" />
+        <Icon size={20} aria-hidden="true" />
       </div>
 
       {/* Content */}
@@ -164,7 +164,7 @@ function ToastItem({ toast }: { toast: Toast }) {
           className="flex-shrink-0 p-1 text-muted-foreground hover:text-foreground transition-colors focus-ring"
           aria-label="Dismiss notification"
         >
-          <X className="w-4 h-4" />
+          <IconX size={16} />
         </button>
       )}
     </div>
@@ -173,10 +173,10 @@ function ToastItem({ toast }: { toast: Toast }) {
 
 // Icon and style mappings
 const iconMap = {
-  success: CheckCircle2,
-  error: XCircle,
-  warning: AlertTriangle,
-  info: Info,
+  success: IconCheckCircle,
+  error: IconXCircle,
+  warning: IconWarning,
+  info: IconInfo,
 }
 
 const styleMap = {
@@ -200,4 +200,60 @@ const styleMap = {
     icon: 'text-info',
     progress: 'bg-info',
   },
+}
+
+// =============================================================================
+// GLOBAL TOAST HELPER (for use outside React components)
+// =============================================================================
+
+// This is a simple event-based toast system that works outside of React context.
+// Use the useToast() hook when inside React components for better integration.
+
+type ToastEvent = CustomEvent<Omit<Toast, 'id'>>
+const TOAST_EVENT = 'reconciled:toast'
+
+// Global toast trigger (for use outside React)
+export const toast = {
+  success: (title: string, description?: string) =>
+    dispatchToastEvent({ type: 'success', title, description }),
+  error: (title: string, description?: string) =>
+    dispatchToastEvent({ type: 'error', title, description }),
+  warning: (title: string, description?: string) =>
+    dispatchToastEvent({ type: 'warning', title, description }),
+  info: (title: string, description?: string) =>
+    dispatchToastEvent({ type: 'info', title, description }),
+}
+
+function dispatchToastEvent(toast: Omit<Toast, 'id'>) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(TOAST_EVENT, { detail: toast }))
+  }
+}
+
+// Hook to listen for global toast events (used in ToastProvider)
+export function useGlobalToastListener() {
+  const { addToast } = useToast()
+
+  useEffect(() => {
+    const handler = (event: ToastEvent) => {
+      addToast(event.detail)
+    }
+    window.addEventListener(TOAST_EVENT, handler as EventListener)
+    return () => window.removeEventListener(TOAST_EVENT, handler as EventListener)
+  }, [addToast])
+}
+
+// Enhanced provider that listens for global toasts
+export function ToastProviderWithGlobal({ children }: { children: React.ReactNode }) {
+  return (
+    <ToastProvider>
+      <GlobalToastListener />
+      {children}
+    </ToastProvider>
+  )
+}
+
+function GlobalToastListener() {
+  useGlobalToastListener()
+  return null
 }

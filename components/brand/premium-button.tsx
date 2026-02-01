@@ -2,7 +2,7 @@
 
 import { forwardRef, ButtonHTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
-import { Loader2 } from 'lucide-react'
+import { IconLoader } from '@/components/brand/icons'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
@@ -94,7 +94,7 @@ export const PremiumButton = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading && (
-          <Loader2 className={cn(iconSizes[size], 'animate-spin')} />
+          <IconLoader className={cn(iconSizes[size], 'animate-spin')} />
         )}
         {!loading && icon && iconPosition === 'left' && (
           <span className={iconSizes[size]}>{icon}</span>

@@ -3,6 +3,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { ErrorAnimation } from '@/components/brand'
+import { logBoundaryError } from '@/lib/error-monitor'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -22,7 +23,7 @@ interface ErrorBoundaryState {
  * Error Boundary Component
  *
  * Catches JavaScript errors anywhere in the child component tree,
- * logs the error, and displays a fallback UI.
+ * logs the error to the self-hosted error monitor, and displays a fallback UI.
  *
  * @example
  * <ErrorBoundary componentName="TransactionsTable">
@@ -41,6 +42,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('ErrorBoundary caught an error:', error, errorInfo)
+
+    // Log to self-hosted error monitor
+    logBoundaryError(error, errorInfo, this.props.componentName)
+
+    // Call custom error handler if provided
     this.props.onError?.(error, errorInfo)
   }
 

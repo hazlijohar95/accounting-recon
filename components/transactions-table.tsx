@@ -6,17 +6,19 @@ import { api } from '@/convex/_generated/api'
 import { Id } from '@/convex/_generated/dataModel'
 import { cn } from '@/lib/utils'
 import {
-  ArrowUpRight,
-  ArrowDownLeft,
-  Calendar,
-  ChevronDown,
-  ChevronUp,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from 'lucide-react'
+  IconArrowRight,
+  IconArrowDown,
+  IconArrowUpRight,
+  IconArrowDownLeft,
+  IconCalendar,
+  IconCaretDown,
+  IconCaretUp,
+  IconSearch,
+  IconCaretLeft,
+  IconCaretRight,
+  IconCaretDoubleLeft,
+  IconCaretDoubleRight,
+} from '@/components/brand/icons'
 import { LoadingSpinner } from '@/components/brand'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 
@@ -178,8 +180,9 @@ function TransactionsTableContent({
         <div className="flex flex-col gap-3">
           {/* Search */}
           <div className="relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+            <IconSearch
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
             />
             <input
@@ -195,7 +198,7 @@ function TransactionsTableContent({
           {/* Date filters and clear */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+              <IconCalendar size={16} className="text-muted-foreground flex-shrink-0" aria-hidden="true" />
               <label className="sr-only" htmlFor="date-from">From date</label>
               <input
                 id="date-from"
@@ -316,13 +319,15 @@ function TransactionsTableContent({
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {tx.amount > 0 ? (
-                          <ArrowDownLeft
-                            className="w-4 h-4 text-credit flex-shrink-0"
+                          <IconArrowDown
+                            size={16}
+                            className="text-credit flex-shrink-0"
                             aria-label="Credit"
                           />
                         ) : (
-                          <ArrowUpRight
-                            className="w-4 h-4 text-debit flex-shrink-0"
+                          <IconArrowRight
+                            size={16}
+                            className="text-debit flex-shrink-0"
                             aria-label="Debit"
                           />
                         )}
@@ -365,13 +370,15 @@ function TransactionsTableContent({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2 min-w-0">
                     {tx.amount > 0 ? (
-                      <ArrowDownLeft
-                        className="w-4 h-4 text-credit flex-shrink-0 mt-0.5"
+                      <IconArrowDownLeft
+                        size={16}
+                        className="text-credit flex-shrink-0 mt-0.5"
                         aria-label="Credit"
                       />
                     ) : (
-                      <ArrowUpRight
-                        className="w-4 h-4 text-debit flex-shrink-0 mt-0.5"
+                      <IconArrowUpRight
+                        size={16}
+                        className="text-debit flex-shrink-0 mt-0.5"
                         aria-label="Debit"
                       />
                     )}
@@ -472,12 +479,12 @@ function SortableHeader({
         <span aria-hidden="true">
           {isActive ? (
             direction === 'asc' ? (
-              <ChevronUp className="w-3 h-3" />
+              <IconCaretUp size={12} />
             ) : (
-              <ChevronDown className="w-3 h-3" />
+              <IconCaretDown size={12} />
             )
           ) : (
-            <ChevronDown className="w-3 h-3 opacity-30" />
+            <IconCaretDown size={12} className="opacity-30" />
           )}
         </span>
       </button>
@@ -543,7 +550,7 @@ function Pagination({
           className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-ring"
           aria-label="First page"
         >
-          <ChevronsLeft className="w-4 h-4" />
+          <IconCaretDoubleLeft size={16} />
         </button>
         <button
           onClick={() => onPageChange(currentPage - 1)}
@@ -551,7 +558,7 @@ function Pagination({
           className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-ring"
           aria-label="Previous page"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <IconCaretLeft size={16} />
         </button>
 
         <span className="px-3 py-1 text-sm font-mono">
@@ -564,7 +571,7 @@ function Pagination({
           className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-ring"
           aria-label="Next page"
         >
-          <ChevronRight className="w-4 h-4" />
+          <IconCaretRight size={16} />
         </button>
         <button
           onClick={() => onPageChange(totalPages)}
@@ -572,7 +579,7 @@ function Pagination({
           className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-ring"
           aria-label="Last page"
         >
-          <ChevronsRight className="w-4 h-4" />
+          <IconCaretDoubleRight size={16} />
         </button>
       </div>
     </nav>

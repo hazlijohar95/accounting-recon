@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useTheme } from 'next-themes'
-import { Sun, Moon, Monitor } from 'lucide-react'
+import { IconSun, IconMoon, IconDesktop } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 
 export function ThemeToggle() {
@@ -39,7 +39,7 @@ export function ThemeToggle() {
         )}
         title="Light mode"
       >
-        <Sun className="w-4 h-4" />
+        <IconSun size={16} />
       </button>
       <button
         onClick={() => handleSetTheme('dark')}
@@ -51,7 +51,7 @@ export function ThemeToggle() {
         )}
         title="Dark mode"
       >
-        <Moon className="w-4 h-4" />
+        <IconMoon size={16} />
       </button>
       <button
         onClick={() => handleSetTheme('system')}
@@ -63,7 +63,7 @@ export function ThemeToggle() {
         )}
         title="System preference"
       >
-        <Monitor className="w-4 h-4" />
+        <IconDesktop size={16} />
       </button>
     </div>
   )
