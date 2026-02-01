@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { Player } from '@remotion/player'
 import { LaunchVideo } from '../../../remotion/LaunchVideo'
 import { VIDEO_CONFIG, TOTAL_FRAMES } from '../../../remotion/utils/timing'
-import { Play, Pause, RotateCcw, Download, Film } from 'lucide-react'
+import { IconPlay, IconPause, IconRefresh, IconFilmStrip } from '@/components/brand/icons'
 
 /**
  * Video section for the design page.
@@ -18,7 +18,7 @@ export function VideoSection() {
     <section id="launch-video" className="space-y-8">
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Film className="w-5 h-5 text-muted-foreground" />
+          <IconFilmStrip size={20} className="text-muted-foreground" />
           <h2 className="text-xl font-medium">Launch Video</h2>
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
@@ -72,12 +72,12 @@ export function VideoSection() {
           >
             {isPlaying ? (
               <>
-                <Pause className="w-4 h-4" />
+                <IconPause size={16} />
                 Pause
               </>
             ) : (
               <>
-                <Play className="w-4 h-4" />
+                <IconPlay size={16} />
                 Play
               </>
             )}
@@ -93,7 +93,7 @@ export function VideoSection() {
             }}
             className="flex items-center gap-2 px-4 py-2 border border-border text-sm hover:bg-secondary transition-colors"
           >
-            <RotateCcw className="w-4 h-4" />
+            <IconRefresh size={16} />
             Reset
           </button>
         </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Copy } from 'lucide-react'
+import { IconCheck, IconCopy } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import { useCopyToClipboard } from '@/hooks'
 
@@ -43,9 +43,9 @@ export function CodeBlock({ code, language = 'tsx', showLineNumbers = false, cla
         className="absolute top-2 right-2 p-1.5 bg-background border border-border opacity-60 hover:opacity-100 transition-opacity cursor-copy"
       >
         {copied ? (
-          <Check className="w-3 h-3 text-foreground" />
+          <IconCheck size={12} className="text-foreground" />
         ) : (
-          <Copy className="w-3 h-3 text-muted-foreground" />
+          <IconCopy size={12} className="text-muted-foreground" />
         )}
       </button>
       {language && (

@@ -1,6 +1,7 @@
 import { AppSidebar } from '@/components/app-sidebar'
 import { PaywallModal } from '@/components/paywall-modal'
 import { OnboardingChat } from '@/components/onboarding-chat'
+import { OnboardingTour, OnboardingChecklist } from '@/components/onboarding'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,6 +12,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </main>
       <PaywallModal />
       <OnboardingChat />
+      <OnboardingTour />
+      <OnboardingChecklist />
     </div>
   )
 }

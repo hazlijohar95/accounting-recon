@@ -1,6 +1,7 @@
 import React from "react"
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components'
 
 import { ConvexClientProvider } from '@/components/convex-provider'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -41,20 +42,22 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} antialiased`}>
         <RootErrorBoundary>
-          <ConvexClientProvider>
+          <AuthKitProvider>
             <AuthProvider>
-              <ThemeProvider
-                attribute="class"
-                defaultTheme="system"
-                enableSystem
-                storageKey="reconcile-theme"
-              >
-                <ToastProvider>
-                  {children}
-                </ToastProvider>
-              </ThemeProvider>
+              <ConvexClientProvider>
+                <ThemeProvider
+                  attribute="class"
+                  defaultTheme="system"
+                  enableSystem
+                  storageKey="reconcile-theme"
+                >
+                  <ToastProvider>
+                    {children}
+                  </ToastProvider>
+                </ThemeProvider>
+              </ConvexClientProvider>
             </AuthProvider>
-          </ConvexClientProvider>
+          </AuthKitProvider>
         </RootErrorBoundary>
         <Analytics />
       </body>

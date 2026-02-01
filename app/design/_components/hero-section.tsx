@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { IconCaretDown } from '@/components/brand/icons'
 import { LogoAnimated } from '@/components/brand'
 import { cn } from '@/lib/utils'
 
@@ -47,7 +47,7 @@ export function HeroSection() {
         )}
       >
         <span className="text-xs uppercase tracking-wider">Explore</span>
-        <ChevronDown className="w-4 h-4 animate-bounce" />
+        <IconCaretDown size={16} className="animate-bounce" />
       </button>
     </section>
   )

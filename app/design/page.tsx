@@ -5,6 +5,7 @@ import { DesignNav } from './_components/design-nav'
 import { HeroSection } from './_components/hero-section'
 import { LogoSection } from './_components/logo-section'
 import { BrandSection } from './_components/brand-section'
+import { IconsSection } from './_components/icons-section'
 import { PatternsSection } from './_components/patterns-section'
 import { ComponentsSection } from './_components/components-section'
 import { BrandAssetsSection } from './_components/brand-assets-section'
@@ -72,6 +73,7 @@ export default function DesignPage() {
 
             <LogoSection />
             <BrandSection />
+            <IconsSection />
             <PatternsSection />
             <AIFeaturesSection />
             <ComponentsSection />

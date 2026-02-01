@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { IconCheck, IconCopy } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 
 interface ColorSwatchProps {
@@ -35,9 +35,9 @@ function ColorSwatch({ name, variable, lightValue, darkValue }: ColorSwatchProps
         >
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10">
             {copied === 'light' ? (
-              <Check className="w-4 h-4 text-white drop-shadow" />
+              <IconCheck size={16} className="text-white drop-shadow" />
             ) : (
-              <Copy className="w-4 h-4 text-white drop-shadow" />
+              <IconCopy size={16} className="text-white drop-shadow" />
             )}
           </div>
         </button>
@@ -48,9 +48,9 @@ function ColorSwatch({ name, variable, lightValue, darkValue }: ColorSwatchProps
         >
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/10">
             {copied === 'dark' ? (
-              <Check className="w-4 h-4 text-white drop-shadow" />
+              <IconCheck size={16} className="text-white drop-shadow" />
             ) : (
-              <Copy className="w-4 h-4 text-white drop-shadow" />
+              <IconCopy size={16} className="text-white drop-shadow" />
             )}
           </div>
         </button>

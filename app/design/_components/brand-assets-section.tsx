@@ -1,7 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { Download, Copy, Check, ExternalLink } from 'lucide-react'
+import { IconDownload, IconCopy, IconCheck, IconExternalLink } from '@/components/brand/icons'
 import { LogoMark } from '@/components/brand'
 import { useCopyToClipboard } from '@/hooks'
 
@@ -35,7 +35,7 @@ function AssetCard({ name, dimensions, path, preview, downloadPath, svgCode }: A
             className="text-xs px-2 py-1 border border-border hover:bg-secondary transition-colors"
             title="Copy path"
           >
-            {pathCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {pathCopied ? <IconCheck size={12} /> : <IconCopy size={12} />}
           </button>
         </div>
         <div className="flex gap-2">
@@ -45,7 +45,7 @@ function AssetCard({ name, dimensions, path, preview, downloadPath, svgCode }: A
               download
               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-foreground text-background text-xs hover:bg-foreground/90 transition-colors"
             >
-              <Download className="w-3 h-3" />
+              <IconDownload size={12} />
               Download
             </a>
           )}

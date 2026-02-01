@@ -3,26 +3,24 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard,
-  Upload,
-  GitCompare,
-  FileText,
-  X,
-  Check,
-  AlertCircle,
-  ArrowUpRight,
-  ChevronRight,
-  ChevronDown,
-  Search,
-  Filter,
-  Calendar,
-  SlidersHorizontal,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Flag,
-  ArrowRight,
-} from 'lucide-react'
+  IconUpload,
+  IconFileText,
+  IconX,
+  IconCheck,
+  IconWarningCircle,
+  IconArrowRight,
+  IconCaretRight,
+  IconCaretDown,
+  IconSearch,
+  IconFilter,
+  IconCalendar,
+  IconClock,
+  IconCheckCircle,
+  IconXCircle,
+  IconSquaresFour,
+  IconGitDiff,
+  IconFlag,
+} from '@/components/brand/icons'
 import { CodeBlock } from './code-block'
 
 type ButtonState = 'default' | 'hover' | 'active' | 'disabled'
@@ -91,7 +89,7 @@ function ButtonPreview({ variant, state }: { variant: 'primary' | 'secondary' | 
 
   return (
     <button className={variants[variant]} disabled={state === 'disabled'}>
-      {variant === 'icon' ? <X className="w-4 h-4" /> : labels[variant]}
+      {variant === 'icon' ? <IconX size={16} /> : labels[variant]}
     </button>
   )
 }
@@ -148,7 +146,7 @@ export function ComponentsSection() {
 
 // Icon
 <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary">
-  <X className="w-4 h-4" />
+  <IconX size={16} />
 </button>`}
             language="tsx"
           />
@@ -187,7 +185,7 @@ export function ComponentsSection() {
             <label className="block w-full border border-dashed border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors">
               <input type="file" className="hidden" />
               <div className="text-center">
-                <Upload className="w-6 h-6 mx-auto text-muted-foreground" />
+                <IconUpload size={24} className="mx-auto text-muted-foreground" />
                 <span className="text-sm text-muted-foreground mt-2 block">
                   Click to upload
                 </span>
@@ -196,7 +194,7 @@ export function ComponentsSection() {
             <CodeBlock
               code={`<label className="block border border-dashed border-border p-4 cursor-pointer hover:bg-secondary/50">
   <input type="file" className="hidden" />
-  <Upload className="w-6 h-6 mx-auto text-muted-foreground" />
+  <IconUpload size={24} className="mx-auto text-muted-foreground" />
   <span className="text-sm text-muted-foreground">Click to upload</span>
 </label>`}
               language="tsx"
@@ -214,7 +212,7 @@ export function ComponentsSection() {
                   checkboxChecked ? 'bg-foreground border-foreground' : 'border-border'
                 )}
               >
-                {checkboxChecked && <Check className="w-3 h-3 text-background" />}
+                {checkboxChecked && <IconCheck size={12} className="text-background" />}
               </button>
               <span className="text-sm">Enable feature</span>
             </label>
@@ -225,7 +223,7 @@ export function ComponentsSection() {
     checked ? 'bg-foreground border-foreground' : 'border-border'
   )}
 >
-  {checked && <Check className="w-3 h-3 text-background" />}
+  {checked && <IconCheck size={12} className="text-background" />}
 </button>`}
               language="tsx"
             />
@@ -245,7 +243,7 @@ export function ComponentsSection() {
             <h4 className="text-xs uppercase tracking-wider text-muted-foreground">Stats Card</h4>
             <div className="border border-border p-4">
               <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
-                <ArrowUpRight className="w-3 h-3" />
+                <IconArrowRight size={12} />
                 Cash In
               </div>
               <div className="mt-2 text-2xl font-medium">$12,450.00</div>
@@ -254,7 +252,7 @@ export function ComponentsSection() {
             <CodeBlock
               code={`<div className="border border-border p-4">
   <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
-    <ArrowUpRight className="w-3 h-3" />
+    <IconArrowRight size={12} />
     Cash In
   </div>
   <div className="mt-2 text-2xl font-medium">$12,450.00</div>
@@ -275,7 +273,7 @@ export function ComponentsSection() {
                 {['Item One', 'Item Two', 'Item Three'].map((item) => (
                   <div key={item} className="px-4 py-3 flex items-center justify-between">
                     <span className="text-sm">{item}</span>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    <IconCaretRight size={16} className="text-muted-foreground" />
                   </div>
                 ))}
               </div>
@@ -297,10 +295,10 @@ export function ComponentsSection() {
             <div className="bg-secondary/30 p-2">
               <ul className="space-y-1">
                 {[
-                  { icon: <LayoutDashboard className="w-4 h-4" />, label: 'Dashboard' },
-                  { icon: <Upload className="w-4 h-4" />, label: 'Upload' },
-                  { icon: <GitCompare className="w-4 h-4" />, label: 'Reconcile' },
-                  { icon: <FileText className="w-4 h-4" />, label: 'Reports' },
+                  { icon: <IconSquaresFour size={16} />, label: 'Dashboard' },
+                  { icon: <IconUpload size={16} />, label: 'Upload' },
+                  { icon: <IconGitDiff size={16} />, label: 'Reconcile' },
+                  { icon: <IconFileText size={16} />, label: 'Reports' },
                 ].map((item, i) => (
                   <li key={item.label}>
                     <button
@@ -449,7 +447,7 @@ export function ComponentsSection() {
                   <p className="text-xs text-muted-foreground mt-1">Supporting text</p>
                 </div>
                 <button className="p-2 hover:bg-secondary transition-colors">
-                  <X className="w-4 h-4" />
+                  <IconX size={16} />
                 </button>
               </div>
               <div className="p-4">
@@ -476,7 +474,7 @@ export function ComponentsSection() {
     <div className="p-4 border-b border-border flex items-center justify-between">
       <h4 className="text-sm font-medium">Title</h4>
       <button className="p-2 hover:bg-secondary">
-        <X className="w-4 h-4" />
+        <IconX size={16} />
       </button>
     </div>
     <div className="p-4">Content</div>
@@ -501,7 +499,7 @@ export function ComponentsSection() {
           <div className="border border-border p-6 space-y-4">
             <h4 className="text-xs uppercase tracking-wider text-muted-foreground">Warning Alert</h4>
             <div className="flex items-start gap-3 border border-border p-4">
-              <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+              <IconWarningCircle size={16} className="text-destructive shrink-0 mt-0.5" />
               <div>
                 <div className="text-sm font-medium">Attention required</div>
                 <div className="text-xs text-muted-foreground mt-1">
@@ -515,7 +513,7 @@ export function ComponentsSection() {
             <h4 className="text-xs uppercase tracking-wider text-muted-foreground">Empty State</h4>
             <div className="border border-border p-8 text-center">
               <div className="w-12 h-12 border border-border mx-auto flex items-center justify-center">
-                <FileText className="w-6 h-6 text-muted-foreground" />
+                <IconFileText size={24} className="text-muted-foreground" />
               </div>
               <div className="text-sm mt-4">No items found</div>
               <div className="text-xs text-muted-foreground mt-1">
@@ -601,7 +599,7 @@ export function ComponentsSection() {
                 <tr className="hover:bg-secondary/30 transition-colors bg-red-500/5">
                   <td className="px-4 py-3">
                     <button className="w-4 h-4 border border-foreground bg-foreground">
-                      <Check className="w-3 h-3 text-background" />
+                      <IconCheck size={12} className="text-background" />
                     </button>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">2024-01-13</td>
@@ -652,7 +650,7 @@ export function ComponentsSection() {
             <div className="space-y-6">
               <div className="relative pl-10">
                 <div className="absolute left-2 w-4 h-4 bg-emerald-500 flex items-center justify-center">
-                  <CheckCircle2 className="w-3 h-3 text-background" />
+                  <IconCheckCircle size={12} className="text-background" />
                 </div>
                 <div className="flex items-start justify-between">
                   <div>
@@ -667,7 +665,7 @@ export function ComponentsSection() {
 
               <div className="relative pl-10">
                 <div className="absolute left-2 w-4 h-4 bg-amber-500 flex items-center justify-center">
-                  <Flag className="w-3 h-3 text-background" />
+                  <IconFlag size={12} className="text-background" />
                 </div>
                 <div className="flex items-start justify-between">
                   <div>
@@ -682,7 +680,7 @@ export function ComponentsSection() {
 
               <div className="relative pl-10">
                 <div className="absolute left-2 w-4 h-4 bg-foreground flex items-center justify-center">
-                  <Upload className="w-3 h-3 text-background" />
+                  <IconUpload size={12} className="text-background" />
                 </div>
                 <div className="flex items-start justify-between">
                   <div>
@@ -697,7 +695,7 @@ export function ComponentsSection() {
 
               <div className="relative pl-10">
                 <div className="absolute left-2 w-4 h-4 bg-red-500 flex items-center justify-center">
-                  <XCircle className="w-3 h-3 text-background" />
+                  <IconXCircle size={12} className="text-background" />
                 </div>
                 <div className="flex items-start justify-between">
                   <div>
@@ -811,7 +809,7 @@ export function ComponentsSection() {
           {/* Search Bar */}
           <div className="flex gap-2">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <IconSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search transactions..."
@@ -819,7 +817,7 @@ export function ComponentsSection() {
               />
             </div>
             <button className="px-4 py-2 border border-border hover:bg-secondary flex items-center gap-2">
-              <Filter className="w-4 h-4" />
+              <IconFilter size={16} />
               <span className="text-sm">Filters</span>
               <span className="px-1.5 py-0.5 bg-foreground text-background text-xs">3</span>
             </button>
@@ -830,19 +828,19 @@ export function ComponentsSection() {
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-secondary text-sm">
               <span>Status: Pending</span>
               <button className="hover:text-foreground">
-                <X className="w-3 h-3" />
+                <IconX size={12} />
               </button>
             </div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-secondary text-sm">
               <span>Date: Jan 2024</span>
               <button className="hover:text-foreground">
-                <X className="w-3 h-3" />
+                <IconX size={12} />
               </button>
             </div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-secondary text-sm">
               <span>Amount: &gt;$500</span>
               <button className="hover:text-foreground">
-                <X className="w-3 h-3" />
+                <IconX size={12} />
               </button>
             </div>
             <button className="text-xs text-muted-foreground hover:text-foreground">
@@ -868,12 +866,12 @@ export function ComponentsSection() {
                 <div className="flex items-center gap-2">
                   <button className="flex-1 px-3 py-2 border border-border text-sm text-left flex items-center justify-between hover:bg-secondary">
                     <span>Jan 1, 2024</span>
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <IconCalendar size={16} className="text-muted-foreground" />
                   </button>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                  <IconArrowRight size={16} className="text-muted-foreground" />
                   <button className="flex-1 px-3 py-2 border border-border text-sm text-left flex items-center justify-between hover:bg-secondary">
                     <span>Jan 31, 2024</span>
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <IconCalendar size={16} className="text-muted-foreground" />
                   </button>
                 </div>
               </div>

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 const sections = [
   { id: 'logo', label: 'Logo' },
   { id: 'brand', label: 'Brand' },
+  { id: 'icons', label: 'Icons' },
   { id: 'patterns', label: 'Patterns' },
   { id: 'ai-features', label: 'AI Features' },
   { id: 'components', label: 'Components' },

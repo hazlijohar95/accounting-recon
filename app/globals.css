@@ -234,6 +234,37 @@
   }
 }
 
+/* ==============================================
+   BRAND ICON SYSTEM - Geometric/Pixel Styling
+   ============================================== */
+
+/* Sharp linecaps and miter joins for brand aesthetic */
+.brand-icon {
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+/* Spin animation for loaders */
+.brand-icon-spin {
+  animation: brand-icon-spin 1s linear infinite;
+}
+
+@keyframes brand-icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .brand-icon-spin {
+    animation: none;
+  }
+}
+
 /* Safe Area Insets for iPhone notch/home indicator */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0);
