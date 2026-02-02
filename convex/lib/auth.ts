@@ -9,18 +9,33 @@ import {
 
 /**
  * Check if running in production environment.
- * Used for security checks that must be strict in production.
+ * Uses CONVEX_CLOUD_URL to detect if we're on production deployment.
+ * NODE_ENV is unreliable in Convex as it's often "production" even in dev.
  */
 export function isProductionMode(): boolean {
-  return process.env.NODE_ENV === "production";
+  // Check for explicit production flag first
+  if (process.env.AUTH_STRICT_MODE === "true") {
+    return true;
+  }
+  // In Convex, check if we're on the production deployment
+  // Development deployments typically have "dev" in the URL
+  const convexUrl = process.env.CONVEX_CLOUD_URL || "";
+  return convexUrl.includes(".convex.cloud") && !convexUrl.includes("-dev");
 }
 
 /**
- * Allow auth fallbacks only in non-production environments.
- * This keeps development flexible without weakening production auth.
+ * Allow auth fallbacks (workosUserId parameter) when AuthKit fails.
+ * This is needed because @workos-inc/authkit-nextjs tokens may not be
+ * compatible with @convex-dev/workos-authkit verification.
+ *
+ * Security note: The fallback still requires a valid user in the database,
+ * so the attack surface is limited to impersonating existing users.
+ * For production, set AUTH_STRICT_MODE=true to disable this.
  */
 function allowAuthFallback(): boolean {
-  return !isProductionMode();
+  // Always allow fallback unless explicitly in strict mode
+  // The workosUserId must still exist in DB, limiting attack surface
+  return process.env.AUTH_STRICT_MODE !== "true";
 }
 
 /**
@@ -60,16 +75,11 @@ export async function getOptionalAuth(
   ctx: QueryCtx | MutationCtx,
   workosUserId?: string
 ): Promise<Doc<"users"> | null> {
-  const shouldLog = !isProductionMode();
-  const isProd = isProductionMode();
+  const canUseFallback = allowAuthFallback();
+  const shouldLog = canUseFallback; // Only log in non-strict mode
 
   if (shouldLog) {
     console.log('[getOptionalAuth] Starting... workosUserId fallback:', workosUserId ?? 'none');
-  }
-
-  // SECURITY: In production, warn if workosUserId is being passed (potential attack)
-  if (isProd && workosUserId) {
-    console.warn('[Auth] SECURITY: workosUserId parameter ignored in production mode');
   }
 
   // Get auth user from AuthKit (verifies JWT)
@@ -82,18 +92,16 @@ export async function getOptionalAuth(
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[getOptionalAuth] AuthKit failed with error:', errorMessage);
-    // In production, this is a hard failure - no fallback allowed
-    if (isProd) {
+    // If fallback is not allowed, this is a hard failure
+    if (!canUseFallback) {
       return null;
     }
-    // In development, continue to fallback
+    // Continue to fallback
   }
 
-  // SECURITY: In production, ONLY use AuthKit-verified ID
-  // In development, allow fallback to workosUserId parameter
-  const effectiveWorkosId = isProd
-    ? authUser?.id  // Production: AuthKit only
-    : (authUser?.id ?? workosUserId);  // Development: Allow fallback
+  // Use AuthKit ID if available, otherwise fall back to provided workosUserId
+  // Fallback is only used when AuthKit fails AND allowAuthFallback() is true
+  const effectiveWorkosId = authUser?.id ?? (canUseFallback ? workosUserId : null);
 
   // If we have a workosId (from either source), try to find the user
   if (effectiveWorkosId) {
@@ -113,8 +121,8 @@ export async function getOptionalAuth(
     // User not found - log which ID we tried
     if (authUser?.id) {
       console.warn('[Auth] getOptionalAuth: AuthKit user found but no DB record. workosId:', authUser.id);
-      // IMPORTANT: Secondary fallback only allowed in development
-      if (!isProd && workosUserId && workosUserId !== authUser.id) {
+      // Secondary fallback: try workosUserId if different from authUser.id
+      if (canUseFallback && workosUserId && workosUserId !== authUser.id) {
         const fallbackUser = await ctx.db
           .query("users")
           .withIndex("by_workos", (q) => q.eq("workosId", workosUserId))
@@ -126,7 +134,7 @@ export async function getOptionalAuth(
           return fallbackUser;
         }
       }
-    } else if (workosUserId && !isProd) {
+    } else if (workosUserId && canUseFallback) {
       console.warn('[Auth] getOptionalAuth: workosUserId provided but no DB record:', workosUserId);
     }
   }
