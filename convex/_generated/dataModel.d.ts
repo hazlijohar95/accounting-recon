@@ -708,7 +708,9 @@ export type DataModel = {
     document: {
       columnType: "text" | "number" | "formula";
       dataSource?: string;
+      deletedAt?: number;
       formula?: string;
+      inputColumnId?: Id<"worksheetColumns">;
       name: string;
       order: number;
       width?: number;
@@ -721,7 +723,9 @@ export type DataModel = {
       | "_id"
       | "columnType"
       | "dataSource"
+      | "deletedAt"
       | "formula"
+      | "inputColumnId"
       | "name"
       | "order"
       | "width"
@@ -729,8 +733,42 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_input_column: ["inputColumnId", "_creationTime"];
       by_worksheet: ["worksheetId", "_creationTime"];
+      by_worksheet_active: ["worksheetId", "deletedAt", "_creationTime"];
       by_worksheet_order: ["worksheetId", "order", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  worksheetMessages: {
+    document: {
+      content: string;
+      createdAt: number;
+      metadata?: {
+        referencedCells?: Array<{ columnKey: string; rowNumber: number }>;
+        toolCalls?: Array<{ name: string; result?: string }>;
+      };
+      role: "user" | "assistant";
+      worksheetId: Id<"worksheets">;
+      _id: Id<"worksheetMessages">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "content"
+      | "createdAt"
+      | "metadata"
+      | "metadata.referencedCells"
+      | "metadata.toolCalls"
+      | "role"
+      | "worksheetId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_worksheet: ["worksheetId", "_creationTime"];
+      by_worksheet_time: ["worksheetId", "createdAt", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -744,8 +782,10 @@ export type DataModel = {
       >;
       cells: Record<string, any>;
       createdAt: number;
+      deletedAt?: number;
       rowNumber: number;
       updatedAt: number;
+      version?: number;
       worksheetId: Id<"worksheets">;
       _id: Id<"worksheetRows">;
       _creationTime: number;
@@ -760,13 +800,16 @@ export type DataModel = {
       | "cellStatus"
       | `cellStatus.${string}`
       | "createdAt"
+      | "deletedAt"
       | "rowNumber"
       | "updatedAt"
+      | "version"
       | "worksheetId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_worksheet: ["worksheetId", "_creationTime"];
+      by_worksheet_active: ["worksheetId", "deletedAt", "_creationTime"];
       by_worksheet_row: ["worksheetId", "rowNumber", "_creationTime"];
     };
     searchIndexes: {};
@@ -775,6 +818,7 @@ export type DataModel = {
   worksheets: {
     document: {
       createdAt: number;
+      deletedAt?: number;
       name: string;
       updatedAt: number;
       workspaceId: Id<"workspaces">;
@@ -785,6 +829,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "deletedAt"
       | "name"
       | "updatedAt"
       | "workspaceId";
@@ -792,6 +837,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_active: ["workspaceId", "deletedAt", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

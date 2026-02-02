@@ -17,4 +17,12 @@ crons.daily(
   internal.errors.scheduledCleanup
 );
 
+// Process pending enrichment jobs every 10 seconds
+// Picks up jobs from agentJobs table and runs LLM/external enrichment
+crons.interval(
+  "process-enrichment-jobs",
+  { seconds: 10 },
+  internal.agents.processJobs
+);
+
 export default crons;

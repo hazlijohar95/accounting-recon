@@ -37,13 +37,25 @@ export function useCompany(id: Id<"companies"> | undefined, workosUserId?: strin
   return useQuery(api.companies.get, id ? { id, workosUserId } : "skip");
 }
 
+/**
+ * Hook to fetch companies for a user.
+ * Prefers workosUserId for authentication lookup.
+ * The backend will resolve workosUserId to the user's Convex _id.
+ */
 export function useUserCompanies(
   ownerId: Id<"users"> | undefined,
   workosUserId?: string
 ) {
+  // Always include workosUserId if available, as it's the primary auth mechanism
+  const queryArgs = workosUserId
+    ? { workosUserId, ownerId }
+    : ownerId
+      ? { ownerId }
+      : null;
+
   return useQuery(
     api.companies.listByOwner,
-    ownerId || workosUserId ? { ownerId, workosUserId } : "skip"
+    queryArgs ?? "skip"
   );
 }
 

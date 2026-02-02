@@ -320,132 +320,132 @@ const createDemoSession = (): ReconciliationSession => ({
 const createDemoWorkspaces = (): DemoWorkspace[] => [
   {
     _id: 'demo-ws-1',
-    name: 'Q1 2025 Sales Pipeline',
-    description: 'Lead enrichment and qualification',
+    name: 'Bank Reconciliation Audit',
+    description: 'AI‑assisted cash vs accrual review',
     updatedAt: Date.now() - 3600000, // 1 hour ago
   },
   {
     _id: 'demo-ws-2',
-    name: 'Competitor Research',
-    description: 'Market analysis with AI insights',
+    name: 'Vendor Spend Review',
+    description: 'Expense patterns and vendor risk signals',
     updatedAt: Date.now() - 86400000, // 1 day ago
   },
 ]
 
 const createDemoWorksheets = (): DemoWorksheet[] => [
-  // Workspace 1: Sales Pipeline
-  { _id: 'demo-sheet-1', workspaceId: 'demo-ws-1', name: 'Tech Prospects', updatedAt: Date.now() - 1800000 },
-  { _id: 'demo-sheet-2', workspaceId: 'demo-ws-1', name: 'Enterprise Leads', updatedAt: Date.now() - 7200000 },
-  // Workspace 2: Competitor Research
-  { _id: 'demo-sheet-3', workspaceId: 'demo-ws-2', name: 'SaaS Competitors', updatedAt: Date.now() - 172800000 },
+  // Workspace 1: Bank Reconciliation Audit
+  { _id: 'demo-sheet-1', workspaceId: 'demo-ws-1', name: 'Cash vs Accrual', updatedAt: Date.now() - 1800000 },
+  { _id: 'demo-sheet-2', workspaceId: 'demo-ws-1', name: 'Exception Review', updatedAt: Date.now() - 7200000 },
+  // Workspace 2: Vendor Spend Review
+  { _id: 'demo-sheet-3', workspaceId: 'demo-ws-2', name: 'Top Vendors', updatedAt: Date.now() - 172800000 },
 ]
 
 const createDemoColumns = (): DemoWorksheetColumn[] => [
-  // Tech Prospects sheet columns
-  { _id: 'demo-col-0', worksheetId: 'demo-sheet-1', order: 0, name: 'Company', columnType: 'text', width: 140 },
-  { _id: 'demo-col-1', worksheetId: 'demo-sheet-1', order: 1, name: 'Website', columnType: 'text', width: 140 },
-  { _id: 'demo-col-2', worksheetId: 'demo-sheet-1', order: 2, name: 'CEO', columnType: 'formula', formula: '=ENRICH("Find the CEO name")', dataSource: 'llm', width: 150 },
-  { _id: 'demo-col-3', worksheetId: 'demo-sheet-1', order: 3, name: 'Funding Stage', columnType: 'formula', formula: '=ENRICH("What funding stage?")', dataSource: 'llm', width: 120 },
-  { _id: 'demo-col-4', worksheetId: 'demo-sheet-1', order: 4, name: 'Employees', columnType: 'formula', formula: '=CLEARBIT("company.employees")', dataSource: 'clearbit', width: 100 },
-  { _id: 'demo-col-5', worksheetId: 'demo-sheet-1', order: 5, name: 'Industry', columnType: 'text', width: 120 },
-  // Enterprise Leads sheet columns
-  { _id: 'demo-col-10', worksheetId: 'demo-sheet-2', order: 0, name: 'Company', columnType: 'text', width: 160 },
-  { _id: 'demo-col-11', worksheetId: 'demo-sheet-2', order: 1, name: 'Revenue', columnType: 'number', width: 120 },
-  { _id: 'demo-col-12', worksheetId: 'demo-sheet-2', order: 2, name: 'Contact', columnType: 'formula', formula: '=ENRICH("Find primary contact")', dataSource: 'llm', width: 150 },
-  // SaaS Competitors sheet columns
-  { _id: 'demo-col-20', worksheetId: 'demo-sheet-3', order: 0, name: 'Competitor', columnType: 'text', width: 160 },
-  { _id: 'demo-col-21', worksheetId: 'demo-sheet-3', order: 1, name: 'Pricing', columnType: 'formula', formula: '=ENRICH("Find pricing info")', dataSource: 'llm', width: 180 },
-  { _id: 'demo-col-22', worksheetId: 'demo-sheet-3', order: 2, name: 'Key Features', columnType: 'formula', formula: '=ENRICH("List key features")', dataSource: 'llm', width: 200 },
+  // Cash vs Accrual sheet columns
+  { _id: 'demo-col-0', worksheetId: 'demo-sheet-1', order: 0, name: 'Cash Description', columnType: 'text', width: 170 },
+  { _id: 'demo-col-1', worksheetId: 'demo-sheet-1', order: 1, name: 'Reference', columnType: 'text', width: 130 },
+  { _id: 'demo-col-2', worksheetId: 'demo-sheet-1', order: 2, name: 'Suggested Accrual', columnType: 'formula', formula: '=ENRICH("Find matching invoice/vendor")', dataSource: 'llm', width: 190 },
+  { _id: 'demo-col-3', worksheetId: 'demo-sheet-1', order: 3, name: 'Match Confidence', columnType: 'formula', formula: '=ENRICH("Estimate match confidence")', dataSource: 'llm', width: 150 },
+  { _id: 'demo-col-4', worksheetId: 'demo-sheet-1', order: 4, name: 'Days Difference', columnType: 'number', width: 120 },
+  { _id: 'demo-col-5', worksheetId: 'demo-sheet-1', order: 5, name: 'Notes', columnType: 'text', width: 160 },
+  // Exception Review sheet columns
+  { _id: 'demo-col-10', worksheetId: 'demo-sheet-2', order: 0, name: 'Exception', columnType: 'text', width: 200 },
+  { _id: 'demo-col-11', worksheetId: 'demo-sheet-2', order: 1, name: 'Amount', columnType: 'number', width: 120 },
+  { _id: 'demo-col-12', worksheetId: 'demo-sheet-2', order: 2, name: 'Suggested Action', columnType: 'formula', formula: '=ENRICH("Suggest action")', dataSource: 'llm', width: 180 },
+  // Top Vendors sheet columns
+  { _id: 'demo-col-20', worksheetId: 'demo-sheet-3', order: 0, name: 'Vendor', columnType: 'text', width: 180 },
+  { _id: 'demo-col-21', worksheetId: 'demo-sheet-3', order: 1, name: 'Category', columnType: 'text', width: 140 },
+  { _id: 'demo-col-22', worksheetId: 'demo-sheet-3', order: 2, name: 'YTD Spend', columnType: 'number', width: 140 },
+  { _id: 'demo-col-23', worksheetId: 'demo-sheet-3', order: 3, name: 'Risk Flag', columnType: 'formula', formula: '=ENRICH("Flag anomalies or risk")', dataSource: 'llm', width: 140 },
 ]
 
 const createDemoRows = (): DemoWorksheetRow[] => [
-  // Tech Prospects sheet rows (8 rows with mixed statuses)
+  // Cash vs Accrual sheet rows
   {
     _id: 'demo-row-1',
     worksheetId: 'demo-sheet-1',
     rowNumber: 0,
-    cells: { col_0: 'Apple', col_1: 'apple.com', col_2: 'Tim Cook', col_3: 'Public', col_4: '164,000', col_5: 'Technology' },
-    cellStatus: { col_2: 'complete', col_3: 'complete', col_4: 'complete' },
+    cells: { col_0: 'Client Payment - TechStart', col_1: 'INV-1029', col_2: 'Invoice #1029 · TechStart', col_3: 'High', col_4: 2, col_5: 'Exact amount' },
+    cellStatus: { col_2: 'complete', col_3: 'complete' },
   },
   {
     _id: 'demo-row-2',
     worksheetId: 'demo-sheet-1',
     rowNumber: 1,
-    cells: { col_0: 'Stripe', col_1: 'stripe.com', col_2: 'Patrick Collison', col_3: 'Series I', col_4: '8,000', col_5: 'Fintech' },
-    cellStatus: { col_2: 'complete', col_3: 'complete', col_4: 'complete' },
+    cells: { col_0: 'POS Settlement - Maybank', col_1: 'SETT-5582', col_2: 'POS Batch 5582', col_3: 'Medium', col_4: 3, col_5: 'Within 3 days' },
+    cellStatus: { col_2: 'complete', col_3: 'complete' },
   },
   {
     _id: 'demo-row-3',
     worksheetId: 'demo-sheet-1',
     rowNumber: 2,
-    cells: { col_0: 'OpenAI', col_1: 'openai.com', col_2: 'Sam Altman', col_3: '', col_4: '', col_5: 'AI' },
-    cellStatus: { col_2: 'complete', col_3: 'running', col_4: 'pending' },
+    cells: { col_0: 'Supplier Transfer - FreshFoods', col_1: 'INV-7781', col_2: 'Invoice #7781 · FreshFoods', col_3: 'High', col_4: 1, col_5: 'Reference match' },
+    cellStatus: { col_2: 'complete', col_3: 'complete' },
   },
   {
     _id: 'demo-row-4',
     worksheetId: 'demo-sheet-1',
     rowNumber: 3,
-    cells: { col_0: 'Notion', col_1: 'notion.so', col_2: '', col_3: '', col_4: '', col_5: 'Productivity' },
-    cellStatus: { col_2: 'running', col_3: 'pending', col_4: 'pending' },
+    cells: { col_0: 'Payroll - Jan 2025', col_1: 'PAY-0101', col_2: 'Payroll Journal · Jan', col_3: 'Medium', col_4: 0, col_5: 'Date matches' },
+    cellStatus: { col_2: 'complete', col_3: 'complete' },
   },
   {
     _id: 'demo-row-5',
     worksheetId: 'demo-sheet-1',
     rowNumber: 4,
-    cells: { col_0: 'Figma', col_1: 'figma.com', col_2: 'Dylan Field', col_3: '', col_4: '', col_5: 'Design' },
-    cellStatus: { col_2: 'complete', col_3: 'error', col_4: 'idle' },
-    cellErrors: { col_3: 'API rate limit exceeded' },
+    cells: { col_0: 'Utility Bill - TNB', col_1: 'UTIL-9902', col_2: '', col_3: '', col_4: 9, col_5: 'Date outside range' },
+    cellStatus: { col_2: 'running', col_3: 'pending' },
   },
   {
     _id: 'demo-row-6',
     worksheetId: 'demo-sheet-1',
     rowNumber: 5,
-    cells: { col_0: 'Vercel', col_1: 'vercel.com', col_2: '', col_3: '', col_4: '', col_5: 'DevTools' },
-    cellStatus: { col_2: 'pending', col_3: 'idle', col_4: 'idle' },
+    cells: { col_0: 'Refund - Card Chargeback', col_1: 'CB-2031', col_2: '', col_3: '', col_4: 4, col_5: 'Manual review' },
+    cellStatus: { col_2: 'pending', col_3: 'idle' },
   },
   {
     _id: 'demo-row-7',
     worksheetId: 'demo-sheet-1',
     rowNumber: 6,
-    cells: { col_0: 'Linear', col_1: 'linear.app', col_2: 'Karri Saarinen', col_3: 'Series B', col_4: '150', col_5: 'Productivity' },
-    cellStatus: { col_2: 'complete', col_3: 'complete', col_4: 'complete' },
+    cells: { col_0: 'Software Subscription - Atlas', col_1: 'SUB-442', col_2: 'Invoice #SUB-442 · Atlas', col_3: 'Low', col_4: 15, col_5: 'Amount variance' },
+    cellStatus: { col_2: 'complete', col_3: 'complete' },
   },
   {
     _id: 'demo-row-8',
     worksheetId: 'demo-sheet-1',
     rowNumber: 7,
-    cells: { col_0: 'Anthropic', col_1: 'anthropic.com', col_2: 'Dario Amodei', col_3: 'Series E', col_4: '1,000+', col_5: 'AI' },
-    cellStatus: { col_2: 'complete', col_3: 'complete', col_4: 'complete' },
+    cells: { col_0: 'Client Payment - Nova Labs', col_1: 'INV-1091', col_2: 'Invoice #1091 · Nova Labs', col_3: 'High', col_4: 1, col_5: 'Exact match' },
+    cellStatus: { col_2: 'complete', col_3: 'complete' },
   },
-  // Enterprise Leads sheet rows (fewer rows)
+  // Exception Review sheet rows
   {
     _id: 'demo-row-20',
     worksheetId: 'demo-sheet-2',
     rowNumber: 0,
-    cells: { col_0: 'Microsoft', col_1: 500000000000, col_2: 'Satya Nadella' },
+    cells: { col_0: 'Amount mismatch > 10%', col_1: 1320, col_2: 'Verify invoice total' },
     cellStatus: { col_2: 'complete' },
   },
   {
     _id: 'demo-row-21',
     worksheetId: 'demo-sheet-2',
     rowNumber: 1,
-    cells: { col_0: 'Salesforce', col_1: 31000000000, col_2: '' },
-    cellStatus: { col_2: 'running' },
+    cells: { col_0: 'Date outside window', col_1: 8500, col_2: 'Check settlement delay' },
+    cellStatus: { col_2: 'complete' },
   },
-  // SaaS Competitors sheet rows
+  // Top Vendors sheet rows
   {
     _id: 'demo-row-30',
     worksheetId: 'demo-sheet-3',
     rowNumber: 0,
-    cells: { col_0: 'Airtable', col_1: '$20-45/user/mo', col_2: 'Flexible databases, automations, views' },
-    cellStatus: { col_1: 'complete', col_2: 'complete' },
+    cells: { col_0: 'FreshFoods Sdn Bhd', col_1: 'Inventory', col_2: 58200, col_3: 'Stable' },
+    cellStatus: { col_3: 'complete' },
   },
   {
     _id: 'demo-row-31',
     worksheetId: 'demo-sheet-3',
     rowNumber: 1,
-    cells: { col_0: 'Retool', col_1: '', col_2: '' },
-    cellStatus: { col_1: 'pending', col_2: 'pending' },
+    cells: { col_0: 'PrintWorks Co', col_1: 'Marketing', col_2: 21400, col_3: 'Review terms' },
+    cellStatus: { col_3: 'complete' },
   },
 ]
 

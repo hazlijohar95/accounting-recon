@@ -16,6 +16,7 @@ import { api } from '@/convex/_generated/api'
 import { Id } from '@/convex/_generated/dataModel'
 import { useAuth } from './auth-provider'
 import { useOnboardingProgress, useSaveOnboardingProgress, useDeleteOnboardingProgress } from '@/lib/convex-hooks'
+import { logConvexError, logManualError } from '@/lib/error-monitor'
 import { ANIMATION_TIMINGS } from '@/constants/brand'
 
 interface Question {
@@ -228,14 +229,22 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
 
     setIsCreating(true)
     setCreateError(null)
+
+    // Prepare the workosUserId - prefer workosId, fallback to id
+    const workosUserIdToSend = user.workosId ?? user.id
+
     console.log('[Onboarding] Creating company with data:', {
       name: data.companyName,
-      userEmail: user?.email,
-      userName: user?.name,
-      userId: user?.id,
-      workosId: user?.workosId,
-      workosUserIdToSend: user?.workosId ?? user?.id,
+      userEmail: user.email,
+      userName: user.name,
+      userId: user.id,
+      workosId: user.workosId,
+      workosUserIdToSend,
+      // Verify workosId is properly set
+      hasWorkosId: Boolean(user.workosId),
+      idsMatch: user.workosId === user.id,
     })
+
     try {
       const result = await createCompany({
         name: data.companyName || 'My Company',
@@ -245,13 +254,35 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
         primaryBank: data.primaryBank,
         fiscalYearEnd: data.fiscalYearEnd,
         currency: 'MYR',
-        userEmail: user?.email,
-        userName: user?.name,
-        workosUserId: user?.workosId ?? user?.id,
+        userEmail: user.email,
+        userName: user.name,
+        workosUserId: workosUserIdToSend,
       })
-      // The mutation now returns { companyId, ownerId }
-      const { companyId } = result
-      console.log('[Onboarding] Company created successfully:', companyId)
+
+      // The mutation returns { companyId, ownerId }
+      const { companyId, ownerId } = result
+      console.log('[Onboarding] Company created successfully:', {
+        companyId,
+        ownerId,
+        // Log the ownerId type to verify it's a Convex ID (not WorkOS ID)
+        ownerIdType: typeof ownerId,
+        ownerIdPrefix: String(ownerId).substring(0, 10),
+      })
+
+      // VALIDATION: Check if ownerId looks like a WorkOS ID instead of Convex ID
+      // WorkOS IDs start with "user_", Convex IDs are alphanumeric (like "jd7...")
+      const ownerIdStr = String(ownerId)
+      if (ownerIdStr.startsWith('user_')) {
+        const errorMsg = `BUG: ownerId is a WorkOS ID (${ownerIdStr}), not a Convex ID!`
+        console.error('[Onboarding]', errorMsg)
+        logManualError(errorMsg, {
+          companyId,
+          ownerId,
+          workosUserId: workosUserIdToSend,
+          userEmail: user.email,
+        })
+      }
+
       console.log('[Onboarding] Setting selectedCompanyId in store:', companyId)
       setSelectedCompanyId(companyId)
       setCompletedInSession(true) // Prevent reset effect from firing
@@ -266,6 +297,12 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       onComplete?.(companyId)
     } catch (error) {
       console.error('[Onboarding] Failed to create company:', error)
+      // Track this error for monitoring
+      logConvexError(error, 'companies:create', {
+        companyName: data.companyName,
+        workosUserId: workosUserIdToSend,
+        userEmail: user.email,
+      })
       setCreateError(error instanceof Error ? error.message : 'Failed to create company. Please try again.')
     } finally {
       setIsCreating(false)

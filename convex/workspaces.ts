@@ -40,14 +40,15 @@ const MAX_CELLS_PER_ROW = 100;
  */
 async function verifyQueryWorkspaceAccess(
   ctx: QueryCtx,
-  workspaceId: Id<"workspaces">
+  workspaceId: Id<"workspaces">,
+  workosUserId?: string
 ): Promise<{ allowed: boolean; user: Doc<"users"> | null; workspace: Doc<"workspaces"> | null }> {
   const workspace = await ctx.db.get(workspaceId);
   if (!workspace) {
     return { allowed: false, user: null, workspace: null };
   }
 
-  const { allowed, user } = await verifyQueryCompanyAccess(ctx, workspace.companyId);
+  const { allowed, user } = await verifyQueryCompanyAccess(ctx, workspace.companyId, workosUserId);
   return { allowed, user, workspace };
 }
 
@@ -56,14 +57,15 @@ async function verifyQueryWorkspaceAccess(
  */
 async function verifyQueryWorksheetAccess(
   ctx: QueryCtx,
-  worksheetId: Id<"worksheets">
+  worksheetId: Id<"worksheets">,
+  workosUserId?: string
 ): Promise<{ allowed: boolean; user: Doc<"users"> | null; worksheet: Doc<"worksheets"> | null; workspace: Doc<"workspaces"> | null }> {
   const worksheet = await ctx.db.get(worksheetId);
   if (!worksheet) {
     return { allowed: false, user: null, worksheet: null, workspace: null };
   }
 
-  const { allowed, user, workspace } = await verifyQueryWorkspaceAccess(ctx, worksheet.workspaceId);
+  const { allowed, user, workspace } = await verifyQueryWorkspaceAccess(ctx, worksheet.workspaceId, workosUserId);
   return { allowed, user, worksheet, workspace };
 }
 
@@ -158,10 +160,13 @@ function validateCells(cells: Record<string, unknown>): { valid: boolean; error?
  * SECURITY: Requires authenticated user with company ownership.
  */
 export const listWorkspaces = query({
-  args: { companyId: v.id("companies") },
+  args: {
+    companyId: v.id("companies"),
+    workosUserId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access to this company
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify user has access to this company (with workosUserId fallback)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
     if (!allowed) return [];
 
     return await ctx.db
@@ -176,10 +181,13 @@ export const listWorkspaces = query({
  * SECURITY: Requires authenticated user with company ownership.
  */
 export const getWorkspace = query({
-  args: { workspaceId: v.id("workspaces") },
+  args: {
+    workspaceId: v.id("workspaces"),
+    workosUserId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access to this workspace
-    const { allowed, workspace } = await verifyQueryWorkspaceAccess(ctx, args.workspaceId);
+    // SECURITY: Verify user has access to this workspace (with workosUserId fallback)
+    const { allowed, workspace } = await verifyQueryWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
     if (!allowed) return null;
 
     return workspace;
@@ -191,10 +199,13 @@ export const getWorkspace = query({
  * SECURITY: Requires authenticated user with company ownership.
  */
 export const getWorkspaceWithWorksheets = query({
-  args: { workspaceId: v.id("workspaces") },
+  args: {
+    workspaceId: v.id("workspaces"),
+    workosUserId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access to this workspace
-    const { allowed, workspace } = await verifyQueryWorkspaceAccess(ctx, args.workspaceId);
+    // SECURITY: Verify user has access to this workspace (with workosUserId fallback)
+    const { allowed, workspace } = await verifyQueryWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
     if (!allowed || !workspace) return null;
 
     const worksheets = await ctx.db
@@ -347,31 +358,80 @@ export const deleteWorkspace = mutation({
 /**
  * Get a worksheet with all its columns and rows.
  * SECURITY: Requires authenticated user with company ownership.
+ * NOTE: Soft-deleted items are excluded by default.
  */
 export const getWorksheetData = query({
-  args: { worksheetId: v.id("worksheets") },
+  args: {
+    worksheetId: v.id("worksheets"),
+    workosUserId: v.optional(v.string()),
+    includeDeleted: v.optional(v.boolean()), // For viewing trash
+  },
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access to this worksheet
-    const { allowed, worksheet } = await verifyQueryWorksheetAccess(ctx, args.worksheetId);
+    // SECURITY: Verify user has access to this worksheet (with workosUserId fallback)
+    const { allowed, worksheet } = await verifyQueryWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
     if (!allowed || !worksheet) return null;
 
-    const columns = await ctx.db
+    // Check if worksheet itself is deleted
+    if (worksheet.deletedAt && !args.includeDeleted) return null;
+
+    const allColumns = await ctx.db
       .query("worksheetColumns")
       .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
       .collect();
 
+    // Filter out soft-deleted columns unless includeDeleted is true
+    const columns = args.includeDeleted
+      ? allColumns
+      : allColumns.filter((c) => !c.deletedAt);
+
     // Sort columns by order
     columns.sort((a, b) => a.order - b.order);
+
+    const allRows = await ctx.db
+      .query("worksheetRows")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    // Filter out soft-deleted rows unless includeDeleted is true
+    const rows = args.includeDeleted
+      ? allRows
+      : allRows.filter((r) => !r.deletedAt);
+
+    // Sort rows by rowNumber
+    rows.sort((a, b) => a.rowNumber - b.rowNumber);
+
+    return { worksheet, columns, rows };
+  },
+});
+
+/**
+ * Get cell statuses for a worksheet (for real-time updates).
+ * This query is subscribed to separately to get live status updates
+ * without needing to refetch all data.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const getCellStatuses = query({
+  args: {
+    worksheetId: v.id("worksheets"),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    const { allowed } = await verifyQueryWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+    if (!allowed) return [];
 
     const rows = await ctx.db
       .query("worksheetRows")
       .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
       .collect();
 
-    // Sort rows by rowNumber
-    rows.sort((a, b) => a.rowNumber - b.rowNumber);
-
-    return { worksheet, columns, rows };
+    return rows.map((row) => ({
+      rowId: row._id,
+      cells: row.cells,
+      cellStatus: row.cellStatus || {},
+      cellErrors: row.cellErrors,
+      updatedAt: row.updatedAt,
+    }));
   },
 });
 
@@ -474,6 +534,7 @@ export const addColumn = mutation({
     columnType: v.union(v.literal("text"), v.literal("number"), v.literal("formula")),
     formula: v.optional(v.string()),
     dataSource: v.optional(v.string()),
+    inputColumnId: v.optional(v.id("worksheetColumns")),
     workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -486,6 +547,14 @@ export const addColumn = mutation({
     }
     if (args.formula && args.formula.length > 10000) {
       ValidationErrors.outOfRange("formula", undefined, 10000);
+    }
+
+    // Validate inputColumnId if provided
+    if (args.inputColumnId) {
+      const inputColumn = await ctx.db.get(args.inputColumnId);
+      if (!inputColumn || inputColumn.worksheetId !== args.worksheetId) {
+        throw new Error("Invalid input column");
+      }
     }
 
     // Get current max order
@@ -510,6 +579,7 @@ export const addColumn = mutation({
       columnType: args.columnType,
       formula: args.formula,
       dataSource: args.dataSource,
+      inputColumnId: args.inputColumnId,
     });
 
     // Update worksheet's updatedAt
@@ -520,13 +590,16 @@ export const addColumn = mutation({
 });
 
 /**
- * Delete a column and update row data.
+ * Delete a column (soft delete by default).
  * SECURITY: Requires authenticated user with company ownership.
+ * Note: Soft delete keeps cell data in rows, which allows restoration.
+ * Use permanent=true to actually remove the column and clear cell data.
  */
 export const deleteColumn = mutation({
   args: {
     columnId: v.id("worksheetColumns"),
     workosUserId: v.optional(v.string()),
+    permanent: v.optional(v.boolean()), // Set to true for hard delete
   },
   handler: async (ctx, args) => {
     const column = await ctx.db.get(args.columnId);
@@ -536,33 +609,115 @@ export const deleteColumn = mutation({
     await requireWorksheetAccess(ctx, column.worksheetId, args.workosUserId);
 
     const columnKey = `col_${column.order}`;
+    const now = Date.now();
 
-    // Remove this column's data from all rows
-    const rows = await ctx.db
-      .query("worksheetRows")
-      .withIndex("by_worksheet", (q) => q.eq("worksheetId", column.worksheetId))
+    // Check for dependent formula columns - block deletion if dependencies exist
+    const dependentColumns = await ctx.db
+      .query("worksheetColumns")
+      .withIndex("by_input_column", (q) => q.eq("inputColumnId", args.columnId))
       .collect();
 
-    for (const row of rows) {
-      const newCells = { ...row.cells };
-      delete newCells[columnKey];
+    // Only check non-deleted dependent columns
+    const activeDependents = dependentColumns.filter(c => !c.deletedAt);
+    if (activeDependents.length > 0) {
+      const depNames = activeDependents.map(c => `"${c.name}"`).join(", ");
+      throw new Error(
+        `Cannot delete: ${activeDependents.length} formula column(s) depend on this column: ${depNames}. ` +
+        `Please update or delete those columns first.`
+      );
+    }
 
-      const newStatus = { ...row.cellStatus };
-      delete newStatus[columnKey];
+    if (args.permanent) {
+      // Hard delete - remove column and clear cell data from all rows
+      const rows = await ctx.db
+        .query("worksheetRows")
+        .withIndex("by_worksheet", (q) => q.eq("worksheetId", column.worksheetId))
+        .collect();
 
-      const newErrors = row.cellErrors ? { ...row.cellErrors } : undefined;
-      if (newErrors) delete newErrors[columnKey];
+      for (const row of rows) {
+        const newCells = { ...row.cells };
+        delete newCells[columnKey];
 
-      await ctx.db.patch(row._id, {
-        cells: newCells,
-        cellStatus: newStatus,
-        cellErrors: newErrors,
-        updatedAt: Date.now(),
+        const newStatus = { ...row.cellStatus };
+        delete newStatus[columnKey];
+
+        const newErrors = row.cellErrors ? { ...row.cellErrors } : undefined;
+        if (newErrors) delete newErrors[columnKey];
+
+        await ctx.db.patch(row._id, {
+          cells: newCells,
+          cellStatus: newStatus,
+          cellErrors: newErrors,
+          updatedAt: now,
+        });
+      }
+
+      await ctx.db.delete(args.columnId);
+    } else {
+      // Soft delete - mark as deleted but keep cell data for recovery
+      await ctx.db.patch(args.columnId, {
+        deletedAt: now,
       });
     }
 
-    // Delete the column
-    await ctx.db.delete(args.columnId);
+    await ctx.db.patch(column.worksheetId, { updatedAt: now });
+  },
+});
+
+/**
+ * Update a column's properties (name, formula, inputColumnId).
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const updateColumn = mutation({
+  args: {
+    columnId: v.id("worksheetColumns"),
+    name: v.optional(v.string()),
+    formula: v.optional(v.string()),
+    inputColumnId: v.optional(v.union(v.id("worksheetColumns"), v.null())),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const column = await ctx.db.get(args.columnId);
+    if (!column) return;
+
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, column.worksheetId, args.workosUserId);
+
+    // Validate inputs
+    if (args.name !== undefined && args.name.length > 255) {
+      ValidationErrors.outOfRange("name", undefined, 255);
+    }
+    if (args.formula !== undefined && args.formula.length > 10000) {
+      ValidationErrors.outOfRange("formula", undefined, 10000);
+    }
+
+    // Validate inputColumnId if provided
+    if (args.inputColumnId !== undefined && args.inputColumnId !== null) {
+      const inputColumn = await ctx.db.get(args.inputColumnId);
+      if (!inputColumn || inputColumn.worksheetId !== column.worksheetId) {
+        throw new Error("Invalid input column");
+      }
+      // Prevent formula column from referencing itself
+      if (args.inputColumnId === args.columnId) {
+        throw new Error("Formula column cannot reference itself as input");
+      }
+      // Prevent referencing another formula column
+      if (inputColumn.columnType === "formula") {
+        throw new Error("Cannot use another formula column as input");
+      }
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (args.name !== undefined) updates.name = args.name;
+    if (args.formula !== undefined) updates.formula = args.formula;
+    if (args.inputColumnId !== undefined) {
+      updates.inputColumnId = args.inputColumnId === null ? undefined : args.inputColumnId;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(args.columnId, updates);
+      await ctx.db.patch(column.worksheetId, { updatedAt: Date.now() });
+    }
   },
 });
 
@@ -609,6 +764,7 @@ export const addRow = mutation({
       rowNumber: maxRowNumber + 1,
       cells: args.cells || {},
       cellStatus: {},
+      version: 0, // Initialize version for optimistic concurrency
       createdAt: now,
       updatedAt: now,
     });
@@ -666,6 +822,7 @@ export const addRows = mutation({
         rowNumber: nextRowNumber++,
         cells,
         cellStatus: {},
+        version: 0, // Initialize version for optimistic concurrency
         createdAt: now,
         updatedAt: now,
       });
@@ -681,6 +838,10 @@ export const addRows = mutation({
 /**
  * Update a cell value in a row.
  * SECURITY: Requires authenticated user with company ownership.
+ *
+ * Supports optimistic concurrency control via the expectedVersion parameter.
+ * If provided, the update will only succeed if the row's current version matches.
+ * This prevents lost updates when multiple users edit the same cell.
  */
 export const updateCell = mutation({
   args: {
@@ -688,6 +849,7 @@ export const updateCell = mutation({
     columnKey: v.string(), // e.g., "col_0"
     value: v.any(),
     workosUserId: v.optional(v.string()),
+    expectedVersion: v.optional(v.number()), // For optimistic concurrency
   },
   handler: async (ctx, args) => {
     const row = await ctx.db.get(args.rowId);
@@ -706,23 +868,38 @@ export const updateCell = mutation({
       ValidationErrors.outOfRange("value", undefined, MAX_CELL_VALUE_LENGTH);
     }
 
+    // OPTIMISTIC CONCURRENCY: Check version if provided
+    const currentVersion = row.version ?? 0;
+    if (args.expectedVersion !== undefined && args.expectedVersion !== currentVersion) {
+      throw new Error(
+        `Concurrent edit detected: expected version ${args.expectedVersion}, ` +
+        `but row is at version ${currentVersion}. Please refresh and try again.`
+      );
+    }
+
     const newCells = { ...row.cells, [args.columnKey]: args.value };
 
     await ctx.db.patch(args.rowId, {
       cells: newCells,
+      version: currentVersion + 1, // Increment version on every update
       updatedAt: Date.now(),
     });
+
+    // Return the new version so client can track it
+    return { version: currentVersion + 1 };
   },
 });
 
 /**
- * Delete a row.
+ * Delete a row (soft delete).
  * SECURITY: Requires authenticated user with company ownership.
+ * Use permanentDeleteRow for hard deletion.
  */
 export const deleteRow = mutation({
   args: {
     rowId: v.id("worksheetRows"),
     workosUserId: v.optional(v.string()),
+    permanent: v.optional(v.boolean()), // Set to true for hard delete
   },
   handler: async (ctx, args) => {
     const row = await ctx.db.get(args.rowId);
@@ -731,66 +908,317 @@ export const deleteRow = mutation({
     // SECURITY: Verify user has access to this worksheet
     await requireWorksheetAccess(ctx, row.worksheetId, args.workosUserId);
 
-    // Delete any pending agent jobs for this row
-    const jobs = await ctx.db
-      .query("agentJobs")
-      .withIndex("by_row", (q) => q.eq("rowId", args.rowId))
-      .collect();
-    for (const job of jobs) {
-      await ctx.db.delete(job._id);
+    const now = Date.now();
+
+    if (args.permanent) {
+      // Hard delete - actually remove the row
+      const jobs = await ctx.db
+        .query("agentJobs")
+        .withIndex("by_row", (q) => q.eq("rowId", args.rowId))
+        .collect();
+      for (const job of jobs) {
+        await ctx.db.delete(job._id);
+      }
+      await ctx.db.delete(args.rowId);
+    } else {
+      // Soft delete - mark as deleted but keep data for recovery
+      await ctx.db.patch(args.rowId, {
+        deletedAt: now,
+        updatedAt: now,
+      });
     }
 
-    await ctx.db.delete(args.rowId);
-    await ctx.db.patch(row.worksheetId, { updatedAt: Date.now() });
+    await ctx.db.patch(row.worksheetId, { updatedAt: now });
   },
 });
 
 /**
- * Delete multiple rows.
+ * Delete multiple rows (soft delete by default).
  * SECURITY: Requires authenticated user with company ownership.
+ * All rows MUST belong to the same worksheet - cross-worksheet deletion is not allowed.
  */
 export const deleteRows = mutation({
   args: {
     rowIds: v.array(v.id("worksheetRows")),
     workosUserId: v.optional(v.string()),
+    permanent: v.optional(v.boolean()), // Set to true for hard delete
   },
   handler: async (ctx, args) => {
+    if (args.rowIds.length === 0) return;
+
     // Limit batch size
     const MAX_BATCH_SIZE = 1000;
     if (args.rowIds.length > MAX_BATCH_SIZE) {
       ValidationErrors.bulkLimitExceeded(MAX_BATCH_SIZE, args.rowIds.length);
     }
 
-    let worksheetId: Id<"worksheets"> | null = null;
-    let hasVerifiedAccess = false;
+    // SECURITY FIX: Collect all rows first and verify they all belong to the same worksheet
+    const rows: Array<{ id: Id<"worksheetRows">; worksheetId: Id<"worksheets"> }> = [];
+    let commonWorksheetId: Id<"worksheets"> | null = null;
 
     for (const rowId of args.rowIds) {
       const row = await ctx.db.get(rowId);
       if (!row) continue;
 
-      worksheetId = row.worksheetId;
-
-      // SECURITY: Verify access once (all rows should be from same worksheet)
-      if (!hasVerifiedAccess) {
-        await requireWorksheetAccess(ctx, row.worksheetId, args.workosUserId);
-        hasVerifiedAccess = true;
+      // Verify all rows belong to the same worksheet
+      if (commonWorksheetId === null) {
+        commonWorksheetId = row.worksheetId;
+      } else if (row.worksheetId !== commonWorksheetId) {
+        // SECURITY: Prevent cross-worksheet deletion attack
+        throw new Error(
+          "Security violation: Cannot delete rows from multiple worksheets in a single request. " +
+          "All rows must belong to the same worksheet."
+        );
       }
 
-      // Delete any pending agent jobs for this row
-      const jobs = await ctx.db
-        .query("agentJobs")
-        .withIndex("by_row", (q) => q.eq("rowId", rowId))
-        .collect();
-      for (const job of jobs) {
-        await ctx.db.delete(job._id);
+      rows.push({ id: rowId, worksheetId: row.worksheetId });
+    }
+
+    // If no valid rows found, nothing to do
+    if (rows.length === 0 || commonWorksheetId === null) return;
+
+    // SECURITY: Verify access to the worksheet (only need to check once since all rows are in same worksheet)
+    await requireWorksheetAccess(ctx, commonWorksheetId, args.workosUserId);
+
+    const now = Date.now();
+
+    // Now safe to delete all rows
+    for (const row of rows) {
+      if (args.permanent) {
+        // Hard delete - actually remove the row and its jobs
+        const jobs = await ctx.db
+          .query("agentJobs")
+          .withIndex("by_row", (q) => q.eq("rowId", row.id))
+          .collect();
+        for (const job of jobs) {
+          await ctx.db.delete(job._id);
+        }
+        await ctx.db.delete(row.id);
+      } else {
+        // Soft delete - mark as deleted but keep data for recovery
+        await ctx.db.patch(row.id, {
+          deletedAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
+    await ctx.db.patch(commonWorksheetId, { updatedAt: now });
+  },
+});
+
+// ============================================================================
+// Soft Delete Recovery (Trash)
+// ============================================================================
+
+/**
+ * Get deleted items (trash) for a worksheet.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const getDeletedItems = query({
+  args: {
+    worksheetId: v.id("worksheets"),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    const { allowed } = await verifyQueryWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+    if (!allowed) return { rows: [], columns: [] };
+
+    const allRows = await ctx.db
+      .query("worksheetRows")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    const deletedRows = allRows
+      .filter((r) => r.deletedAt)
+      .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)); // Most recent first
+
+    const allColumns = await ctx.db
+      .query("worksheetColumns")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    const deletedColumns = allColumns
+      .filter((c) => c.deletedAt)
+      .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)); // Most recent first
+
+    return { rows: deletedRows, columns: deletedColumns };
+  },
+});
+
+/**
+ * Restore a soft-deleted row.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const restoreRow = mutation({
+  args: {
+    rowId: v.id("worksheetRows"),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.rowId);
+    if (!row) return;
+
+    // Only restore if actually deleted
+    if (!row.deletedAt) return;
+
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, row.worksheetId, args.workosUserId);
+
+    const now = Date.now();
+    await ctx.db.patch(args.rowId, {
+      deletedAt: undefined,
+      updatedAt: now,
+    });
+    await ctx.db.patch(row.worksheetId, { updatedAt: now });
+  },
+});
+
+/**
+ * Restore multiple soft-deleted rows.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const restoreRows = mutation({
+  args: {
+    rowIds: v.array(v.id("worksheetRows")),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.rowIds.length === 0) return;
+
+    const MAX_BATCH_SIZE = 1000;
+    if (args.rowIds.length > MAX_BATCH_SIZE) {
+      ValidationErrors.bulkLimitExceeded(MAX_BATCH_SIZE, args.rowIds.length);
+    }
+
+    let worksheetId: Id<"worksheets"> | null = null;
+    const now = Date.now();
+
+    for (const rowId of args.rowIds) {
+      const row = await ctx.db.get(rowId);
+      if (!row || !row.deletedAt) continue;
+
+      // First row - verify access
+      if (!worksheetId) {
+        worksheetId = row.worksheetId;
+        await requireWorksheetAccess(ctx, worksheetId, args.workosUserId);
+      } else if (row.worksheetId !== worksheetId) {
+        throw new Error("All rows must belong to the same worksheet");
       }
 
-      await ctx.db.delete(rowId);
+      await ctx.db.patch(rowId, {
+        deletedAt: undefined,
+        updatedAt: now,
+      });
     }
 
     if (worksheetId) {
-      await ctx.db.patch(worksheetId, { updatedAt: Date.now() });
+      await ctx.db.patch(worksheetId, { updatedAt: now });
     }
+  },
+});
+
+/**
+ * Restore a soft-deleted column.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const restoreColumn = mutation({
+  args: {
+    columnId: v.id("worksheetColumns"),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const column = await ctx.db.get(args.columnId);
+    if (!column) return;
+
+    // Only restore if actually deleted
+    if (!column.deletedAt) return;
+
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, column.worksheetId, args.workosUserId);
+
+    const now = Date.now();
+    await ctx.db.patch(args.columnId, {
+      deletedAt: undefined,
+    });
+    await ctx.db.patch(column.worksheetId, { updatedAt: now });
+  },
+});
+
+/**
+ * Permanently delete all items in trash (empty trash).
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const emptyTrash = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    const now = Date.now();
+
+    // Permanently delete all soft-deleted rows
+    const rows = await ctx.db
+      .query("worksheetRows")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    for (const row of rows) {
+      if (row.deletedAt) {
+        // Delete agent jobs first
+        const jobs = await ctx.db
+          .query("agentJobs")
+          .withIndex("by_row", (q) => q.eq("rowId", row._id))
+          .collect();
+        for (const job of jobs) {
+          await ctx.db.delete(job._id);
+        }
+        await ctx.db.delete(row._id);
+      }
+    }
+
+    // Permanently delete all soft-deleted columns
+    const columns = await ctx.db
+      .query("worksheetColumns")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    for (const column of columns) {
+      if (column.deletedAt) {
+        const columnKey = `col_${column.order}`;
+        // Clear cell data for this column from remaining rows
+        const activeRows = await ctx.db
+          .query("worksheetRows")
+          .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+          .collect();
+
+        for (const row of activeRows) {
+          if (row.cells[columnKey] !== undefined) {
+            const newCells = { ...row.cells };
+            delete newCells[columnKey];
+
+            const newStatus = { ...row.cellStatus };
+            delete newStatus[columnKey];
+
+            const newErrors = row.cellErrors ? { ...row.cellErrors } : undefined;
+            if (newErrors) delete newErrors[columnKey];
+
+            await ctx.db.patch(row._id, {
+              cells: newCells,
+              cellStatus: newStatus,
+              cellErrors: newErrors,
+            });
+          }
+        }
+        await ctx.db.delete(column._id);
+      }
+    }
+
+    await ctx.db.patch(args.worksheetId, { updatedAt: now });
   },
 });
 
@@ -800,6 +1228,7 @@ export const deleteRows = mutation({
 
 /**
  * Update cell status (called by agent job system).
+ * Internal mutation - always increments version for consistency.
  */
 export const updateCellStatus = internalMutation({
   args: {
@@ -819,9 +1248,11 @@ export const updateCellStatus = internalMutation({
     const row = await ctx.db.get(args.rowId);
     if (!row) return;
 
+    const currentVersion = row.version ?? 0;
     const newStatus = { ...row.cellStatus, [args.columnKey]: args.status };
     const updates: Record<string, unknown> = {
       cellStatus: newStatus,
+      version: currentVersion + 1, // Always increment version
       updatedAt: Date.now(),
     };
 

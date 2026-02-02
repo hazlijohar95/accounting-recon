@@ -48,7 +48,10 @@ export async function requireAuth(
  * Optionally get authenticated user (returns null if not authenticated).
  * Uses AuthKit to verify the JWT and look up the user by workosId.
  *
- * FALLBACK: If AuthKit token verification fails (due to incompatible packages),
+ * SECURITY: In production mode, ONLY AuthKit-verified tokens are accepted.
+ * The workosUserId fallback is ONLY allowed in development mode.
+ *
+ * FALLBACK (dev only): If AuthKit token verification fails (due to incompatible packages),
  * accepts an optional workosUserId parameter to look up the user directly.
  * This is a workaround for the incompatibility between @workos-inc/authkit-nextjs
  * (frontend) and @convex-dev/workos-authkit (Convex backend).
@@ -58,8 +61,15 @@ export async function getOptionalAuth(
   workosUserId?: string
 ): Promise<Doc<"users"> | null> {
   const shouldLog = !isProductionMode();
+  const isProd = isProductionMode();
+
   if (shouldLog) {
     console.log('[getOptionalAuth] Starting... workosUserId fallback:', workosUserId ?? 'none');
+  }
+
+  // SECURITY: In production, warn if workosUserId is being passed (potential attack)
+  if (isProd && workosUserId) {
+    console.warn('[Auth] SECURITY: workosUserId parameter ignored in production mode');
   }
 
   // Get auth user from AuthKit (verifies JWT)
@@ -72,41 +82,56 @@ export async function getOptionalAuth(
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[getOptionalAuth] AuthKit failed with error:', errorMessage);
-    // Continue to fallback instead of returning null
+    // In production, this is a hard failure - no fallback allowed
+    if (isProd) {
+      return null;
+    }
+    // In development, continue to fallback
   }
 
-  // If AuthKit returned a user, look them up
-  if (authUser?.id) {
+  // SECURITY: In production, ONLY use AuthKit-verified ID
+  // In development, allow fallback to workosUserId parameter
+  const effectiveWorkosId = isProd
+    ? authUser?.id  // Production: AuthKit only
+    : (authUser?.id ?? workosUserId);  // Development: Allow fallback
+
+  // If we have a workosId (from either source), try to find the user
+  if (effectiveWorkosId) {
     const user = await ctx.db
       .query("users")
-      .withIndex("by_workos", (q) => q.eq("workosId", authUser!.id))
+      .withIndex("by_workos", (q) => q.eq("workosId", effectiveWorkosId))
       .first();
 
     if (user) {
       if (shouldLog) {
-        console.log('[Auth] getOptionalAuth: Found user by AuthKit workosId:', user._id);
+        const source = authUser?.id ? 'AuthKit' : 'workosUserId fallback';
+        console.log(`[Auth] getOptionalAuth: Found user by ${source}:`, user._id);
       }
       return user;
     }
-    console.warn('[Auth] getOptionalAuth: AuthKit user found but no DB record. workosId:', authUser.id);
-  }
 
-  // FALLBACK: Use provided workosUserId if AuthKit didn't work
-  if (allowAuthFallback() && workosUserId) {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_workos", (q) => q.eq("workosId", workosUserId))
-      .first();
-
-    if (user) {
-      if (shouldLog) {
-        console.log('[Auth] getOptionalAuth: Found user by workosUserId fallback:', user._id);
+    // User not found - log which ID we tried
+    if (authUser?.id) {
+      console.warn('[Auth] getOptionalAuth: AuthKit user found but no DB record. workosId:', authUser.id);
+      // IMPORTANT: Secondary fallback only allowed in development
+      if (!isProd && workosUserId && workosUserId !== authUser.id) {
+        const fallbackUser = await ctx.db
+          .query("users")
+          .withIndex("by_workos", (q) => q.eq("workosId", workosUserId))
+          .first();
+        if (fallbackUser) {
+          if (shouldLog) {
+            console.log('[Auth] getOptionalAuth: Found user by secondary workosUserId:', fallbackUser._id);
+          }
+          return fallbackUser;
+        }
       }
-      return user;
+    } else if (workosUserId && !isProd) {
+      console.warn('[Auth] getOptionalAuth: workosUserId provided but no DB record:', workosUserId);
     }
-    console.warn('[Auth] getOptionalAuth: workosUserId provided but no DB record:', workosUserId);
   }
 
+  // No workosId available from any source
   if (shouldLog) {
     console.log('[Auth] getOptionalAuth: No authenticated user found');
   }

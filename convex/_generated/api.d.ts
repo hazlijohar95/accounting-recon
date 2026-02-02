@@ -236,13 +236,24 @@ export declare const api: {
       },
       any
     >;
+    cancelPendingJobs: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnId?: Id<"worksheetColumns">;
+        userId: Id<"users">;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
     createBatchJobs: FunctionReference<
       "mutation",
       "public",
       {
         columnId: Id<"worksheetColumns">;
         dataSource: string;
-        inputColumnKey: string;
+        inputColumnKey?: string;
+        maxRows?: number;
         prompt: string;
         userId: Id<"users">;
         worksheetId: Id<"worksheets">;
@@ -291,6 +302,16 @@ export declare const api: {
       "query",
       "public",
       { worksheetId: Id<"worksheets"> },
+      any
+    >;
+    retryFailedJobs: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnId?: Id<"worksheetColumns">;
+        userId: Id<"users">;
+        worksheetId: Id<"worksheets">;
+      },
       any
     >;
   };
@@ -1863,6 +1884,41 @@ export declare const api: {
       Id<"users">
     >;
   };
+  worksheetChat: {
+    addMessage: FunctionReference<
+      "mutation",
+      "public",
+      {
+        content: string;
+        metadata?: {
+          referencedCells?: Array<{ columnKey: string; rowNumber: number }>;
+          toolCalls?: Array<{ name: string; result?: string }>;
+        };
+        role: "user" | "assistant";
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    clearHistory: FunctionReference<
+      "mutation",
+      "public",
+      { workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+    getMessages: FunctionReference<
+      "query",
+      "public",
+      { limit?: number; workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+    getRecentMessages: FunctionReference<
+      "query",
+      "public",
+      { limit?: number; workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+  };
   workspaces: {
     addColumn: FunctionReference<
       "mutation",
@@ -1871,6 +1927,7 @@ export declare const api: {
         columnType: "text" | "number" | "formula";
         dataSource?: string;
         formula?: string;
+        inputColumnId?: Id<"worksheetColumns">;
         name: string;
         workosUserId?: string;
         worksheetId: Id<"worksheets">;
@@ -1917,19 +1974,31 @@ export declare const api: {
     deleteColumn: FunctionReference<
       "mutation",
       "public",
-      { columnId: Id<"worksheetColumns">; workosUserId?: string },
+      {
+        columnId: Id<"worksheetColumns">;
+        permanent?: boolean;
+        workosUserId?: string;
+      },
       any
     >;
     deleteRow: FunctionReference<
       "mutation",
       "public",
-      { rowId: Id<"worksheetRows">; workosUserId?: string },
+      {
+        permanent?: boolean;
+        rowId: Id<"worksheetRows">;
+        workosUserId?: string;
+      },
       any
     >;
     deleteRows: FunctionReference<
       "mutation",
       "public",
-      { rowIds: Array<Id<"worksheetRows">>; workosUserId?: string },
+      {
+        permanent?: boolean;
+        rowIds: Array<Id<"worksheetRows">>;
+        workosUserId?: string;
+      },
       any
     >;
     deleteWorksheet: FunctionReference<
@@ -1944,28 +2013,68 @@ export declare const api: {
       { workosUserId?: string; workspaceId: Id<"workspaces"> },
       any
     >;
+    emptyTrash: FunctionReference<
+      "mutation",
+      "public",
+      { workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+    getCellStatuses: FunctionReference<
+      "query",
+      "public",
+      { workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+    getDeletedItems: FunctionReference<
+      "query",
+      "public",
+      { workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
     getWorksheetData: FunctionReference<
       "query",
       "public",
-      { worksheetId: Id<"worksheets"> },
+      {
+        includeDeleted?: boolean;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
       any
     >;
     getWorkspace: FunctionReference<
       "query",
       "public",
-      { workspaceId: Id<"workspaces"> },
+      { workosUserId?: string; workspaceId: Id<"workspaces"> },
       any
     >;
     getWorkspaceWithWorksheets: FunctionReference<
       "query",
       "public",
-      { workspaceId: Id<"workspaces"> },
+      { workosUserId?: string; workspaceId: Id<"workspaces"> },
       any
     >;
     listWorkspaces: FunctionReference<
       "query",
       "public",
-      { companyId: Id<"companies"> },
+      { companyId: Id<"companies">; workosUserId?: string },
+      any
+    >;
+    restoreColumn: FunctionReference<
+      "mutation",
+      "public",
+      { columnId: Id<"worksheetColumns">; workosUserId?: string },
+      any
+    >;
+    restoreRow: FunctionReference<
+      "mutation",
+      "public",
+      { rowId: Id<"worksheetRows">; workosUserId?: string },
+      any
+    >;
+    restoreRows: FunctionReference<
+      "mutation",
+      "public",
+      { rowIds: Array<Id<"worksheetRows">>; workosUserId?: string },
       any
     >;
     updateCell: FunctionReference<
@@ -1973,8 +2082,21 @@ export declare const api: {
       "public",
       {
         columnKey: string;
+        expectedVersion?: number;
         rowId: Id<"worksheetRows">;
         value: any;
+        workosUserId?: string;
+      },
+      any
+    >;
+    updateColumn: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnId: Id<"worksheetColumns">;
+        formula?: string;
+        inputColumnId?: Id<"worksheetColumns"> | null;
+        name?: string;
         workosUserId?: string;
       },
       any
@@ -2035,6 +2157,13 @@ export declare const internal: {
       "mutation",
       "internal",
       { jobId: Id<"agentJobs"> },
+      any
+    >;
+    processJobs: FunctionReference<"action", "internal", any, any>;
+    resetJobForRetry: FunctionReference<
+      "mutation",
+      "internal",
+      { error: string; jobId: Id<"agentJobs">; retryCount: number },
       any
     >;
   };

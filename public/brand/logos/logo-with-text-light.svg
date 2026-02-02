@@ -1,11 +1,59 @@
-<svg width="180" height="48" viewBox="0 0 180 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Logo Mark -->
+<svg width="204" height="48" viewBox="0 0 204 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Full logo: R mark + "econcile" wordmark
+    Both share same 48px canvas with content from y=8 to y=40
+    R mark: 8px strokes
+    Wordmark: 6px strokes (optically balanced, more detail = slightly lighter weight)
+  -->
+
+  <!-- R Mark (48×48, content y=8 to y=40, 8px strokes) -->
   <rect x="8" y="8" width="8" height="32" fill="#0a0a0a"/>
   <rect x="16" y="8" width="16" height="8" fill="#0a0a0a"/>
   <rect x="32" y="8" width="8" height="12" fill="#0a0a0a"/>
   <rect x="16" y="20" width="16" height="8" fill="#0a0a0a"/>
   <rect x="24" y="28" width="8" height="4" fill="#0a0a0a"/>
   <rect x="32" y="32" width="8" height="8" fill="#0a0a0a"/>
-  <!-- Text -->
-  <text x="56" y="32" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#0a0a0a" letter-spacing="0.05em">reconcile</text>
+
+  <!-- Wordmark "econcile" starts at x=50, same y=8 to y=40 content area -->
+  <!-- 6px strokes, 7px counters, 18px letter width, 4px letter spacing -->
+
+  <!-- Letter "e" @ x=50 -->
+  <rect x="50" y="8" width="18" height="6" fill="#0a0a0a"/>
+  <rect x="50" y="8" width="6" height="32" fill="#0a0a0a"/>
+  <rect x="56" y="21" width="12" height="6" fill="#0a0a0a"/>
+  <rect x="50" y="34" width="18" height="6" fill="#0a0a0a"/>
+
+  <!-- Letter "c" @ x=72 -->
+  <rect x="72" y="8" width="18" height="6" fill="#0a0a0a"/>
+  <rect x="72" y="8" width="6" height="32" fill="#0a0a0a"/>
+  <rect x="72" y="34" width="18" height="6" fill="#0a0a0a"/>
+
+  <!-- Letter "o" @ x=94 -->
+  <rect x="94" y="8" width="18" height="6" fill="#0a0a0a"/>
+  <rect x="94" y="8" width="6" height="32" fill="#0a0a0a"/>
+  <rect x="106" y="8" width="6" height="32" fill="#0a0a0a"/>
+  <rect x="94" y="34" width="18" height="6" fill="#0a0a0a"/>
+
+  <!-- Letter "n" @ x=116 -->
+  <rect x="116" y="8" width="18" height="6" fill="#0a0a0a"/>
+  <rect x="116" y="8" width="6" height="32" fill="#0a0a0a"/>
+  <rect x="128" y="8" width="6" height="32" fill="#0a0a0a"/>
+
+  <!-- Letter "c" @ x=138 -->
+  <rect x="138" y="8" width="18" height="6" fill="#0a0a0a"/>
+  <rect x="138" y="8" width="6" height="32" fill="#0a0a0a"/>
+  <rect x="138" y="34" width="18" height="6" fill="#0a0a0a"/>
+
+  <!-- Letter "i" @ x=160 (6px wide, dot + stem) -->
+  <rect x="160" y="8" width="6" height="6" fill="#0a0a0a"/>
+  <rect x="160" y="18" width="6" height="22" fill="#0a0a0a"/>
+
+  <!-- Letter "l" @ x=170 (6px wide, full height) -->
+  <rect x="170" y="8" width="6" height="32" fill="#0a0a0a"/>
+
+  <!-- Letter "e" @ x=180 -->
+  <rect x="180" y="8" width="18" height="6" fill="#0a0a0a"/>
+  <rect x="180" y="8" width="6" height="32" fill="#0a0a0a"/>
+  <rect x="186" y="21" width="12" height="6" fill="#0a0a0a"/>
+  <rect x="180" y="34" width="18" height="6" fill="#0a0a0a"/>
 </svg>

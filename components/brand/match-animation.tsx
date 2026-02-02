@@ -266,7 +266,7 @@ export function DataSyncPulse({ active = true, className }: DataSyncPulseProps) 
       </div>
       <div className="text-sm">
         <span className={active ? 'text-emerald-500' : 'text-muted-foreground'}>
-          {active ? 'Syncing' : 'Disconnected'}
+          {active ? 'Updating matches' : 'Disconnected'}
         </span>
       </div>
     </div>

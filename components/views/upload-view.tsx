@@ -1,7 +1,15 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { useAppStore, useSetProcessingDocumentsCount, useIsDemo, useSelectedCompanyId, useSetShowPaywall } from '@/lib/store'
+import {
+  useAppStore,
+  useSetProcessingDocumentsCount,
+  useIsDemo,
+  useSelectedCompanyId,
+  useSetShowPaywall,
+  useActiveSession,
+  useCompanies,
+} from '@/lib/store'
 import {
   IconFileText,
   IconWarningCircle,
@@ -65,10 +73,13 @@ function UploadViewContent() {
   // Use individual selectors to prevent unnecessary re-renders
   const isDemo = useIsDemo()
   const selectedCompanyId = useSelectedCompanyId()
+  const activeSession = useActiveSession()
+  const companies = useCompanies()
   const setShowPaywall = useSetShowPaywall()
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [activeTab, setActiveTab] = useState<UploadTab>('upload')
+  const [defaultDocType, setDefaultDocType] = useState<UploadedFile['type'] | 'auto'>('auto')
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Store XHR objects in ref to avoid storing non-serializable objects in state
@@ -78,6 +89,10 @@ function UploadViewContent() {
   const documents = useCompanyDocuments(
     activeTab === 'documents' ? selectedCompanyId as Id<"companies"> | undefined : undefined
   )
+  const selectedCompanyName = useMemo(() => {
+    if (!selectedCompanyId) return 'No company selected'
+    return companies.find((c) => c.id === selectedCompanyId)?.name || 'Selected company'
+  }, [companies, selectedCompanyId])
 
   // SECURITY: Cleanup XHR connections on unmount to prevent resource leaks
   useEffect(() => {
@@ -108,13 +123,13 @@ function UploadViewContent() {
       id: crypto.randomUUID(),
       name: file.name,
       size: file.size,
-      type: detectDocumentType(file.name),
+      type: defaultDocType === 'auto' ? detectDocumentType(file.name) : defaultDocType,
       status: 'idle' as FileStatus,
       progress: 0,
       file,
     }))
     setFiles((prev) => [...prev, ...newFiles])
-  }, [])
+  }, [defaultDocType])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -388,6 +403,36 @@ function UploadViewContent() {
           Bank statements, invoices, and receipts for reconciliation
         </p>
       </header>
+
+      {/* Context bar */}
+      <div className="border border-border bg-secondary/20 px-4 py-3 flex flex-col md:flex-row md:items-center gap-3">
+        <div className="text-xs">
+          <span className="text-muted-foreground">Company</span>
+          <div className="text-sm font-medium">{selectedCompanyName}</div>
+        </div>
+        <div className="text-xs">
+          <span className="text-muted-foreground">Active session</span>
+          <div className="text-sm font-medium">
+            {activeSession?.name || 'No active session'}
+          </div>
+        </div>
+        <div className="text-xs md:ml-auto">
+          <span className="text-muted-foreground">Default document type</span>
+          <div className="mt-1">
+            <select
+              value={defaultDocType}
+              onChange={(e) => setDefaultDocType(e.target.value as UploadedFile['type'] | 'auto')}
+              className="px-2 py-1 text-xs border border-border bg-background focus:outline-none focus:border-foreground"
+            >
+              <option value="auto">Auto-detect</option>
+              <option value="bank_statement">Bank statement</option>
+              <option value="invoice">Invoice</option>
+              <option value="receipt">Receipt</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       {/* Tab Navigation */}
       <TabNav

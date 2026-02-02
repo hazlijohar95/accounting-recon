@@ -1,4 +1,5 @@
 export { LogoMark, LogoFull, LogoStacked } from './logo-mark'
+export { LogoWordmark, LogoWordmarkAnimated } from './logo-wordmark'
 // Note: Icons are now exported from './icons' (pixel icon system)
 // Legacy geometric-icons.tsx kept for reference but no longer exported
 export { LogoAnimated, LogoAnimatedWithText } from './logo-animated'

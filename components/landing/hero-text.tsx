@@ -3,41 +3,43 @@
 import { cn } from '@/lib/utils'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 
-const HERO_TEXT = 'What do you want to reconcile today?'
-const EMPHASIS_WORD = 'reconcile'
+const HERO_TEXT = "Reconciliation doesn't have to hurt."
+const EMPHASIS_WORD = 'hurt'
 
 interface HeroTextProps {
   className?: string
 }
 
 /**
- * High-performance animated hero text using CSS transforms.
- * Each word animates in with a stagger effect.
- * The key word "reconcile" receives visual emphasis.
+ * Elegant animated hero text with refined luxury typography.
+ * Uses Cormorant Garamond serif for display text.
+ * Key word "hurt" is emphasized in italic.
  * Falls back to static text for reduced motion preference.
  */
 export function HeroText({ className }: HeroTextProps) {
   const prefersReducedMotion = useReducedMotion()
-  const words = HERO_TEXT.split(' ')
+  const words = HERO_TEXT.replace('.', '').split(' ')
 
   if (prefersReducedMotion) {
     return (
       <h1 className={cn(
-        'text-2xl sm:text-3xl md:text-5xl lg:text-6xl',
-        'font-mono font-medium tracking-tight text-center',
-        'text-foreground leading-tight',
+        'font-[family-name:var(--font-display)]',
+        'text-[clamp(2rem,7vw,4.5rem)]',
+        'font-light tracking-tight text-center',
+        'text-foreground leading-[1.1]',
         className
       )}>
         {words.map((word, i) => (
-          <span key={i}>
+          <span key={`word-${i}-${word}`}>
             {word === EMPHASIS_WORD ? (
-              <span className="font-semibold">{word}</span>
+              <em className="italic">{word}</em>
             ) : (
               word
             )}
             {i < words.length - 1 ? ' ' : ''}
           </span>
         ))}
+        <span className="text-foreground/50">.</span>
       </h1>
     )
   }
@@ -45,29 +47,30 @@ export function HeroText({ className }: HeroTextProps) {
   return (
     <h1
       className={cn(
-        'text-2xl sm:text-3xl md:text-5xl lg:text-6xl',
-        'font-mono font-medium tracking-tight text-center',
-        'text-foreground leading-tight',
-        'flex flex-wrap justify-center gap-x-[0.3em] gap-y-2',
+        'font-[family-name:var(--font-display)]',
+        'text-[clamp(2rem,7vw,4.5rem)]',
+        'font-light tracking-tight text-center',
+        'text-foreground leading-[1.1]',
+        'flex flex-wrap justify-center gap-x-[0.25em] gap-y-1',
         className
       )}
       aria-label={HERO_TEXT}
     >
       {words.map((word, wordIndex) => {
         const isEmphasis = word === EMPHASIS_WORD
-        // Add slight extra delay before the emphasis word
-        const baseDelay = wordIndex * 80 + 200
-        const delay = isEmphasis ? baseDelay + 50 : baseDelay
+        // Slower, more elegant animation timing
+        const baseDelay = wordIndex * 100 + 300
+        const delay = isEmphasis ? baseDelay + 80 : baseDelay
 
         return (
           <span
-            key={wordIndex}
+            key={`word-${wordIndex}-${word}`}
             className="inline-block overflow-hidden"
           >
             <span
               className={cn(
-                'inline-block animate-hero-word',
-                isEmphasis && 'font-semibold text-foreground'
+                'inline-block animate-blur-fade-in',
+                isEmphasis && 'italic'
               )}
               style={{
                 animationDelay: `${delay}ms`,
@@ -78,6 +81,13 @@ export function HeroText({ className }: HeroTextProps) {
           </span>
         )
       })}
+      {/* Period with subtle fade */}
+      <span
+        className="inline-block animate-blur-fade-in text-foreground/50"
+        style={{ animationDelay: `${words.length * 100 + 500}ms` }}
+      >
+        .
+      </span>
     </h1>
   )
 }
@@ -88,7 +98,7 @@ export function HeroText({ className }: HeroTextProps) {
 export function FallbackText() {
   return (
     <div className="flex items-center justify-center px-4">
-      <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-mono font-medium tracking-tight text-center text-foreground/30 leading-tight">
+      <h1 className="font-[family-name:var(--font-display)] text-[clamp(2rem,7vw,4.5rem)] font-light tracking-tight text-center text-foreground/20 leading-[1.1]">
         {HERO_TEXT}
       </h1>
     </div>

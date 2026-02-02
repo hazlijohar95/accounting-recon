@@ -14,7 +14,7 @@
   --sidebar-transition: 500ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Typography Scale */
-  --text-display: clamp(1.875rem, 5vw, 3.75rem);
+  --text-display: clamp(2.5rem, 8vw, 5rem);
   --text-title: clamp(0.875rem, 2vw, 1rem);
   --text-caption: 0.75rem;
 
@@ -22,6 +22,7 @@
   --duration-fast: 150ms;
   --duration-normal: 300ms;
   --duration-slow: 500ms;
+  --duration-premium: 800ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -34,8 +35,12 @@
   --surface-interactive: var(--secondary);
   --surface-interactive-hover: color-mix(in srgb, var(--foreground) 5%, var(--secondary));
 
-  --background: #ffffff;
-  --foreground: #0a0a0a;
+  /* Landing page specific - warm tones */
+  --landing-bg: #fafaf8;
+  --landing-cream: #f7f6f3;
+
+  --background: #fafaf8;
+  --foreground: #1a1a1a;
   --card: #ffffff;
   --card-foreground: #0a0a0a;
   --popover: #ffffff;
@@ -163,6 +168,7 @@
 @theme inline {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --font-display: var(--font-display), 'Cormorant Garamond', 'Georgia', serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -454,6 +460,40 @@
   opacity: 0;
   animation: hero-word var(--duration-slow) var(--ease-out) both;
   font-weight: 500;
+}
+
+/* Premium blur fade-in animation for refined landing */
+@keyframes blur-fade-in {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+.animate-blur-fade-in {
+  opacity: 0;
+  animation: blur-fade-in var(--duration-premium) var(--ease-out) both;
+}
+
+/* Noise texture overlay for premium feel */
+.noise-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.015;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+.dark .noise-overlay::before {
+  opacity: 0.03;
 }
 
 @keyframes check-draw {
@@ -844,10 +884,12 @@
   .animate-wipe-vertical,
   .animate-wipe-horizontal,
   .animate-card-entrance,
-  .animate-hero-word {
+  .animate-hero-word,
+  .animate-blur-fade-in {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
+    filter: none !important;
   }
 
   .card-interactive:hover,

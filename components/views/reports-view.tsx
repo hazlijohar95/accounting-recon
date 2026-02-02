@@ -249,43 +249,48 @@ function ReportsViewContent() {
           <p className="text-sm text-muted-foreground mt-1">{activeSession?.name || 'No session selected'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <ButtonSecondary
-            size="sm"
-            icon={<IconDownload size={12} />}
-            loading={exportLoading === 'csv'}
-            disabled={exportLoading !== null}
-            onClick={() => handleExport('csv')}
-          >
-            CSV
-          </ButtonSecondary>
-          <ButtonPrimary
-            size="sm"
-            icon={<IconDownload size={12} />}
-            loading={exportLoading === 'xlsx'}
-            disabled={exportLoading !== null}
-            onClick={() => handleExport('xlsx')}
-          >
-            Excel
-          </ButtonPrimary>
-
-          {/* Accounting Software Export Dropdown */}
+          {/* Export Dropdown */}
           <div className="relative">
-            <ButtonSecondary
+            <ButtonPrimary
               size="sm"
               icon={<IconDownload size={12} />}
-              loading={exportLoading === 'accounting'}
+              loading={exportLoading !== null}
               disabled={exportLoading !== null}
               onClick={(e) => {
                 e.stopPropagation()
                 setShowAccountingMenu(!showAccountingMenu)
               }}
             >
-              Accounting
+              Export
               <IconCaretDown size={12} className="ml-1" />
-            </ButtonSecondary>
+            </ButtonPrimary>
 
             {showAccountingMenu && (
-              <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border shadow-lg z-10">
+              <div className="absolute right-0 top-full mt-1 w-56 bg-background border border-border shadow-lg z-10">
+                <div className="px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                  Download
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleExport('csv')
+                  }}
+                  className="w-full px-3 py-2 text-xs text-left hover:bg-secondary transition-colors"
+                >
+                  CSV export
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleExport('xlsx')
+                  }}
+                  className="w-full px-3 py-2 text-xs text-left hover:bg-secondary transition-colors"
+                >
+                  Excel export
+                </button>
+                <div className="px-3 pt-3 pb-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-t border-border">
+                  Accounting
+                </div>
                 {accountingSoftwareOptions.map((option) => (
                   <button
                     key={option.id}

@@ -338,9 +338,12 @@ export default defineSchema({
   worksheets: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
+    deletedAt: v.optional(v.number()), // Soft delete timestamp
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_workspace", ["workspaceId"]),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_active", ["workspaceId", "deletedAt"]), // For filtering active worksheets
 
   // Column definitions (schema for each column)
   worksheetColumns: defineTable({
@@ -355,9 +358,13 @@ export default defineSchema({
     formula: v.optional(v.string()), // "=ENRICH(A, 'Find the CEO')"
     dataSource: v.optional(v.string()), // "clearbit", "zoominfo", "llm"
     width: v.optional(v.number()), // Column width in pixels
+    inputColumnId: v.optional(v.id("worksheetColumns")), // Which column to use as input for AI enrichment
+    deletedAt: v.optional(v.number()), // Soft delete timestamp
   })
     .index("by_worksheet", ["worksheetId"])
-    .index("by_worksheet_order", ["worksheetId", "order"]),
+    .index("by_worksheet_order", ["worksheetId", "order"])
+    .index("by_input_column", ["inputColumnId"]) // For cascade handling when input column is deleted
+    .index("by_worksheet_active", ["worksheetId", "deletedAt"]), // For filtering active columns
 
   // Row data (cells stored as JSON object per row)
   worksheetRows: defineTable({
@@ -378,11 +385,15 @@ export default defineSchema({
     ),
     // Cell errors: { "col_2": "API rate limit exceeded" }
     cellErrors: v.optional(v.record(v.string(), v.string())),
+    // Optimistic concurrency control - increment on each update
+    version: v.optional(v.number()), // Optional for backwards compatibility with existing rows
+    deletedAt: v.optional(v.number()), // Soft delete timestamp
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_worksheet", ["worksheetId"])
-    .index("by_worksheet_row", ["worksheetId", "rowNumber"]),
+    .index("by_worksheet_row", ["worksheetId", "rowNumber"])
+    .index("by_worksheet_active", ["worksheetId", "deletedAt"]), // For filtering active rows
 
   // Agent jobs (for tracking async enrichment)
   agentJobs: defineTable({
@@ -445,6 +456,26 @@ export default defineSchema({
     value: v.number(),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  // Worksheet chat messages for conversational AI queries on spreadsheet data
+  worksheetMessages: defineTable({
+    worksheetId: v.id("worksheets"),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+    metadata: v.optional(v.object({
+      referencedCells: v.optional(v.array(v.object({
+        rowNumber: v.number(),
+        columnKey: v.string(),
+      }))),
+      toolCalls: v.optional(v.array(v.object({
+        name: v.string(),
+        result: v.optional(v.string()),
+      }))),
+    })),
+    createdAt: v.number(),
+  })
+    .index("by_worksheet", ["worksheetId"])
+    .index("by_worksheet_time", ["worksheetId", "createdAt"]),
 
   // ============================================================================
   // Self-Hosted Error Monitoring

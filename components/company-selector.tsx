@@ -6,6 +6,7 @@ import { api } from '@/convex/_generated/api'
 import { useAuth } from './auth-provider'
 import { useCompanyState, useIsDemo } from '@/lib/store'
 import { IconBuildings, IconCaretDown, IconPlus, IconCheck } from '@/components/brand/icons'
+import { logManualError } from '@/lib/error-monitor'
 import { cn } from '@/lib/utils'
 import { Id } from '@/convex/_generated/dataModel'
 
@@ -26,42 +27,92 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
   const dropdownRef = React.useRef<HTMLDivElement>(null)
 
   // Fetch companies from Convex - pass workosUserId for auth fallback
+  // Use workosId if available, otherwise fall back to user.id
+  const workosIdForQuery = user?.workosId ?? user?.id
   const convexCompanies = useQuery(
     api.companies.listByOwner,
-    user && !isDemo ? { workosUserId: user.workosId } : 'skip'
+    user && !isDemo && workosIdForQuery ? { workosUserId: workosIdForQuery } : 'skip'
   )
+
+  // Log query parameters for debugging
+  React.useEffect(() => {
+    if (user && !isDemo) {
+      console.log('[CompanySelector] Query params:', {
+        workosUserId: workosIdForQuery,
+        hasUser: Boolean(user),
+        isDemo,
+        querySkipped: !workosIdForQuery,
+      })
+    }
+  }, [user, isDemo, workosIdForQuery])
 
   // Sync companies to store
   React.useEffect(() => {
-    if (convexCompanies) {
-      console.log('[CompanySelector] Received companies from Convex:', convexCompanies.length)
-      const mapped = convexCompanies.map((c: { _id: Id<'companies'>; name: string; code?: string }) => ({
+    if (convexCompanies === undefined) {
+      console.log('[CompanySelector] Query loading...')
+      return
+    }
+
+    // convexCompanies is now guaranteed to be an array (possibly empty)
+    if (convexCompanies.length === 0) {
+      console.log('[CompanySelector] Query returned empty array - no companies found for workosUserId:', workosIdForQuery)
+      setCompanies([])
+      return
+    }
+
+    console.log('[CompanySelector] Received companies from Convex:', {
+      count: convexCompanies.length,
+      companies: convexCompanies.map((c) => ({
         id: c._id,
         name: c.name,
-        code: c.code,
-      }))
-      setCompanies(mapped)
+        ownerId: c.ownerId,
+      })),
+    })
 
-      // Auto-select first company if none selected
-      if (!selectedCompanyId && mapped.length > 0) {
-        console.log('[CompanySelector] Auto-selecting first company:', mapped[0].id, mapped[0].name)
-        setSelectedCompanyId(mapped[0].id)
-      }
-    } else if (convexCompanies === undefined) {
-      console.log('[CompanySelector] Query loading...')
+    const mapped = convexCompanies.map((c) => ({
+      id: c._id,
+      name: c.name,
+      code: c.code,
+    }))
+    setCompanies(mapped)
+
+    // Auto-select first company if none selected
+    if (!selectedCompanyId && mapped.length > 0) {
+      console.log('[CompanySelector] Auto-selecting first company:', mapped[0].id, mapped[0].name)
+      setSelectedCompanyId(mapped[0].id)
     }
-  }, [convexCompanies, selectedCompanyId, setSelectedCompanyId, setCompanies])
+  }, [convexCompanies, selectedCompanyId, setSelectedCompanyId, setCompanies, workosIdForQuery])
 
-  // Log state changes
+  // Log state changes and detect visibility issues
   React.useEffect(() => {
     console.log('[CompanySelector] State:', {
       userId: user?.id,
+      workosId: user?.workosId,
       isDemo,
       selectedCompanyId,
       companiesInStore: companies.length,
       convexQueryResult: convexCompanies === undefined ? 'loading' : convexCompanies?.length ?? 0,
     })
-  }, [user?.id, isDemo, selectedCompanyId, companies.length, convexCompanies])
+
+    // TRACKING: Detect when selectedCompanyId exists but company isn't in list
+    // This indicates the visibility bug we fixed
+    if (
+      selectedCompanyId &&
+      convexCompanies !== undefined &&
+      convexCompanies.length === 0 &&
+      !isDemo &&
+      user?.workosId
+    ) {
+      console.error('[CompanySelector] BUG DETECTED: selectedCompanyId exists but no companies returned!')
+      logManualError('Company visibility bug: selectedCompanyId exists but listByOwner returned empty', {
+        selectedCompanyId,
+        workosId: user.workosId,
+        userId: user.id,
+        convexQueryLength: convexCompanies.length,
+        timestamp: new Date().toISOString(),
+      })
+    }
+  }, [user?.id, user?.workosId, isDemo, selectedCompanyId, companies.length, convexCompanies])
 
   // Close dropdown on click outside
   React.useEffect(() => {

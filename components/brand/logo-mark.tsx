@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { LogoWordmark } from './logo-wordmark'
 
 interface LogoMarkProps {
   size?: number
@@ -34,13 +35,19 @@ interface LogoFullProps {
 }
 
 /**
- * Full horizontal logo with mark + wordmark.
+ * Full horizontal logo with mark + geometric wordmark.
+ * Both elements use 48px canvas with content from y=8 to y=40,
+ * ensuring perfect alignment at any size.
  */
 export function LogoFull({ className }: LogoFullProps) {
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div
+      className={cn('flex items-center gap-0.5', className)}
+      role="img"
+      aria-label="Reconcile"
+    >
       <LogoMark size={32} />
-      <span className="font-mono text-sm tracking-wide">reconcile</span>
+      <LogoWordmark height={32} className="text-current" />
     </div>
   )
 }
@@ -50,13 +57,17 @@ interface LogoStackedProps {
 }
 
 /**
- * Stacked logo with mark above wordmark.
+ * Stacked logo with mark above geometric wordmark.
  */
 export function LogoStacked({ className }: LogoStackedProps) {
   return (
-    <div className={cn('flex flex-col items-center gap-2', className)}>
+    <div
+      className={cn('flex flex-col items-center gap-3', className)}
+      role="img"
+      aria-label="Reconcile"
+    >
       <LogoMark size={48} />
-      <span className="font-mono text-xs tracking-wide">reconcile</span>
+      <LogoWordmark height={16} className="text-current" />
     </div>
   )
 }

@@ -196,6 +196,18 @@ function ReconcileViewContent() {
   )
   const suspenseItems = cashTransactions.filter((t) => t.status === 'suspense')
 
+  // Auto-select the first match in the active tab for a clearer default state
+  useEffect(() => {
+    const list = activeTab === 'pending' ? pendingMatches : approvedMatches
+    if (list.length === 0) {
+      if (selectedMatch) setSelectedMatch(null)
+      return
+    }
+    if (!selectedMatch || !list.find((m) => m.id === selectedMatch.id)) {
+      setSelectedMatch(list[0])
+    }
+  }, [activeTab, pendingMatches, approvedMatches, selectedMatch])
+
   // Get current match index for keyboard navigation
   const currentMatchIndex = useMemo(() => {
     if (!selectedMatch) return -1

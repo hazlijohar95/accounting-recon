@@ -1,6 +1,6 @@
 import React from "react"
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Cormorant_Garamond } from 'next/font/google'
 import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components'
 
 import { ConvexClientProvider } from '@/components/convex-provider'
@@ -12,6 +12,12 @@ import { Analytics } from '@/components/analytics'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
+
+const cormorant = Cormorant_Garamond({
+  subsets: ['latin'],
+  weight: ['300', '400', '500'],
+  variable: '--font-display',
+})
 
 export const metadata: Metadata = {
   title: 'Reconcile',
@@ -40,7 +46,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} antialiased`}>
+      <body className={`${inter.className} ${cormorant.variable} antialiased`}>
         <RootErrorBoundary>
           <AuthKitProvider>
             <AuthProvider>

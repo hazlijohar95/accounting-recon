@@ -77,6 +77,8 @@ export function WorkspaceView() {
   const [isCreating, setIsCreating] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const [mounted, setMounted] = useState(false)
+  const [isCreatingSheet, setIsCreatingSheet] = useState(false)
+  const [newSheetName, setNewSheetName] = useState('')
 
   useEffect(() => {
     setMounted(true)
@@ -93,20 +95,21 @@ export function WorkspaceView() {
     return false
   }
 
-  // Queries (skip in demo mode)
+  // Queries (skip in demo mode) - pass workosUserId for auth fallback
+  const workosUserId = user?.workosId ?? user?.id
   const workspaces = useQuery(
     api.workspaces.listWorkspaces,
-    companyId && !isDemo ? { companyId } : 'skip'
+    companyId && !isDemo ? { companyId, workosUserId } : 'skip'
   )
 
   const workspaceData = useQuery(
     api.workspaces.getWorkspaceWithWorksheets,
-    workspaceId && !isDemo ? { workspaceId: workspaceId as Id<'workspaces'> } : 'skip'
+    workspaceId && !isDemo ? { workspaceId: workspaceId as Id<'workspaces'>, workosUserId } : 'skip'
   )
 
   const worksheetData = useQuery(
     api.workspaces.getWorksheetData,
-    worksheetId && !isDemo ? { worksheetId: worksheetId as Id<'worksheets'> } : 'skip'
+    worksheetId && !isDemo ? { worksheetId: worksheetId as Id<'worksheets'>, workosUserId } : 'skip'
   )
 
   // Demo data helpers
@@ -174,23 +177,33 @@ export function WorkspaceView() {
     router.push(`/workspace?ws=${workspaceId}&sheet=${sheetId}`)
   }
 
-  const handleAddWorksheet = async () => {
+  const handleStartCreatingSheet = () => {
     if (guardAction()) return
-    if (!workspaceId || !user?.id) return
+    setIsCreatingSheet(true)
+    setNewSheetName('')
+  }
 
-    const name = prompt('Worksheet name:')
-    if (!name?.trim()) return
+  const handleCreateWorksheet = async () => {
+    if (guardAction()) return
+    if (!workspaceId || !user?.id || !newSheetName.trim()) return
 
     try {
       const sheetId = await createWorksheet({
         workspaceId: workspaceId as Id<'workspaces'>,
-        name: name.trim(),
+        name: newSheetName.trim(),
         workosUserId: user.workosId,
       })
+      setIsCreatingSheet(false)
+      setNewSheetName('')
       router.push(`/workspace?ws=${workspaceId}&sheet=${sheetId}`)
     } catch (error) {
       console.error('Failed to create worksheet:', error)
     }
+  }
+
+  const handleCancelCreateSheet = () => {
+    setIsCreatingSheet(false)
+    setNewSheetName('')
   }
 
   const handleStartCreating = () => {
@@ -235,6 +248,7 @@ export function WorkspaceView() {
             <div className="flex-1 overflow-hidden">
               <WorksheetGrid
                 worksheetId={worksheetId as Id<'worksheets'>}
+                worksheetName={demoSheetData.worksheet.name}
                 columns={demoSheetData.columns as unknown as Parameters<typeof WorksheetGrid>[0]['columns']}
                 rows={demoSheetData.rows as unknown as Parameters<typeof WorksheetGrid>[0]['rows']}
                 userId={'demo-user' as Id<'users'>}
@@ -275,13 +289,47 @@ export function WorkspaceView() {
                 </div>
               </div>
               <PremiumButton
-                onClick={handleAddWorksheet}
+                onClick={handleStartCreatingSheet}
                 icon={<IconPlus size={14} />}
                 size="sm"
               >
                 Add Sheet
               </PremiumButton>
             </div>
+
+            {/* Create worksheet form */}
+            {isCreatingSheet && (
+              <div className="p-4 border border-border bg-secondary/20 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium">Create Worksheet</h3>
+                  <button
+                    onClick={handleCancelCreateSheet}
+                    className="p-1 hover:bg-secondary transition-colors"
+                    aria-label="Cancel"
+                  >
+                    <IconX size={14} className="text-muted-foreground" />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newSheetName}
+                    onChange={(e) => setNewSheetName(e.target.value)}
+                    placeholder="Worksheet name..."
+                    className="flex-1 px-3 py-2 text-sm border border-border bg-background focus:outline-none focus:border-foreground transition-colors"
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateWorksheet()}
+                  />
+                  <PremiumButton
+                    onClick={handleCreateWorksheet}
+                    disabled={!newSheetName.trim()}
+                    size="sm"
+                  >
+                    Create
+                  </PremiumButton>
+                </div>
+              </div>
+            )}
 
             {/* Worksheets grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -335,10 +383,10 @@ export function WorkspaceView() {
           <div className="flex items-start gap-3">
             <IconSparkle size={16} className="text-chart-5 mt-0.5 shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-medium mb-1">Exploring Demo Mode</p>
+              <p className="text-sm font-medium mb-1">Demo Workspaces · Accounting Use‑Cases</p>
               <p className="text-xs text-muted-foreground">
-                Browse sample workspaces to see AI-powered data enrichment in action.
-                Switch to Real mode and sign in to create your own workspaces.
+                Explore reconciliation‑focused examples (exceptions, vendor spend, audit notes).
+                Switch to Real mode to create your own worksheets.
               </p>
             </div>
           </div>
@@ -481,6 +529,7 @@ export function WorkspaceView() {
         <div className="flex-1 overflow-hidden">
           <WorksheetGrid
             worksheetId={worksheetId as Id<'worksheets'>}
+            worksheetName={worksheetData.worksheet.name}
             columns={worksheetData.columns}
             rows={worksheetData.rows}
             userId={user?.id as Id<'users'>}
@@ -513,7 +562,7 @@ export function WorkspaceView() {
             </div>
           </div>
           <PremiumButton
-            onClick={handleAddWorksheet}
+            onClick={handleStartCreatingSheet}
             icon={<IconPlus size={14} />}
             size="sm"
           >
@@ -521,8 +570,42 @@ export function WorkspaceView() {
           </PremiumButton>
         </div>
 
+        {/* Create worksheet form */}
+        {isCreatingSheet && (
+          <div className="p-4 border border-border bg-secondary/20 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium">Create Worksheet</h3>
+              <button
+                onClick={handleCancelCreateSheet}
+                className="p-1 hover:bg-secondary transition-colors"
+                aria-label="Cancel"
+              >
+                <IconX size={14} className="text-muted-foreground" />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newSheetName}
+                onChange={(e) => setNewSheetName(e.target.value)}
+                placeholder="Worksheet name..."
+                className="flex-1 px-3 py-2 text-sm border border-border bg-background focus:outline-none focus:border-foreground transition-colors"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateWorksheet()}
+              />
+              <PremiumButton
+                onClick={handleCreateWorksheet}
+                disabled={!newSheetName.trim()}
+                size="sm"
+              >
+                Create
+              </PremiumButton>
+            </div>
+          </div>
+        )}
+
         {/* Worksheets grid */}
-        {workspaceData.worksheets.length === 0 ? (
+        {workspaceData.worksheets.length === 0 && !isCreatingSheet ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <IconTable size={48} className="text-muted-foreground/30 mb-4" />
             <h3 className="text-sm font-medium mb-2">No worksheets yet</h3>
@@ -530,14 +613,14 @@ export function WorkspaceView() {
               Create a worksheet to start adding data
             </p>
             <PremiumButton
-              onClick={handleAddWorksheet}
+              onClick={handleStartCreatingSheet}
               icon={<IconPlus size={14} />}
               size="sm"
             >
               Add Sheet
             </PremiumButton>
           </div>
-        ) : (
+        ) : workspaceData.worksheets.length === 0 ? null : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {workspaceData.worksheets.map((sheet: { _id: Id<'worksheets'>; name: string; updatedAt: number }, index: number) => (
               <button

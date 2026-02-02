@@ -1,6 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
+import { LogoWordmarkAnimated } from './logo-wordmark'
 
 interface LogoAnimatedProps {
   size?: number
@@ -20,6 +21,8 @@ export function LogoAnimated({ size = 48, className, animate = true }: LogoAnima
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="text-foreground"
+        role="img"
+        aria-label="Reconcile logo"
       >
       {/* Vertical stem - slides in from left */}
       <rect
@@ -86,23 +89,33 @@ export function LogoAnimated({ size = 48, className, animate = true }: LogoAnima
   )
 }
 
+/**
+ * Animated logo with geometric wordmark.
+ * The R mark animates first (0-400ms), then wordmark follows (500ms+).
+ * Both use same 48px canvas proportions for perfect alignment.
+ */
 export function LogoAnimatedWithText({
   size = 32,
   className,
   animate = true,
 }: LogoAnimatedProps) {
+  // R mark animation ends at ~400ms (6 rectangles × ~80ms stagger)
+  // Wordmark starts at 500ms for smooth sequence
+  const wordmarkStartDelay = 500
+
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div
+      className={cn('flex items-center gap-0.5', className)}
+      role="img"
+      aria-label="Reconcile"
+    >
       <LogoAnimated size={size} animate={animate} />
-      <span
-        className={cn(
-          'font-mono text-sm tracking-wide',
-          animate && 'animate-fade-in opacity-0'
-        )}
-        style={animate ? { animationDelay: '500ms', animationFillMode: 'forwards' } : {}}
-      >
-        reconcile
-      </span>
+      <LogoWordmarkAnimated
+        height={size} // Same size as R mark for perfect alignment
+        animate={animate}
+        startDelay={wordmarkStartDelay}
+        className="text-foreground"
+      />
     </div>
   )
 }

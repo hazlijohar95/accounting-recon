@@ -10,33 +10,33 @@ interface LandingHeaderProps {
 }
 
 /**
- * Landing page header with logo, ALPHA badge, and auth buttons.
- * Refined with geometric styling and entrance animation.
+ * Refined landing page header with logo, ALPHA badge, and auth buttons.
+ * ALPHA badge is now outline style for a more subtle appearance.
  */
 export function LandingHeader({ className }: LandingHeaderProps) {
   return (
     <header
       className={cn(
         'flex items-center justify-between',
-        'animate-fade-in',
+        'animate-blur-fade-in',
         className
       )}
       style={{ animationDelay: '100ms' }}
     >
       {/* Logo + ALPHA badge */}
-      <div className="flex items-center gap-2 md:gap-4">
-        <LogoFull />
-        <div className="relative">
-          <span
-            className={cn(
-              'inline-block px-2 py-1',
-              'bg-foreground text-background',
-              'text-[11px] font-mono font-semibold tracking-widest'
-            )}
-          >
-            ALPHA
-          </span>
-        </div>
+      <div className="flex items-center gap-2 md:gap-3">
+        <Link href="/" aria-label="Reconcile - Go to homepage">
+          <LogoFull />
+        </Link>
+        <span
+          className={cn(
+            'inline-block px-1.5 py-0.5',
+            'border border-foreground/30 text-foreground/50',
+            'text-[9px] font-mono font-medium tracking-widest'
+          )}
+        >
+          ALPHA
+        </span>
       </div>
 
       {/* Navigation */}
@@ -44,9 +44,10 @@ export function LandingHeader({ className }: LandingHeaderProps) {
         <Link
           href="/docs"
           className={cn(
-            'text-xs md:text-sm font-mono text-muted-foreground',
+            'text-xs md:text-sm font-mono text-muted-foreground/70',
             'hover:text-foreground transition-colors',
-            'px-2 py-1'
+            'px-2 py-1',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background'
           )}
         >
           Docs

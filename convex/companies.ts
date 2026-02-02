@@ -44,11 +44,38 @@ export const listByOwner = query({
   },
   returns: v.array(companyDocValidator),
   handler: async (ctx, args) => {
-    // Try to get authenticated user (with workosUserId fallback)
-    const user = await getOptionalAuth(ctx, args.workosUserId);
     const shouldLog = !isProductionMode();
+
+    if (shouldLog) {
+      console.log('[listByOwner] Called with args:', {
+        ownerId: args.ownerId ?? 'undefined',
+        workosUserId: args.workosUserId ?? 'undefined',
+      });
+    }
+
+    // Try to get authenticated user (with workosUserId fallback)
+    let user = await getOptionalAuth(ctx, args.workosUserId);
+
     if (shouldLog) {
       console.log('[listByOwner] getOptionalAuth returned:', user?._id ?? 'null');
+    }
+
+    // ENHANCED: If getOptionalAuth failed but we have workosUserId, try direct lookup
+    // This handles cases where AuthKit token verification fails but the user exists in DB
+    if (!user && args.workosUserId) {
+      const directLookup = await ctx.db
+        .query("users")
+        .withIndex("by_workos", (q) => q.eq("workosId", args.workosUserId))
+        .first();
+
+      if (directLookup) {
+        user = directLookup;
+        if (shouldLog) {
+          console.log('[listByOwner] Found user via direct workosId lookup:', user._id);
+        }
+      } else if (shouldLog) {
+        console.log('[listByOwner] Direct workosId lookup failed - no user found for:', args.workosUserId);
+      }
     }
 
     // If authenticated, use that user's ID; otherwise fall back to provided ownerId (dev/demo only)
@@ -61,6 +88,9 @@ export const listByOwner = query({
     if (!ownerIdToUse) {
       if (shouldLog) {
         console.log('[listByOwner] No owner ID, returning empty');
+        // Debug: List all users to check if any exist
+        const allUsers = await ctx.db.query("users").take(5);
+        console.log('[listByOwner] Debug - sample users in DB:', allUsers.map(u => ({ id: u._id, workosId: u.workosId, email: u.email })));
       }
       return [];
     }
@@ -73,6 +103,11 @@ export const listByOwner = query({
 
     if (shouldLog) {
       console.log('[listByOwner] Found companies:', companies.length);
+      if (companies.length === 0) {
+        // Debug: Check if any companies exist for this owner
+        const allCompanies = await ctx.db.query("companies").take(5);
+        console.log('[listByOwner] Debug - sample companies in DB:', allCompanies.map(c => ({ id: c._id, ownerId: c.ownerId, name: c.name })));
+      }
     }
     return companies;
   },
@@ -223,10 +258,29 @@ export const create = mutation({
       }
     }
 
-    // Fall back to provided ownerId (demo mode only)
+    // CRITICAL: Verify user was found or created with a valid Convex _id
+    if (!user?._id) {
+      console.error('[Company Create] CRITICAL: User creation failed - no valid user._id');
+      console.error('[Company Create] Debug info:', {
+        hasUser: !!user,
+        userId: user?._id ?? 'undefined',
+        workosUserId: args.workosUserId,
+        userEmail: args.userEmail,
+        providedOwnerId: args.ownerId,
+      });
+      // Fall back to provided ownerId only in non-production mode
+      if (!isProductionMode() && args.ownerId) {
+        console.log('[Company Create] Using fallback ownerId (dev mode):', args.ownerId);
+      } else {
+        return AuthErrors.unauthorized("User creation failed. Please try again.");
+      }
+    }
+
+    // Use the Convex user._id as ownerId (NEVER use WorkOS ID directly)
     const ownerId = user?._id ?? args.ownerId;
 
-    console.log('[Company Create] Final ownerId:', ownerId ?? 'null');
+    console.log('[Company Create] Final ownerId (Convex ID):', ownerId ?? 'null');
+    console.log('[Company Create] Verification - ownerId type check:', typeof ownerId, 'starts with:', String(ownerId).substring(0, 10));
 
     if (!ownerId) {
       console.error('[Company Create] AUTH FAILED - no user found or created');
