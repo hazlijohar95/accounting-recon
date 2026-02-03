@@ -74,6 +74,36 @@ export async function requireSession(): Promise<SessionData> {
 }
 
 /**
+ * Get session with fallback for dev mode.
+ * In Convex dev environment, WorkOS auth may fail.
+ * Falls back to workosUserId from request headers.
+ */
+export async function getSessionWithFallback(
+  request: Request
+): Promise<SessionData | null> {
+  // Try normal WorkOS session first
+  const session = await getSession();
+  if (session) return session;
+
+  // In strict auth mode, don't allow fallback
+  if (process.env.AUTH_STRICT_MODE === 'true') {
+    return null;
+  }
+
+  // Try to get workosUserId from request header
+  const workosUserId = request.headers.get('x-workos-user-id');
+  if (workosUserId) {
+    // Return minimal session data for dev fallback
+    return {
+      workosId: workosUserId,
+      email: 'dev-fallback@local',
+    };
+  }
+
+  return null;
+}
+
+/**
  * Get the access token for the current session.
  * Useful for passing to other services that need to verify the user.
  */

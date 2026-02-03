@@ -21,10 +21,8 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  useAppStore,
   useIsDemo,
   useSelectedCompanyId,
-  useCashTransactionsSafe,
   useAccrualTransactionsSafe,
   useMatchesSafe,
   useActiveSessionSafe,
@@ -34,7 +32,10 @@ import {
   useMonthlyCashFlow,
   useExpenseBreakdown,
   useTopExpenses,
-  useReconciliationStats,
+  useCashTransactionsCombined,
+  useReconciliationStatsCombined,
+  useSuspenseItemsCombined,
+  useAccrualDocumentsCombined,
 } from '@/lib/convex-hooks'
 import {
   IconUpload,
@@ -58,6 +59,7 @@ import {
   ExpenseChart,
   TopExpensesList,
   ChartSection,
+  SkeletonStatCard,
 } from '@/components/brand'
 import type { CashFlowDataPoint, ExpenseCategory, TopExpense } from '@/components/brand'
 
@@ -115,8 +117,13 @@ export function DashboardView() {
   const isDemo = useIsDemo()
   const selectedCompanyId = useSelectedCompanyId()
 
-  // Mode-aware selectors - automatically return correct data based on isDemo
-  const cashTransactions = useCashTransactionsSafe()
+  // Mode-aware combined hooks - automatically return demo or real data
+  const { data: cashTransactions, isLoading: isCashLoading } = useCashTransactionsCombined()
+  const { data: reconStats, isLoading: isStatsLoading } = useReconciliationStatsCombined()
+  const { data: suspenseItems, isLoading: isSuspenseLoading } = useSuspenseItemsCombined()
+  const { data: accrualDocuments, isLoading: isAccrualDocsLoading } = useAccrualDocumentsCombined()
+
+  // Store selectors for data not yet migrated to combined hooks
   const accrualTransactions = useAccrualTransactionsSafe()
   const matches = useMatchesSafe()
   const activeSession = useActiveSessionSafe()
@@ -125,11 +132,10 @@ export function DashboardView() {
   // Get companyId for real data queries (skip in demo mode or when no company selected)
   const companyId = isDemo ? undefined : selectedCompanyId ?? undefined
 
-  // Real data queries (skip in demo mode or when no company selected)
+  // Real data queries for charts (skip in demo mode or when no company selected)
   const cashFlowData = useMonthlyCashFlow(companyId)
   const expenseData = useExpenseBreakdown(companyId)
   const topExpensesData = useTopExpenses(companyId)
-  const reconStats = useReconciliationStats(companyId)
 
   // State for notification dropdown
   const [showNotifications, setShowNotifications] = useState(false)
@@ -197,29 +203,14 @@ export function DashboardView() {
     return null
   }, [cashTransactions, accrualTransactions, matches, activeSession, isDemo])
 
-  // Memoize calculations - prefer backend stats over local store for accuracy
-  // Backend reconStats is the source of truth for match/pending/suspense counts
-  // Cash in/out totals come from local store (could be moved to backend later)
-  const stats = useMemo(() => {
-    // Use backend reconciliation stats when available (non-demo mode)
-    if (!isDemo && reconStats) {
-      return {
-        totalCashIn: cashTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
-        totalCashOut: cashTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0),
-        matchedCount: reconStats.matched ?? 0,
-        pendingCount: reconStats.pending ?? 0,
-        suspenseCount: reconStats.suspense ?? 0,
-      }
-    }
-    // Fallback to local store calculation (demo mode or loading state)
-    return {
-      totalCashIn: cashTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
-      totalCashOut: cashTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0),
-      matchedCount: matches.filter(m => m.approved).length,
-      pendingCount: matches.filter(m => !m.approved).length,
-      suspenseCount: cashTransactions.filter(t => t.status === 'suspense').length,
-    }
-  }, [isDemo, reconStats, cashTransactions, matches])
+  // Stats come from the combined hook which handles demo/real mode automatically
+  const stats = useMemo(() => ({
+    totalCashIn: reconStats.totalCashIn,
+    totalCashOut: reconStats.totalCashOut,
+    matchedCount: reconStats.matchedCount,
+    pendingCount: reconStats.pendingCount,
+    suspenseCount: reconStats.suspenseCount,
+  }), [reconStats])
 
   // Empty state for Real mode with no data
   const hasNoData = !isDemo && sessions.length === 0 && cashTransactions.length === 0 && accrualTransactions.length === 0
@@ -245,20 +236,24 @@ export function DashboardView() {
     }))
   }, [isDemo, topExpensesData])
 
-  // Reconciliation stats from backend (for non-demo mode)
-  const statsData = useMemo(() => {
-    if (isDemo) {
-      return { matched: 127, pending: 12, suspense: 5, total: 144, matchRate: 88 }
-    }
-    return reconStats ?? { matched: 0, pending: 0, suspense: 0, total: 0, matchRate: 0 }
-  }, [isDemo, reconStats])
+  // Reconciliation stats for progress display
+  const statsData = useMemo(() => ({
+    matched: reconStats.matchedCount,
+    pending: reconStats.pendingCount,
+    suspense: reconStats.suspenseCount,
+    total: reconStats.matchedCount + reconStats.pendingCount + reconStats.suspenseCount,
+    matchRate: reconStats.matchRate,
+  }), [reconStats])
 
-  // Loading state for charts (only in real mode)
+  // Loading state for charts and stats
   const isChartsLoading = !isDemo && (
     cashFlowData === undefined ||
     expenseData === undefined ||
     topExpensesData === undefined
   )
+
+  // Loading state for stats (from combined hooks)
+  const isStatsLoadingAny = isStatsLoading || isCashLoading
 
   if (hasNoData) {
     return (
@@ -324,36 +319,48 @@ export function DashboardView() {
 
       {/* Stats Grid - Responsive: 1 col mobile, 2 col tablet, 4 col desktop */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Cash In"
-          value={stats.totalCashIn}
-          prefix="$"
-          icon={<IconCashIn className="w-3 h-3" />}
-          decimals={2}
-          animate
-        />
-        <StatCard
-          label="Cash Out"
-          value={stats.totalCashOut}
-          prefix="$"
-          icon={<IconCashOut className="w-3 h-3" />}
-          decimals={2}
-          animate
-        />
-        <StatCard
-          label="Matched"
-          value={stats.matchedCount}
-          icon={<IconMatched className="w-3 h-3" />}
-          secondaryText={`${stats.pendingCount} pending review`}
-          animate
-        />
-        <StatCard
-          label="Needs Review"
-          value={stats.suspenseCount}
-          icon={<IconSuspense className="w-3 h-3" />}
-          trend={stats.suspenseCount > 0 ? 'down' : 'neutral'}
-          animate
-        />
+        {isStatsLoadingAny ? (
+          <>
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+          </>
+        ) : (
+          <>
+            <StatCard
+              label="Cash In"
+              value={stats.totalCashIn}
+              prefix="$"
+              icon={<IconCashIn className="w-3 h-3" />}
+              decimals={2}
+              animate
+            />
+            <StatCard
+              label="Cash Out"
+              value={stats.totalCashOut}
+              prefix="$"
+              icon={<IconCashOut className="w-3 h-3" />}
+              decimals={2}
+              animate
+            />
+            <StatCard
+              label="Matched"
+              value={stats.matchedCount}
+              icon={<IconMatched className="w-3 h-3" />}
+              secondaryText={`${stats.pendingCount} pending review`}
+              animate
+            />
+            <StatCard
+              label="Suspense"
+              value={stats.suspenseCount}
+              icon={<IconSuspense className="w-3 h-3" />}
+              trend={stats.suspenseCount > 0 ? 'down' : 'neutral'}
+              secondaryText="Unmatched items"
+              animate
+            />
+          </>
+        )}
       </div>
 
       {/* Cash Flow Chart */}
@@ -401,7 +408,7 @@ export function DashboardView() {
           headerRight={
             (activeSession || isDemo) && (
               <span className="text-sm text-muted-foreground font-mono">
-                {isDemo ? `${statsData.matchRate}%` : `${activeSession?.progress ?? 0}%`}
+                {`${statsData.matchRate}%`}
               </span>
             )
           }
@@ -409,9 +416,9 @@ export function DashboardView() {
           {activeSession || isDemo ? (
             <>
               <ReconciliationProgress
-                matched={isDemo ? statsData.matched : stats.matchedCount}
-                pending={isDemo ? statsData.pending : stats.pendingCount}
-                suspense={isDemo ? statsData.suspense : stats.suspenseCount}
+                matched={statsData.matched}
+                pending={statsData.pending}
+                suspense={statsData.suspense}
                 animate={true}
               />
               <div className="mt-4 pt-4 border-t border-border">

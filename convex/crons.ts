@@ -25,4 +25,13 @@ crons.interval(
   internal.agents.processJobs
 );
 
+// Clean up stale PDF export jobs every minute
+// Marks jobs stuck in "processing" for >10 minutes as failed
+// Also cleans up expired download URLs
+crons.interval(
+  "cleanup-stale-pdf-jobs",
+  { minutes: 1 },
+  internal.exports.pdf.cleanupStalePDFJobs
+);
+
 export default crons;

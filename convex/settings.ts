@@ -1,41 +1,102 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireAuth, getOptionalAuth } from "./lib/auth";
-import { AuthErrors } from "./lib/errors";
 
 /**
  * Settings module for user preferences, data export, and account management.
  *
  * Provides:
+ * - User preferences persistence (date/number format, notifications)
  * - Export all user data (GDPR compliance)
  * - Delete user account and all associated data
- * - User preferences management
+ * - Rate limiting for destructive operations
  */
+
+// ============ RATE LIMIT HELPERS ============
+
+const RATE_LIMITS = {
+  deleteAccount: { maxAttempts: 1, windowMs: 60 * 60 * 1000 }, // 1 per hour
+  exportUserData: { maxAttempts: 5, windowMs: 24 * 60 * 60 * 1000 }, // 5 per day
+};
+
+async function checkRateLimit(
+  ctx: { db: any },
+  userId: any,
+  action: keyof typeof RATE_LIMITS
+): Promise<{ allowed: boolean; retryAfter?: number }> {
+  const limit = RATE_LIMITS[action];
+  const now = Date.now();
+  const windowStart = now - limit.windowMs;
+
+  // Get existing rate limit record
+  const existing = await ctx.db
+    .query("rateLimits")
+    .withIndex("by_user_action", (q: any) => q.eq("userId", userId).eq("action", action))
+    .first();
+
+  if (!existing) {
+    // No record - allowed
+    return { allowed: true };
+  }
+
+  // Filter timestamps within the window
+  const recentTimestamps = existing.timestamps.filter((ts: number) => ts > windowStart);
+
+  if (recentTimestamps.length >= limit.maxAttempts) {
+    // Rate limited - calculate retry time
+    const oldestInWindow = Math.min(...recentTimestamps);
+    const retryAfter = oldestInWindow + limit.windowMs - now;
+    return { allowed: false, retryAfter };
+  }
+
+  return { allowed: true };
+}
+
+async function recordRateLimitAttempt(
+  ctx: { db: any },
+  userId: any,
+  action: string
+): Promise<void> {
+  const now = Date.now();
+  const limit = RATE_LIMITS[action as keyof typeof RATE_LIMITS];
+  const windowStart = now - limit.windowMs;
+
+  const existing = await ctx.db
+    .query("rateLimits")
+    .withIndex("by_user_action", (q: any) => q.eq("userId", userId).eq("action", action))
+    .first();
+
+  if (existing) {
+    // Update existing - keep only timestamps within window + new one
+    const recentTimestamps = existing.timestamps.filter((ts: number) => ts > windowStart);
+    await ctx.db.patch(existing._id, {
+      timestamps: [...recentTimestamps, now],
+      updatedAt: now,
+    });
+  } else {
+    // Create new record
+    await ctx.db.insert("rateLimits", {
+      userId,
+      action,
+      timestamps: [now],
+      updatedAt: now,
+    });
+  }
+}
 
 // ============ QUERIES ============
 
 /**
- * Get user preferences (stored in user document or separate table if needed)
+ * Get user preferences from database.
+ * Returns defaults if no preferences saved yet.
  */
 export const getUserPreferences = query({
   args: {},
   handler: async (ctx) => {
     const user = await getOptionalAuth(ctx);
-    if (!user) {
-      return {
-        theme: "system",
-        dateFormat: "DD/MM/YYYY",
-        numberFormat: "1,234.56",
-        emailNotifications: {
-          reconciliationComplete: true,
-          weeklyDigest: false,
-          newFeatures: true,
-        },
-      };
-    }
 
-    // For now, return defaults - can be extended to read from a preferences table
-    return {
+    // Default preferences
+    const defaults = {
       theme: "system",
       dateFormat: "DD/MM/YYYY",
       numberFormat: "1,234.56",
@@ -45,19 +106,116 @@ export const getUserPreferences = query({
         newFeatures: true,
       },
     };
+
+    if (!user) {
+      return defaults;
+    }
+
+    // Fetch from database
+    const prefs = await ctx.db
+      .query("userPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+
+    if (!prefs) {
+      return defaults;
+    }
+
+    // Merge with defaults (in case new preferences are added later)
+    return {
+      theme: "system", // Theme is managed by next-themes in localStorage
+      dateFormat: prefs.dateFormat ?? defaults.dateFormat,
+      numberFormat: prefs.numberFormat ?? defaults.numberFormat,
+      emailNotifications: {
+        reconciliationComplete: prefs.emailReconciliation ?? defaults.emailNotifications.reconciliationComplete,
+        weeklyDigest: prefs.emailWeeklyDigest ?? defaults.emailNotifications.weeklyDigest,
+        newFeatures: prefs.emailProductUpdates ?? defaults.emailNotifications.newFeatures,
+      },
+    };
   },
 });
 
 // ============ MUTATIONS ============
 
 /**
+ * Update user preferences.
+ * Uses upsert logic - creates if not exists, updates if exists.
+ */
+export const updateUserPreferences = mutation({
+  args: {
+    dateFormat: v.optional(v.string()),
+    numberFormat: v.optional(v.string()),
+    emailReconciliation: v.optional(v.boolean()),
+    emailWeeklyDigest: v.optional(v.boolean()),
+    emailProductUpdates: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuth(ctx);
+
+    // Validate date format if provided
+    if (args.dateFormat && !["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"].includes(args.dateFormat)) {
+      throw new Error("Invalid date format. Must be DD/MM/YYYY, MM/DD/YYYY, or YYYY-MM-DD");
+    }
+
+    // Validate number format if provided
+    if (args.numberFormat && !["1,234.56", "1.234,56", "1 234.56"].includes(args.numberFormat)) {
+      throw new Error("Invalid number format. Must be 1,234.56, 1.234,56, or 1 234.56");
+    }
+
+    const now = Date.now();
+
+    // Check if preferences exist
+    const existing = await ctx.db
+      .query("userPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+
+    if (existing) {
+      // Update existing
+      await ctx.db.patch(existing._id, {
+        ...(args.dateFormat !== undefined && { dateFormat: args.dateFormat }),
+        ...(args.numberFormat !== undefined && { numberFormat: args.numberFormat }),
+        ...(args.emailReconciliation !== undefined && { emailReconciliation: args.emailReconciliation }),
+        ...(args.emailWeeklyDigest !== undefined && { emailWeeklyDigest: args.emailWeeklyDigest }),
+        ...(args.emailProductUpdates !== undefined && { emailProductUpdates: args.emailProductUpdates }),
+        updatedAt: now,
+      });
+    } else {
+      // Create new
+      await ctx.db.insert("userPreferences", {
+        userId: user._id,
+        dateFormat: args.dateFormat,
+        numberFormat: args.numberFormat,
+        emailReconciliation: args.emailReconciliation,
+        emailWeeklyDigest: args.emailWeeklyDigest,
+        emailProductUpdates: args.emailProductUpdates,
+        updatedAt: now,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+/**
  * Export all user data for GDPR compliance.
  * Returns a JSON object containing all user-owned data.
+ * Rate limited to 5 exports per day.
  */
 export const exportUserData = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireAuth(ctx);
+
+    // Check rate limit
+    const rateCheck = await checkRateLimit(ctx, user._id, "exportUserData");
+    if (!rateCheck.allowed) {
+      const retryMinutes = Math.ceil((rateCheck.retryAfter || 0) / (60 * 1000));
+      throw new Error(`Rate limited. Please try again in ${retryMinutes} minutes.`);
+    }
+
+    // Record this attempt
+    await recordRateLimitAttempt(ctx, user._id, "exportUserData");
 
     // Collect all user data
     const userData: Record<string, unknown> = {
@@ -68,6 +226,22 @@ export const exportUserData = mutation({
         createdAt: new Date(user.createdAt).toISOString(),
       },
     };
+
+    // Get user preferences
+    const preferences = await ctx.db
+      .query("userPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+
+    if (preferences) {
+      userData.preferences = {
+        dateFormat: preferences.dateFormat,
+        numberFormat: preferences.numberFormat,
+        emailReconciliation: preferences.emailReconciliation,
+        emailWeeklyDigest: preferences.emailWeeklyDigest,
+        emailProductUpdates: preferences.emailProductUpdates,
+      };
+    }
 
     // Get all companies owned by user
     const companies = await ctx.db
@@ -192,11 +366,22 @@ export const exportUserData = mutation({
 /**
  * Delete user account and all associated data.
  * This is a destructive operation that cannot be undone.
+ * Rate limited to 1 attempt per hour for security.
  */
 export const deleteAccount = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireAuth(ctx);
+
+    // Check rate limit
+    const rateCheck = await checkRateLimit(ctx, user._id, "deleteAccount");
+    if (!rateCheck.allowed) {
+      const retryMinutes = Math.ceil((rateCheck.retryAfter || 0) / (60 * 1000));
+      throw new Error(`Rate limited. Please try again in ${retryMinutes} minutes.`);
+    }
+
+    // Record this attempt
+    await recordRateLimitAttempt(ctx, user._id, "deleteAccount");
 
     // Get all companies owned by user
     const companies = await ctx.db
@@ -271,10 +456,6 @@ export const deleteAccount = mutation({
         await ctx.db.delete(c._id);
       }
 
-      // Delete PDF export jobs
-      // Note: No by_company index, so we'll skip this for now
-      // Jobs are session-linked and will become orphaned but harmless
-
       // Delete company credits
       const credits = await ctx.db
         .query("companyCredits")
@@ -333,6 +514,15 @@ export const deleteAccount = mutation({
             await ctx.db.delete(job._id);
           }
 
+          // Delete worksheet messages
+          const messages = await ctx.db
+            .query("worksheetMessages")
+            .withIndex("by_worksheet", (q) => q.eq("worksheetId", worksheet._id))
+            .collect();
+          for (const msg of messages) {
+            await ctx.db.delete(msg._id);
+          }
+
           await ctx.db.delete(worksheet._id);
         }
 
@@ -341,6 +531,24 @@ export const deleteAccount = mutation({
 
       // Delete company
       await ctx.db.delete(company._id);
+    }
+
+    // Delete user preferences
+    const preferences = await ctx.db
+      .query("userPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+    if (preferences) {
+      await ctx.db.delete(preferences._id);
+    }
+
+    // Delete rate limit records
+    const rateLimits = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const rl of rateLimits) {
+      await ctx.db.delete(rl._id);
     }
 
     // Delete onboarding progress

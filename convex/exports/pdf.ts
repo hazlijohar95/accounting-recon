@@ -1,7 +1,7 @@
 // PDF Report Export Action
 import { v } from "convex/values";
-import { action, internalMutation, query } from "../_generated/server";
-import { internal } from "../_generated/api";
+import { action, internalMutation, internalQuery, query } from "../_generated/server";
+import { api, internal } from "../_generated/api";
 import { Id, Doc } from "../_generated/dataModel";
 
 // Type for enriched match from getExportData
@@ -445,6 +445,116 @@ export const handlePDFResults = internalMutation({
         timestamp: Date.now(),
       })
     );
+  },
+});
+
+/**
+ * Internal mutation to mark stale PDF jobs as failed
+ * Called by cron job to handle timeout of stuck jobs
+ */
+export const cleanupStalePDFJobs = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // Jobs are considered stale after 10 minutes of processing
+    const STALE_THRESHOLD_MS = 10 * 60 * 1000;
+    const now = Date.now();
+
+    // Find all processing jobs
+    const processingJobs = await ctx.db
+      .query("pdfExportJobs")
+      .withIndex("by_status", (q) => q.eq("status", "processing"))
+      .collect();
+
+    let cleanedCount = 0;
+    for (const job of processingJobs) {
+      if (now - job.createdAt > STALE_THRESHOLD_MS) {
+        await ctx.db.patch(job._id, {
+          status: "failed",
+          errorMessage: "Job timed out after 10 minutes",
+          completedAt: now,
+        });
+        cleanedCount++;
+
+        console.log(
+          JSON.stringify({
+            event: "pdf_job_timeout",
+            level: "warning",
+            jobId: job._id,
+            sessionId: job.sessionId,
+            createdAt: job.createdAt,
+            timestamp: now,
+          })
+        );
+      }
+    }
+
+    // Also clean up expired completed jobs (remove download URLs after 24h)
+    const expiredJobs = await ctx.db
+      .query("pdfExportJobs")
+      .withIndex("by_status", (q) => q.eq("status", "completed"))
+      .collect();
+
+    for (const job of expiredJobs) {
+      if (job.expiresAt && now > job.expiresAt) {
+        await ctx.db.patch(job._id, {
+          downloadUrl: undefined,
+          fileName: undefined,
+        });
+      }
+    }
+
+    return { cleanedCount };
+  },
+});
+
+/**
+ * Retry a failed PDF export job
+ */
+export const retryPDFExport = action({
+  args: {
+    jobId: v.string(),
+  },
+  returns: pdfExportResultValidator,
+  handler: async (ctx, args) => {
+    // Get the failed job
+    const job = await ctx.runQuery(internal.exports.pdf.getJobById, {
+      jobId: args.jobId,
+    });
+
+    if (!job) {
+      return {
+        success: false,
+        error: "Job not found",
+      };
+    }
+
+    if (job.status !== "failed") {
+      return {
+        success: false,
+        error: "Can only retry failed jobs",
+      };
+    }
+
+    // Re-trigger the PDF export with the same parameters
+    const result = await ctx.runAction(api.exports.index.generatePDFExport, {
+      sessionId: job.sessionId,
+      reportType: job.reportType,
+    });
+
+    return result;
+  },
+});
+
+/**
+ * Internal query to get a PDF job by ID
+ */
+export const getJobById = internalQuery({
+  args: {
+    jobId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId as Id<"pdfExportJobs">);
+    return job;
   },
 });
 

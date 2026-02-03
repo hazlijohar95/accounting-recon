@@ -11,6 +11,7 @@ export {
   SkeletonAvatar,
   SkeletonButton,
   SkeletonTable,
+  SkeletonStatCard,
 } from './skeleton'
 export { PageTransition, PageTransitionOverlay } from './page-transition'
 export { SuccessAnimation, SuccessCheckmark } from './success-animation'

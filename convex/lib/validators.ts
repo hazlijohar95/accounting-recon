@@ -181,8 +181,7 @@ export const documentDocValidator = v.object({
   fileName: v.string(),
   fileType: v.string(),
   fileSize: v.number(),
-  storageId: v.optional(v.string()),
-  storageUrl: v.optional(v.string()),
+  storageId: v.optional(v.id("_storage")), // Convex file storage ID
   documentType: documentTypeValidator,
   extractedText: v.optional(v.string()),
   extractionStatus: extractionStatusValidator,

@@ -639,14 +639,20 @@ export declare const api: {
       "public",
       {
         companyId: Id<"companies">;
+        contentType: string;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
         fileName: string;
         fileSize: number;
         fileType: string;
-        storageId?: string;
-        storageUrl?: string;
+        storageId: Id<"_storage">;
       },
       Id<"documents">
+    >;
+    generateUploadUrl: FunctionReference<
+      "mutation",
+      "public",
+      { companyId: Id<"companies"> },
+      string
     >;
     get: FunctionReference<
       "query",
@@ -670,8 +676,7 @@ export declare const api: {
         periodEnd?: string;
         periodStart?: string;
         processedAt?: number;
-        storageId?: string;
-        storageUrl?: string;
+        storageId?: Id<"_storage">;
         uploadedAt: number;
       } | null
     >;
@@ -700,8 +705,7 @@ export declare const api: {
         periodEnd?: string;
         periodStart?: string;
         processedAt?: number;
-        storageId?: string;
-        storageUrl?: string;
+        storageId?: Id<"_storage">;
         uploadedAt: number;
       }>
     >;
@@ -865,6 +869,12 @@ export declare const api: {
           status: "pending" | "processing" | "completed" | "failed";
         } | null
       >;
+      retryPDFExport: FunctionReference<
+        "action",
+        "public",
+        { jobId: string },
+        { error?: string; jobId?: string; success: boolean }
+      >;
     };
     pdf: {
       generatePDFExport: FunctionReference<
@@ -891,6 +901,12 @@ export declare const api: {
           fileName?: string;
           status: "pending" | "processing" | "completed" | "failed";
         } | null
+      >;
+      retryPDFExport: FunctionReference<
+        "action",
+        "public",
+        { jobId: string },
+        { error?: string; jobId?: string; success: boolean }
       >;
     };
   };
@@ -1375,6 +1391,26 @@ export declare const api: {
         { remaining: number; rolledBack: number }
       >;
     };
+    "003_backfill_aggregates": {
+      backfillMatches: FunctionReference<
+        "mutation",
+        "public",
+        { cursor?: string },
+        any
+      >;
+      backfillTransactions: FunctionReference<
+        "mutation",
+        "public",
+        { cursor?: string },
+        any
+      >;
+      clearAggregates: FunctionReference<
+        "mutation",
+        "public",
+        { confirmClear: "I_UNDERSTAND_THIS_DELETES_ALL_AGGREGATES" },
+        any
+      >;
+    };
   };
   onboarding: {
     deleteProgress: FunctionReference<
@@ -1546,6 +1582,18 @@ export declare const api: {
     deleteAccount: FunctionReference<"mutation", "public", {}, any>;
     exportUserData: FunctionReference<"mutation", "public", {}, any>;
     getUserPreferences: FunctionReference<"query", "public", {}, any>;
+    updateUserPreferences: FunctionReference<
+      "mutation",
+      "public",
+      {
+        dateFormat?: string;
+        emailProductUpdates?: boolean;
+        emailReconciliation?: boolean;
+        emailWeeklyDigest?: boolean;
+        numberFormat?: string;
+      },
+      any
+    >;
   };
   suspenseItems: {
     create: FunctionReference<
@@ -2232,10 +2280,15 @@ export declare const internal: {
         periodEnd?: string;
         periodStart?: string;
         processedAt?: number;
-        storageId?: string;
-        storageUrl?: string;
+        storageId?: Id<"_storage">;
         uploadedAt: number;
       }>
+    >;
+    getStorageUrl: FunctionReference<
+      "query",
+      "internal",
+      { storageId: Id<"_storage"> },
+      string | null
     >;
   };
   errors: {
@@ -2261,6 +2314,7 @@ export declare const internal: {
       >;
     };
     pdf: {
+      cleanupStalePDFJobs: FunctionReference<"mutation", "internal", {}, any>;
       createPDFJob: FunctionReference<
         "mutation",
         "internal",
@@ -2270,6 +2324,12 @@ export declare const internal: {
           userId: Id<"users">;
         },
         string
+      >;
+      getJobById: FunctionReference<
+        "query",
+        "internal",
+        { jobId: string },
+        any
       >;
       handlePDFResults: FunctionReference<
         "mutation",
@@ -2308,8 +2368,7 @@ export declare const internal: {
         periodEnd?: string;
         periodStart?: string;
         processedAt?: number;
-        storageId?: string;
-        storageUrl?: string;
+        storageId?: Id<"_storage">;
         uploadedAt: number;
       } | null
     >;
@@ -2726,6 +2785,192 @@ export declare const components: {
           profilePictureUrl?: null | string;
           updatedAt: string;
         } | null
+      >;
+    };
+  };
+  aggregate: {
+    btree: {
+      aggregateBetween: FunctionReference<
+        "query",
+        "internal",
+        { k1?: any; k2?: any; namespace?: any },
+        { count: number; sum: number }
+      >;
+      aggregateBetweenBatch: FunctionReference<
+        "query",
+        "internal",
+        { queries: Array<{ k1?: any; k2?: any; namespace?: any }> },
+        Array<{ count: number; sum: number }>
+      >;
+      atNegativeOffset: FunctionReference<
+        "query",
+        "internal",
+        { k1?: any; k2?: any; namespace?: any; offset: number },
+        { k: any; s: number; v: any }
+      >;
+      atOffset: FunctionReference<
+        "query",
+        "internal",
+        { k1?: any; k2?: any; namespace?: any; offset: number },
+        { k: any; s: number; v: any }
+      >;
+      atOffsetBatch: FunctionReference<
+        "query",
+        "internal",
+        {
+          queries: Array<{
+            k1?: any;
+            k2?: any;
+            namespace?: any;
+            offset: number;
+          }>;
+        },
+        Array<{ k: any; s: number; v: any }>
+      >;
+      get: FunctionReference<
+        "query",
+        "internal",
+        { key: any; namespace?: any },
+        null | { k: any; s: number; v: any }
+      >;
+      offset: FunctionReference<
+        "query",
+        "internal",
+        { k1?: any; key: any; namespace?: any },
+        number
+      >;
+      offsetUntil: FunctionReference<
+        "query",
+        "internal",
+        { k2?: any; key: any; namespace?: any },
+        number
+      >;
+      paginate: FunctionReference<
+        "query",
+        "internal",
+        {
+          cursor?: string;
+          k1?: any;
+          k2?: any;
+          limit: number;
+          namespace?: any;
+          order: "asc" | "desc";
+        },
+        {
+          cursor: string;
+          isDone: boolean;
+          page: Array<{ k: any; s: number; v: any }>;
+        }
+      >;
+      paginateNamespaces: FunctionReference<
+        "query",
+        "internal",
+        { cursor?: string; limit: number },
+        { cursor: string; isDone: boolean; page: Array<any> }
+      >;
+      validate: FunctionReference<
+        "query",
+        "internal",
+        { namespace?: any },
+        any
+      >;
+    };
+    inspect: {
+      display: FunctionReference<"query", "internal", { namespace?: any }, any>;
+      dump: FunctionReference<"query", "internal", { namespace?: any }, string>;
+      inspectNode: FunctionReference<
+        "query",
+        "internal",
+        { namespace?: any; node?: string },
+        null
+      >;
+      listTreeNodes: FunctionReference<
+        "query",
+        "internal",
+        { take?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          aggregate?: { count: number; sum: number };
+          items: Array<{ k: any; s: number; v: any }>;
+          subtrees: Array<string>;
+        }>
+      >;
+      listTrees: FunctionReference<
+        "query",
+        "internal",
+        { take?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          maxNodeSize: number;
+          namespace?: any;
+          root: string;
+        }>
+      >;
+    };
+    public: {
+      clear: FunctionReference<
+        "mutation",
+        "internal",
+        { maxNodeSize?: number; namespace?: any; rootLazy?: boolean },
+        null
+      >;
+      delete_: FunctionReference<
+        "mutation",
+        "internal",
+        { key: any; namespace?: any },
+        null
+      >;
+      deleteIfExists: FunctionReference<
+        "mutation",
+        "internal",
+        { key: any; namespace?: any },
+        any
+      >;
+      init: FunctionReference<
+        "mutation",
+        "internal",
+        { maxNodeSize?: number; namespace?: any; rootLazy?: boolean },
+        null
+      >;
+      insert: FunctionReference<
+        "mutation",
+        "internal",
+        { key: any; namespace?: any; summand?: number; value: any },
+        null
+      >;
+      makeRootLazy: FunctionReference<
+        "mutation",
+        "internal",
+        { namespace?: any },
+        null
+      >;
+      replace: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          currentKey: any;
+          namespace?: any;
+          newKey: any;
+          newNamespace?: any;
+          summand?: number;
+          value: any;
+        },
+        null
+      >;
+      replaceOrInsert: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          currentKey: any;
+          namespace?: any;
+          newKey: any;
+          newNamespace?: any;
+          summand?: number;
+          value: any;
+        },
+        any
       >;
     };
   };

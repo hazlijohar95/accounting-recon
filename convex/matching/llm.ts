@@ -50,6 +50,99 @@ async function callBedrock(prompt: string): Promise<string> {
   return text;
 }
 
+// ============ SANITIZATION CONSTANTS ============
+
+/**
+ * Maximum character limits for sanitized prompt fields.
+ * These limits balance security (prevent token abuse) with utility (preserve meaning).
+ */
+export const SANITIZE_LIMITS = {
+  /** System-generated IDs - short, alphanumeric */
+  ID: 50,
+  /** Date strings - ISO format is 10 chars, allow some buffer */
+  DATE: 20,
+  /** Document numbers - invoice/PO numbers */
+  DOC_NUMBER: 50,
+  /** Counterparty names - company names can be long */
+  COUNTERPARTY: 100,
+  /** Transaction descriptions - main content field */
+  DESCRIPTION: 200,
+  /** Reference numbers - various formats */
+  REFERENCE: 100,
+  /** Default for unspecified fields */
+  DEFAULT: 500,
+} as const;
+
+/** Type for sanitization limit keys */
+export type SanitizeLimitKey = keyof typeof SANITIZE_LIMITS;
+
+// ============ INPUT SANITIZATION (P1-8 FIX) ============
+
+/**
+ * Sanitizes user-controlled text before inserting into LLM prompts.
+ *
+ * Implements defense-in-depth against prompt injection attacks by:
+ * - Removing ASCII control characters (0x00-0x1F, 0x7F)
+ * - Replacing JSON-breaking characters ({, }, [, ], ", `, \) with spaces
+ * - Normalizing whitespace to prevent formatting exploits
+ * - Enforcing maximum length to prevent token abuse
+ *
+ * @param text - The user-controlled text to sanitize (can be null/undefined)
+ * @param maxLength - Maximum allowed length after sanitization (default: 500)
+ * @returns Sanitized string safe for LLM prompt insertion
+ *
+ * @example
+ * ```typescript
+ * // Basic usage
+ * sanitizeForPrompt('Hello World') // 'Hello World'
+ *
+ * // Handles null/undefined
+ * sanitizeForPrompt(null) // ''
+ * sanitizeForPrompt(undefined) // ''
+ *
+ * // Removes dangerous characters
+ * sanitizeForPrompt('{"inject": true}') // '  inject   true  ' (normalized to ' inject true ')
+ *
+ * // Enforces length limit
+ * sanitizeForPrompt('a'.repeat(1000), 100) // 'aaa...' (100 chars)
+ * ```
+ *
+ * @security This function is critical for preventing prompt injection.
+ * Never bypass sanitization for user-controlled data.
+ */
+export function sanitizeForPrompt(text: string | undefined | null, maxLength: number = SANITIZE_LIMITS.DEFAULT): string {
+  if (!text) return "";
+  return text
+    .replace(/[\x00-\x1F\x7F]/g, "") // Remove control characters
+    .replace(/[{}[\]"`\\]/g, " ") // Replace JSON-breaking chars with spaces
+    .replace(/\s+/g, " ") // Normalize whitespace
+    .trim()
+    .slice(0, maxLength); // Limit length
+}
+
+/**
+ * Sanitizes numeric amounts to prevent injection through numeric fields.
+ *
+ * @param amount - The numeric amount to sanitize
+ * @returns A valid finite number rounded to 2 decimal places, or 0 if invalid
+ *
+ * @example
+ * ```typescript
+ * sanitizeAmount(123.456) // 123.46
+ * sanitizeAmount(NaN) // 0
+ * sanitizeAmount(Infinity) // 0
+ * sanitizeAmount(-Infinity) // 0
+ * sanitizeAmount(0) // 0
+ * sanitizeAmount(-99.999) // -100
+ * ```
+ */
+export function sanitizeAmount(amount: number): number {
+  // Ensure it's a valid finite number
+  if (!Number.isFinite(amount)) return 0;
+  // Round to 2 decimal places to prevent floating point shenanigans
+  return Math.round(amount * 100) / 100;
+}
+
 // ============ PROMPT TEMPLATE ============
 
 const MATCHING_SYSTEM_PROMPT = `You are an expert accounting reconciliation assistant. Your task is to match bank transactions (cash basis) with invoices/receipts (accrual basis).
@@ -109,13 +202,32 @@ function buildMatchingPrompt(
     amount: number;
   }>
 ): string {
+  // P1-8 FIX: Sanitize all user-controlled input before inserting into prompt
+  // Defense-in-depth: Also sanitize IDs even though they're typically system-generated
+  const sanitizedCash = cashItems.map((item) => ({
+    id: sanitizeForPrompt(item.id, SANITIZE_LIMITS.ID),
+    date: sanitizeForPrompt(item.date, SANITIZE_LIMITS.DATE),
+    description: sanitizeForPrompt(item.description, SANITIZE_LIMITS.DESCRIPTION),
+    amount: sanitizeAmount(item.amount),
+    reference: sanitizeForPrompt(item.reference, SANITIZE_LIMITS.REFERENCE),
+  }));
+
+  const sanitizedAccrual = accrualItems.map((item) => ({
+    id: sanitizeForPrompt(item.id, SANITIZE_LIMITS.ID),
+    date: sanitizeForPrompt(item.date, SANITIZE_LIMITS.DATE),
+    docNumber: sanitizeForPrompt(item.docNumber, SANITIZE_LIMITS.DOC_NUMBER),
+    counterparty: sanitizeForPrompt(item.counterparty, SANITIZE_LIMITS.COUNTERPARTY),
+    description: sanitizeForPrompt(item.description, SANITIZE_LIMITS.DESCRIPTION),
+    amount: sanitizeAmount(item.amount),
+  }));
+
   return `${MATCHING_SYSTEM_PROMPT}
 
 ## BANK TRANSACTIONS (Cash Basis)
-${JSON.stringify(cashItems, null, 2)}
+${JSON.stringify(sanitizedCash, null, 2)}
 
 ## INVOICES/RECEIPTS (Accrual Basis)
-${JSON.stringify(accrualItems, null, 2)}
+${JSON.stringify(sanitizedAccrual, null, 2)}
 
 Analyze these items and provide matching suggestions in the specified JSON format.`;
 }

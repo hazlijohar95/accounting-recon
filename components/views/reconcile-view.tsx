@@ -53,6 +53,7 @@ import {
   IconDollarSign,
 } from '@/components/brand/icons'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
+import { useToastHelpers } from '@/components/ui/toast'
 import { useRunMatching, usePreviewMatching } from '@/lib/convex-hooks'
 import { cn } from '@/lib/utils'
 import {
@@ -161,6 +162,9 @@ function ReconcileViewContent() {
   // Convex hooks for matching engine
   const runMatching = useRunMatching()
   const previewMatching = usePreviewMatching()
+
+  // Toast notifications (P0-4, P1-5)
+  const toast = useToastHelpers()
 
   // Apply filters to matches
   const filterMatches = useCallback((matchList: MatchPair[]) => {
@@ -412,6 +416,7 @@ function ReconcileViewContent() {
 
       if (!sessionId) {
         console.warn('No active session - cannot run matching')
+        toast.warning('No active session', 'Please select or create a reconciliation session first.')
         return
       }
 
@@ -426,17 +431,43 @@ function ReconcileViewContent() {
             matchesByLayer: result.matchesByLayer,
             suspenseItems: result.suspenseItems,
           })
+
+          // P0-4: Surface LLM fallback notification to users
+          if (result.usedMockLLM) {
+            toast.warning(
+              'AI matching unavailable',
+              result.llmError
+                ? `Using rule-based matching instead. Error: ${result.llmError.substring(0, 100)}`
+                : 'Used rule-based heuristic matching instead of AI semantic analysis.'
+            )
+          }
+
           if (result.totalMatches > 0) {
             setShowCelebration(true)
+            toast.success(
+              'Matching complete',
+              `Found ${result.totalMatches} matches across ${Object.keys(result.matchesByLayer).length} layers.`
+            )
+          } else {
+            toast.info(
+              'No new matches found',
+              'All transactions may already be matched or no suitable matches exist.'
+            )
           }
+        } else if (result.error) {
+          // P1-5: Show error states to users
+          toast.error('Matching failed', result.error)
         }
       } catch (error) {
+        // P1-5: Show error states to users (catch block)
+        const message = error instanceof Error ? error.message : 'An unexpected error occurred'
         console.error('Matching failed:', error)
+        toast.error('Matching failed', message)
       } finally {
         setRunningMatching(false)
       }
     },
-    [guardAction, sessionId, runMatching, setShowCelebration]
+    [guardAction, sessionId, runMatching, setShowCelebration, toast]
   )
 
   const handleCelebrationComplete = useCallback(() => {
@@ -898,7 +929,7 @@ const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }: Suspe
             <button
               onClick={() => onFindMatch(item)}
               aria-label={`Find match for ${item.description}`}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+              className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-colors opacity-70 hover:opacity-100 focus:opacity-100 focus:ring-1 focus:ring-foreground/50"
             >
               <IconSearch size={12} aria-hidden="true" />
               Find Match
@@ -986,28 +1017,72 @@ const keyboardShortcuts = [
 
 /**
  * Modal displaying keyboard shortcuts for power users.
+ * P1-7 FIX: Added focus trap to keep keyboard navigation within modal.
  */
 function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
   const categories = ['Actions', 'Navigation', 'Help']
+  const modalRef = React.useRef<HTMLDivElement>(null)
+  const closeButtonRef = React.useRef<HTMLButtonElement>(null)
+
+  // Focus trap: keep focus within the modal
+  React.useEffect(() => {
+    // Focus the close button when modal opens
+    closeButtonRef.current?.focus()
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+
+      const focusableElements = modalRef.current?.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusableElements || focusableElements.length === 0) return
+
+      const firstElement = focusableElements[0] as HTMLElement
+      const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement
+
+      if (e.shiftKey) {
+        // Shift+Tab: if on first element, go to last
+        if (document.activeElement === firstElement) {
+          e.preventDefault()
+          lastElement.focus()
+        }
+      } else {
+        // Tab: if on last element, go to first
+        if (document.activeElement === lastElement) {
+          e.preventDefault()
+          firstElement.focus()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shortcuts-modal-title"
     >
       <div
+        ref={modalRef}
         className="bg-background border border-border shadow-xl w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <IconCommand size={20} className="text-muted-foreground" />
-            <h2 className="text-lg font-medium">Keyboard Shortcuts</h2>
+            <IconCommand size={20} className="text-muted-foreground" aria-hidden="true" />
+            <h2 id="shortcuts-modal-title" className="text-lg font-medium">Keyboard Shortcuts</h2>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
-            className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 text-muted-foreground hover:text-foreground transition-colors focus:ring-1 focus:ring-foreground/50"
+            aria-label="Close keyboard shortcuts"
           >
             <IconX size={20} />
           </button>

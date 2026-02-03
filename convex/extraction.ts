@@ -79,8 +79,18 @@ export const triggerExtraction = action({
       }
     }
 
-    if (!document.storageUrl) {
-      return ValidationErrors.missingField("storageUrl");
+    if (!document.storageId) {
+      return ValidationErrors.missingField("storageId");
+    }
+
+    // Get storage URL from Convex storage (URLs don't expire)
+    // SECURITY: Using internal query - not exposed to clients
+    const storageUrl = await ctx.runQuery(internal.documents.getStorageUrl, {
+      storageId: document.storageId,
+    });
+
+    if (!storageUrl) {
+      return ValidationErrors.missingField("storageUrl (file not found in storage)");
     }
 
     // Update document status to processing
@@ -91,13 +101,14 @@ export const triggerExtraction = action({
 
     try {
       // Call ML service - returns immediately with job_id
+      // Note: Convex storage URLs don't expire, so ML service has unlimited time to fetch
       const response = await fetch(`${ML_SERVICE_URL}/extract`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           document_id: args.documentId,
           company_id: document.companyId,
-          storage_url: document.storageUrl,
+          storage_url: storageUrl,
           file_name: document.fileName,
           file_type: document.fileType,
           document_type: document.documentType,

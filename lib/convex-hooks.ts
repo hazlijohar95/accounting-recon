@@ -293,6 +293,21 @@ export function useCompanyDocuments(
   );
 }
 
+/**
+ * Generate an upload URL for Convex file storage.
+ * Returns a presigned URL to which the client can POST the file.
+ */
+export function useGenerateUploadUrl() {
+  const mutation = useMutation(api.documents.generateUploadUrl);
+  return useCallback(
+    (args: { companyId: Id<"companies"> }) => mutation(args),
+    [mutation]
+  );
+}
+
+/**
+ * Create a document record after uploading to Convex storage.
+ */
 export function useCreateDocument() {
   const mutation = useMutation(api.documents.create);
   return useCallback(
@@ -301,8 +316,8 @@ export function useCreateDocument() {
       fileName: string;
       fileType: string;
       fileSize: number;
-      storageId?: string;
-      storageUrl?: string;
+      contentType: string;
+      storageId: Id<"_storage">;
       documentType: "bank_statement" | "invoice" | "receipt" | "other";
     }) => mutation(args),
     [mutation]
@@ -379,6 +394,16 @@ export function useAccrualDocCounts(companyId: Id<"companies"> | undefined) {
 }
 
 // ============ SUSPENSE ITEM HOOKS ============
+
+export function useCompanySuspenseItems(
+  companyId: Id<"companies"> | undefined,
+  status?: "open" | "queried" | "resolved"
+) {
+  return useQuery(
+    api.suspenseItems.listByCompany,
+    companyId ? { companyId, status } : "skip"
+  );
+}
 
 export function useSessionSuspenseItems(
   sessionId: Id<"reconciliationSessions"> | undefined,
@@ -509,4 +534,777 @@ export function useDeleteOnboardingProgress() {
     (userId: string) => mutation({ userId }),
     [mutation]
   );
+}
+
+// ============ USER PREFERENCES HOOKS ============
+
+export interface UserPreferences {
+  theme: string;
+  dateFormat: string;
+  numberFormat: string;
+  emailNotifications: {
+    reconciliationComplete: boolean;
+    weeklyDigest: boolean;
+    newFeatures: boolean;
+  };
+}
+
+/**
+ * Hook to get user preferences with real-time updates.
+ * Returns default values for unauthenticated users.
+ */
+export function useUserPreferences() {
+  return useQuery(api.settings.getUserPreferences);
+}
+
+/**
+ * Hook to update user preferences.
+ * Supports partial updates - only pass the fields you want to change.
+ */
+export function useUpdateUserPreferences() {
+  const mutation = useMutation(api.settings.updateUserPreferences);
+  return useCallback(
+    (args: {
+      dateFormat?: string;
+      numberFormat?: string;
+      emailReconciliation?: boolean;
+      emailWeeklyDigest?: boolean;
+      emailProductUpdates?: boolean;
+    }) => mutation(args),
+    [mutation]
+  );
+}
+
+// ============ MODE-AWARE COMBINED HOOKS ============
+// These hooks automatically return demo data in demo mode, or real Convex data in real mode.
+// They combine the store selectors with Convex queries for seamless mode switching.
+
+import {
+  useIsDemo,
+  useSelectedCompanyId,
+  useAccrualDocuments as useStoreAccrualDocuments,
+  useSuspenseItems as useStoreSuspenseItems,
+  useCashTransactions as useStoreCashTransactions,
+  useMatches as useStoreMatches,
+  useSessions as useStoreSessions,
+  useActiveSession as useStoreActiveSession,
+  type AccrualDocument,
+  type SuspenseItem,
+  type Transaction,
+  type MatchPair,
+  type ReconciliationSession,
+} from "./store";
+
+/**
+ * Mode-aware hook for accrual documents.
+ * Returns demo data in demo mode, Convex data in real mode.
+ */
+export function useAccrualDocumentsCombined(): {
+  data: AccrualDocument[];
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const isDemo = useIsDemo();
+  const companyId = useSelectedCompanyId();
+  const demoData = useStoreAccrualDocuments();
+
+  // Query Convex in real mode (skip in demo mode)
+  const convexData = useCompanyAccrualDocs(isDemo ? undefined : companyId ?? undefined);
+
+  if (isDemo) {
+    return { data: demoData, isLoading: false, error: null };
+  }
+
+  // Transform Convex data to match store type
+  const transformedData: AccrualDocument[] = (convexData ?? []).map((doc) => ({
+    id: doc._id,
+    docType: doc.docType,
+    docNumber: doc.docNumber,
+    docDate: doc.docDate,
+    dueDate: doc.dueDate,
+    counterparty: doc.counterparty,
+    amount: doc.amount,
+    taxAmount: doc.taxAmount,
+    description: doc.description,
+    status: doc.status,
+    matchId: doc.matchId,
+  }));
+
+  return {
+    data: transformedData,
+    isLoading: convexData === undefined,
+    error: null,
+  };
+}
+
+/**
+ * Mode-aware hook for suspense items.
+ * Returns demo data in demo mode, Convex data in real mode.
+ */
+export function useSuspenseItemsCombined(): {
+  data: SuspenseItem[];
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const isDemo = useIsDemo();
+  const companyId = useSelectedCompanyId();
+  const demoData = useStoreSuspenseItems();
+
+  // Query Convex in real mode (skip in demo mode)
+  const convexData = useCompanySuspenseItems(isDemo ? undefined : companyId ?? undefined);
+
+  if (isDemo) {
+    return { data: demoData, isLoading: false, error: null };
+  }
+
+  // Transform Convex data to match store type
+  const transformedData: SuspenseItem[] = (convexData ?? []).map((item) => ({
+    id: item._id,
+    sourceType: item.sourceType,
+    sourceId: item.sourceId,
+    amount: item.amount,
+    transactionDate: item.transactionDate,
+    description: item.description,
+    reason: item.reason,
+    suggestedAction: item.suggestedAction,
+    status: item.status,
+    resolutionNotes: item.resolutionNotes,
+  }));
+
+  return {
+    data: transformedData,
+    isLoading: convexData === undefined,
+    error: null,
+  };
+}
+
+/**
+ * Mode-aware hook for cash transactions.
+ * Returns demo data in demo mode, Convex data in real mode.
+ */
+export function useCashTransactionsCombined(): {
+  data: Transaction[];
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const isDemo = useIsDemo();
+  const companyId = useSelectedCompanyId();
+  const demoData = useStoreCashTransactions();
+
+  // Query Convex in real mode (skip in demo mode)
+  const convexData = useCompanyTransactions(
+    isDemo ? undefined : companyId ?? undefined,
+    { type: "cash" }
+  );
+
+  if (isDemo) {
+    return { data: demoData, isLoading: false, error: null };
+  }
+
+  // Transform Convex data to match store type
+  const transformedData: Transaction[] = (convexData ?? []).map((tx) => ({
+    id: tx._id,
+    date: tx.date,
+    description: tx.description,
+    amount: tx.amount,
+    type: tx.type,
+    status: tx.status,
+    matchId: tx.matchId,
+    category: tx.category,
+  }));
+
+  return {
+    data: transformedData,
+    isLoading: convexData === undefined,
+    error: null,
+  };
+}
+
+/**
+ * Mode-aware hook for reconciliation stats.
+ * Returns demo data in demo mode, Convex data in real mode.
+ */
+export function useReconciliationStatsCombined(): {
+  data: {
+    totalCashIn: number;
+    totalCashOut: number;
+    matchedCount: number;
+    pendingCount: number;
+    suspenseCount: number;
+    matchRate: number;
+  };
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const isDemo = useIsDemo();
+  const companyId = useSelectedCompanyId();
+  const demoCashTxns = useStoreCashTransactions();
+  const demoMatches = useStoreMatches();
+
+  // Query Convex in real mode
+  const reconStats = useReconciliationStats(isDemo ? undefined : companyId ?? undefined);
+  const cashTxns = useCompanyTransactions(
+    isDemo ? undefined : companyId ?? undefined,
+    { type: "cash" }
+  );
+
+  if (isDemo) {
+    const totalCashIn = demoCashTxns.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+    const totalCashOut = demoCashTxns.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const matchedCount = demoMatches.filter(m => m.approved).length;
+    const pendingCount = demoMatches.filter(m => !m.approved).length;
+    const suspenseCount = demoCashTxns.filter(t => t.status === "suspense").length;
+    const total = matchedCount + pendingCount + suspenseCount;
+    const matchRate = total > 0 ? Math.round((matchedCount / total) * 100) : 0;
+
+    return {
+      data: { totalCashIn, totalCashOut, matchedCount, pendingCount, suspenseCount, matchRate },
+      isLoading: false,
+      error: null,
+    };
+  }
+
+  const isLoading = reconStats === undefined || cashTxns === undefined;
+
+  const totalCashIn = (cashTxns ?? []).filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+  const totalCashOut = (cashTxns ?? []).filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const matchedCount = reconStats?.matched ?? 0;
+  const pendingCount = reconStats?.pending ?? 0;
+  const suspenseCount = reconStats?.suspense ?? 0;
+  const matchRate = reconStats?.matchRate ?? 0;
+
+  return {
+    data: { totalCashIn, totalCashOut, matchedCount, pendingCount, suspenseCount, matchRate },
+    isLoading,
+    error: null,
+  };
+}
+
+// ============ MODE-AWARE SAFE HOOKS (P0-1/P0-2 FIX) ============
+// These hooks return plain arrays (API compatible with store selectors)
+// but properly query Convex in real mode instead of returning empty arrays.
+
+/**
+ * Mode-aware hook for accrual documents with automatic Convex queries.
+ *
+ * Seamlessly switches between demo and real mode:
+ * - **Demo mode:** Returns documents from Zustand store (no network calls)
+ * - **Real mode:** Queries Convex backend by company ID
+ *
+ * @returns Array of accrual documents in UI format. Returns `[]` while loading
+ * in real mode (use `useAccrualDocumentsWithState` if you need loading state).
+ *
+ * @example
+ * ```tsx
+ * function DocumentList() {
+ *   const documents = useAccrualDocumentsSafe()
+ *
+ *   if (documents.length === 0) {
+ *     return <EmptyState /> // Could be loading or actually empty
+ *   }
+ *
+ *   return <List items={documents} />
+ * }
+ * ```
+ *
+ * @see useAccrualDocumentsWithState - Use this if you need loading/error states
+ * @see useAccrualDocumentsCombined - Full combined hook with error handling
+ */
+export function useAccrualDocumentsSafe(): AccrualDocument[] {
+  const isDemo = useIsDemo();
+  const demoData = useStoreAccrualDocuments();
+  const companyId = useSelectedCompanyId();
+
+  // Query Convex in real mode
+  const realData = useCompanyAccrualDocs(isDemo ? undefined : companyId ?? undefined);
+
+  if (isDemo) {
+    return demoData;
+  }
+
+  // Transform Convex data to store format
+  return (realData ?? []).map((doc) => ({
+    id: doc._id,
+    docType: doc.docType,
+    docNumber: doc.docNumber,
+    docDate: doc.docDate,
+    dueDate: doc.dueDate,
+    counterparty: doc.counterparty,
+    amount: doc.amount,
+    taxAmount: doc.taxAmount,
+    description: doc.description,
+    status: doc.status,
+    matchId: doc.matchId,
+  }));
+}
+
+/**
+ * Mode-aware hook for suspense items with automatic Convex queries.
+ *
+ * Seamlessly switches between demo and real mode:
+ * - **Demo mode:** Returns items from Zustand store (no network calls)
+ * - **Real mode:** Queries Convex backend by company ID
+ *
+ * @returns Array of suspense items in UI format. Returns `[]` while loading.
+ *
+ * @example
+ * ```tsx
+ * function SuspenseQueue() {
+ *   const items = useSuspenseItemsSafe()
+ *
+ *   return (
+ *     <div>
+ *       <h2>Suspense Items ({items.length})</h2>
+ *       {items.map(item => (
+ *         <SuspenseCard key={item.id} item={item} />
+ *       ))}
+ *     </div>
+ *   )
+ * }
+ * ```
+ *
+ * @see useSuspenseItemsWithState - Use this if you need loading state
+ */
+export function useSuspenseItemsSafe(): SuspenseItem[] {
+  const isDemo = useIsDemo();
+  const demoData = useStoreSuspenseItems();
+  const companyId = useSelectedCompanyId();
+
+  // Query Convex in real mode
+  const realData = useCompanySuspenseItems(isDemo ? undefined : companyId ?? undefined);
+
+  if (isDemo) {
+    return demoData;
+  }
+
+  // Transform Convex data to store format
+  return (realData ?? []).map((item) => ({
+    id: item._id,
+    sourceType: item.sourceType,
+    sourceId: item.sourceId,
+    amount: item.amount,
+    transactionDate: item.transactionDate,
+    description: item.description,
+    reason: item.reason,
+    suggestedAction: item.suggestedAction,
+    status: item.status,
+    resolutionNotes: item.resolutionNotes,
+  }));
+}
+
+/**
+ * Mode-aware hook for cash transactions with automatic Convex queries.
+ *
+ * Seamlessly switches between demo and real mode:
+ * - **Demo mode:** Returns transactions from Zustand store (no network calls)
+ * - **Real mode:** Queries Convex backend by company ID, filtered to cash type
+ *
+ * @returns Array of cash transactions in UI format. Returns `[]` while loading.
+ *
+ * @example
+ * ```tsx
+ * function CashTransactionTable() {
+ *   const transactions = useCashTransactionsSafe()
+ *
+ *   const totals = useMemo(() => ({
+ *     inflows: transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0),
+ *     outflows: transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0),
+ *   }), [transactions])
+ *
+ *   return <Table data={transactions} totals={totals} />
+ * }
+ * ```
+ *
+ * @see useCashTransactionsWithState - Use this if you need loading state
+ */
+export function useCashTransactionsSafe(): Transaction[] {
+  const isDemo = useIsDemo();
+  const demoData = useStoreCashTransactions();
+  const companyId = useSelectedCompanyId();
+
+  // Query Convex in real mode
+  const realData = useCompanyTransactions(
+    isDemo ? undefined : companyId ?? undefined,
+    { type: "cash" }
+  );
+
+  if (isDemo) {
+    return demoData;
+  }
+
+  // Transform Convex data to store format
+  return (realData ?? []).map((tx) => ({
+    id: tx._id,
+    date: tx.date,
+    description: tx.description,
+    amount: tx.amount,
+    type: tx.type,
+    status: tx.status,
+    matchId: tx.matchId,
+    category: tx.category,
+  }));
+}
+
+/**
+ * Mode-aware hook for match pairs.
+ *
+ * Seamlessly switches between demo and real mode:
+ * - **Demo mode:** Returns matches from Zustand store (no network calls)
+ * - **Real mode:** Returns empty array (matches should be fetched per-session)
+ *
+ * **Note:** In real mode, use `useReconcileData` or `useSessionMatches` for
+ * proper session-based match fetching. This hook is primarily for demo mode
+ * compatibility with existing components.
+ *
+ * @returns Array of match pairs. In real mode, returns `[]`.
+ *
+ * @example
+ * ```tsx
+ * // Demo mode usage
+ * function MatchList() {
+ *   const matches = useMatchesSafe()
+ *
+ *   return (
+ *     <ul>
+ *       {matches.map(match => (
+ *         <MatchRow key={match.id} match={match} />
+ *       ))}
+ *     </ul>
+ *   )
+ * }
+ *
+ * // Real mode: use session-based fetching instead
+ * function RealModeMatchList({ sessionId }: { sessionId: Id<"reconciliationSessions"> }) {
+ *   const matches = useSessionMatches(sessionId)
+ *   // ...
+ * }
+ * ```
+ *
+ * @see useSessionMatches - For real mode session-based match fetching
+ */
+export function useMatchesSafe(): MatchPair[] {
+  const isDemo = useIsDemo();
+  const demoData = useStoreMatches();
+
+  // In real mode, matches should be fetched per session via useReconcileData
+  // This hook is primarily for demo mode compatibility
+  if (isDemo) {
+    return demoData;
+  }
+
+  // Real mode: return empty - use useReconcileData for proper session-based fetching
+  // This maintains backward compatibility while directing users to the proper hook
+  return [];
+}
+
+/**
+ * Mode-aware hook for reconciliation sessions with automatic Convex queries.
+ *
+ * Seamlessly switches between demo and real mode:
+ * - **Demo mode:** Returns sessions from Zustand store (no network calls)
+ * - **Real mode:** Queries Convex backend by company ID
+ *
+ * @returns Array of reconciliation sessions in UI format. Returns `[]` while loading.
+ *
+ * @example
+ * ```tsx
+ * function SessionSelector() {
+ *   const sessions = useSessionsSafe()
+ *
+ *   return (
+ *     <select>
+ *       <option value="">Select a session...</option>
+ *       {sessions.map(session => (
+ *         <option key={session.id} value={session.id}>
+ *           {session.name} ({session.status})
+ *         </option>
+ *       ))}
+ *     </select>
+ *   )
+ * }
+ * ```
+ *
+ * @see useSessionsWithState - Use this if you need loading state
+ */
+export function useSessionsSafe(): ReconciliationSession[] {
+  const isDemo = useIsDemo();
+  const demoData = useStoreSessions();
+  const companyId = useSelectedCompanyId();
+
+  // Query Convex in real mode
+  const realData = useCompanySessions(isDemo ? undefined : companyId ?? undefined);
+
+  if (isDemo) {
+    return demoData;
+  }
+
+  // Transform Convex data to store format
+  return (realData ?? []).map((session) => ({
+    id: session._id,
+    name: session.name,
+    createdAt: new Date(session._creationTime).toISOString().split('T')[0],
+    status: session.status,
+    progress: session.progress ?? 0,
+    totalCash: 0, // Would need separate query
+    totalAccrual: 0, // Would need separate query
+    matchedCount: session.matchedCount ?? 0,
+    suspenseCount: session.suspenseCount ?? 0,
+  }));
+}
+
+/**
+ * Mode-aware hook for the currently active reconciliation session.
+ *
+ * Seamlessly switches between demo and real mode:
+ * - **Demo mode:** Returns active session from Zustand store
+ * - **Real mode:** Returns `null` (active session tracked via URL params)
+ *
+ * **Note:** In real mode, the active session is typically determined by URL
+ * parameters (e.g., `/reconcile/[sessionId]`). This hook is primarily for
+ * demo mode compatibility.
+ *
+ * @returns The active session, or `null` if none is active or in real mode.
+ *
+ * @example
+ * ```tsx
+ * function SessionHeader() {
+ *   const activeSession = useActiveSessionSafe()
+ *
+ *   if (!activeSession) {
+ *     return <span>No session selected</span>
+ *   }
+ *
+ *   return (
+ *     <div>
+ *       <h2>{activeSession.name}</h2>
+ *       <ProgressBar value={activeSession.progress} />
+ *     </div>
+ *   )
+ * }
+ * ```
+ *
+ * @see useSession - For fetching a specific session by ID in real mode
+ */
+export function useActiveSessionSafe(): ReconciliationSession | null {
+  const isDemo = useIsDemo();
+  const demoData = useStoreActiveSession();
+
+  if (isDemo) {
+    return demoData;
+  }
+
+  // Real mode: active session is tracked via URL params, not store
+  return null;
+}
+
+// ============ WITH-STATE HOOK VARIANTS ============
+// These hooks expose loading state alongside data for components that need to
+// distinguish between "loading" and "empty" states.
+
+/**
+ * Mode-aware hook for accrual documents with loading state.
+ *
+ * Seamlessly switches between demo and real mode:
+ * - **Demo mode:** Returns documents from Zustand store (no network calls)
+ * - **Real mode:** Queries Convex backend by company ID
+ *
+ * @returns Object with data array and loading state
+ *
+ * @example
+ * ```tsx
+ * function DocumentList() {
+ *   const { data: documents, isLoading } = useAccrualDocumentsWithState()
+ *
+ *   if (isLoading) {
+ *     return <Skeleton />
+ *   }
+ *
+ *   if (documents.length === 0) {
+ *     return <EmptyState />
+ *   }
+ *
+ *   return <List items={documents} />
+ * }
+ * ```
+ *
+ * @see useAccrualDocumentsSafe - Use this if you don't need loading state
+ */
+export function useAccrualDocumentsWithState(): {
+  data: AccrualDocument[];
+  isLoading: boolean;
+} {
+  const isDemo = useIsDemo();
+  const demoData = useStoreAccrualDocuments();
+  const companyId = useSelectedCompanyId();
+  const realData = useCompanyAccrualDocs(isDemo ? undefined : companyId ?? undefined);
+
+  if (isDemo) {
+    return { data: demoData, isLoading: false };
+  }
+
+  const transformedData: AccrualDocument[] = (realData ?? []).map((doc) => ({
+    id: doc._id,
+    docType: doc.docType,
+    docNumber: doc.docNumber,
+    docDate: doc.docDate,
+    dueDate: doc.dueDate,
+    counterparty: doc.counterparty,
+    amount: doc.amount,
+    taxAmount: doc.taxAmount,
+    description: doc.description,
+    status: doc.status,
+    matchId: doc.matchId,
+  }));
+
+  return {
+    data: transformedData,
+    isLoading: realData === undefined,
+  };
+}
+
+/**
+ * Mode-aware hook for suspense items with loading state.
+ *
+ * @returns Object with data array and loading state
+ *
+ * @example
+ * ```tsx
+ * function SuspenseList() {
+ *   const { data: items, isLoading } = useSuspenseItemsWithState()
+ *
+ *   if (isLoading) return <Skeleton />
+ *   return <List items={items} />
+ * }
+ * ```
+ *
+ * @see useSuspenseItemsSafe - Use this if you don't need loading state
+ */
+export function useSuspenseItemsWithState(): {
+  data: SuspenseItem[];
+  isLoading: boolean;
+} {
+  const isDemo = useIsDemo();
+  const demoData = useStoreSuspenseItems();
+  const companyId = useSelectedCompanyId();
+  const realData = useCompanySuspenseItems(isDemo ? undefined : companyId ?? undefined);
+
+  if (isDemo) {
+    return { data: demoData, isLoading: false };
+  }
+
+  const transformedData: SuspenseItem[] = (realData ?? []).map((item) => ({
+    id: item._id,
+    sourceType: item.sourceType,
+    sourceId: item.sourceId,
+    amount: item.amount,
+    transactionDate: item.transactionDate,
+    description: item.description,
+    reason: item.reason,
+    suggestedAction: item.suggestedAction,
+    status: item.status,
+    resolutionNotes: item.resolutionNotes,
+  }));
+
+  return {
+    data: transformedData,
+    isLoading: realData === undefined,
+  };
+}
+
+/**
+ * Mode-aware hook for cash transactions with loading state.
+ *
+ * @returns Object with data array and loading state
+ *
+ * @example
+ * ```tsx
+ * function TransactionList() {
+ *   const { data: transactions, isLoading } = useCashTransactionsWithState()
+ *
+ *   if (isLoading) return <Skeleton />
+ *   return <List items={transactions} />
+ * }
+ * ```
+ *
+ * @see useCashTransactionsSafe - Use this if you don't need loading state
+ */
+export function useCashTransactionsWithState(): {
+  data: Transaction[];
+  isLoading: boolean;
+} {
+  const isDemo = useIsDemo();
+  const demoData = useStoreCashTransactions();
+  const companyId = useSelectedCompanyId();
+  const realData = useCompanyTransactions(
+    isDemo ? undefined : companyId ?? undefined,
+    { type: "cash" }
+  );
+
+  if (isDemo) {
+    return { data: demoData, isLoading: false };
+  }
+
+  const transformedData: Transaction[] = (realData ?? []).map((tx) => ({
+    id: tx._id,
+    date: tx.date,
+    description: tx.description,
+    amount: tx.amount,
+    type: tx.type,
+    status: tx.status,
+    matchId: tx.matchId,
+    category: tx.category,
+  }));
+
+  return {
+    data: transformedData,
+    isLoading: realData === undefined,
+  };
+}
+
+/**
+ * Mode-aware hook for sessions with loading state.
+ *
+ * @returns Object with data array and loading state
+ *
+ * @example
+ * ```tsx
+ * function SessionList() {
+ *   const { data: sessions, isLoading } = useSessionsWithState()
+ *
+ *   if (isLoading) return <Skeleton />
+ *   return <List items={sessions} />
+ * }
+ * ```
+ *
+ * @see useSessionsSafe - Use this if you don't need loading state
+ */
+export function useSessionsWithState(): {
+  data: ReconciliationSession[];
+  isLoading: boolean;
+} {
+  const isDemo = useIsDemo();
+  const demoData = useStoreSessions();
+  const companyId = useSelectedCompanyId();
+  const realData = useCompanySessions(isDemo ? undefined : companyId ?? undefined);
+
+  if (isDemo) {
+    return { data: demoData, isLoading: false };
+  }
+
+  const transformedData: ReconciliationSession[] = (realData ?? []).map((session) => ({
+    id: session._id,
+    name: session.name,
+    createdAt: new Date(session._creationTime).toISOString().split('T')[0],
+    status: session.status,
+    progress: session.progress ?? 0,
+    totalCash: 0,
+    totalAccrual: 0,
+    matchedCount: session.matchedCount ?? 0,
+    suspenseCount: session.suspenseCount ?? 0,
+  }));
+
+  return {
+    data: transformedData,
+    isLoading: realData === undefined,
+  };
 }

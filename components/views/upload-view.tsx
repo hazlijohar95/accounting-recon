@@ -9,6 +9,7 @@ import {
   useSetShowPaywall,
   useActiveSession,
   useCompanies,
+  useCurrentUser,
 } from '@/lib/store'
 import {
   IconFileText,
@@ -22,7 +23,7 @@ import {
 import { cn, formatFileSize } from '@/lib/utils'
 import { LoadingSpinner, SuccessCheckmark, LogoMark, BrandedEmptyState } from '@/components/brand'
 import { Id } from '@/convex/_generated/dataModel'
-import { useCreateDocument, useTriggerExtraction, useDocument, useCompanyDocuments, useDeleteDocument } from '@/lib/convex-hooks'
+import { useCreateDocument, useTriggerExtraction, useDocument, useCompanyDocuments, useDeleteDocument, useGenerateUploadUrl } from '@/lib/convex-hooks'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useToast } from '@/components/ui/toast'
 import { TabNav, TabPanel } from '@/components/ui/tab-nav'
@@ -30,6 +31,59 @@ import { Modal } from '@/components/ui/modal'
 import { ExtractionStatus } from '@/components/extraction-status'
 
 type FileStatus = 'idle' | 'uploading' | 'processing' | 'complete' | 'failed'
+
+// SECURITY: File validation constants (must match convex/documents.ts)
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+const ALLOWED_CONTENT_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'text/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]
+const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'csv', 'xls', 'xlsx']
+
+/**
+ * SECURITY: Sanitize filename to prevent path traversal and injection attacks
+ * - Removes directory separators (/, \, ..)
+ * - Removes null bytes and control characters
+ * - Limits length to 255 characters
+ * - Preserves file extension
+ */
+function sanitizeFilename(filename: string): string {
+  // Remove path separators and parent directory references
+  let sanitized = filename
+    .replace(/[/\\]/g, '_')
+    .replace(/\.\./g, '_')
+    // Remove null bytes and control characters (ASCII 0-31)
+    .replace(/[\x00-\x1f]/g, '')
+    // Remove other potentially dangerous characters
+    .replace(/[<>:"|?*]/g, '_')
+    .trim()
+
+  // Limit filename length (preserve extension if possible)
+  if (sanitized.length > 255) {
+    const lastDot = sanitized.lastIndexOf('.')
+    if (lastDot > 0 && sanitized.length - lastDot <= 10) {
+      // Has a reasonable extension (1-10 chars after last dot)
+      const ext = sanitized.substring(lastDot)
+      const baseName = sanitized.slice(0, 255 - ext.length)
+      sanitized = `${baseName}${ext}`
+    } else {
+      // No extension or extension too long - just truncate
+      sanitized = sanitized.slice(0, 255)
+    }
+  }
+
+  // Fallback for empty filenames
+  if (!sanitized || sanitized === '.') {
+    sanitized = 'unnamed_file'
+  }
+
+  return sanitized
+}
 
 interface UploadedFile {
   id: string
@@ -76,6 +130,7 @@ function UploadViewContent() {
   const activeSession = useActiveSession()
   const companies = useCompanies()
   const setShowPaywall = useSetShowPaywall()
+  const currentUser = useCurrentUser()
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [activeTab, setActiveTab] = useState<UploadTab>('upload')
@@ -106,6 +161,7 @@ function UploadViewContent() {
   const toast = useToast()
 
   // Convex hooks (wrapper hooks for consistency)
+  const generateUploadUrl = useGenerateUploadUrl()
   const createDocument = useCreateDocument()
   const triggerExtraction = useTriggerExtraction()
 
@@ -119,17 +175,69 @@ function UploadViewContent() {
   }
 
   const handleFiles = useCallback((fileList: FileList) => {
-    const newFiles: UploadedFile[] = Array.from(fileList).map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      size: file.size,
-      type: defaultDocType === 'auto' ? detectDocumentType(file.name) : defaultDocType,
-      status: 'idle' as FileStatus,
-      progress: 0,
-      file,
-    }))
-    setFiles((prev) => [...prev, ...newFiles])
-  }, [defaultDocType])
+    const newFiles: UploadedFile[] = []
+    const rejectedFiles: { name: string; reason: string }[] = []
+
+    Array.from(fileList).forEach((file) => {
+      // SECURITY: Validate file size before upload
+      if (file.size > MAX_FILE_SIZE) {
+        rejectedFiles.push({
+          name: file.name,
+          reason: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`,
+        })
+        return
+      }
+
+      // SECURITY: Validate file type by extension and MIME type
+      const extension = file.name.split('.').pop()?.toLowerCase() || ''
+      if (!ALLOWED_EXTENSIONS.includes(extension)) {
+        rejectedFiles.push({
+          name: file.name,
+          reason: `Invalid file type (.${extension})`,
+        })
+        return
+      }
+
+      // Also check MIME type (can be spoofed, but adds defense in depth)
+      if (!ALLOWED_CONTENT_TYPES.includes(file.type) && file.type !== '') {
+        rejectedFiles.push({
+          name: file.name,
+          reason: `Invalid content type (${file.type})`,
+        })
+        return
+      }
+
+      // SECURITY: Sanitize filename
+      const sanitizedName = sanitizeFilename(file.name)
+
+      newFiles.push({
+        id: crypto.randomUUID(),
+        name: sanitizedName,
+        size: file.size,
+        type: defaultDocType === 'auto' ? detectDocumentType(sanitizedName) : defaultDocType,
+        status: 'idle' as FileStatus,
+        progress: 0,
+        file,
+      })
+    })
+
+    // Show error toast for rejected files
+    if (rejectedFiles.length > 0) {
+      const message = rejectedFiles.length === 1
+        ? `${rejectedFiles[0].name}: ${rejectedFiles[0].reason}`
+        : `${rejectedFiles.length} files rejected`
+      toast.addToast({
+        type: 'error',
+        title: 'Files rejected',
+        description: message,
+        duration: 8000,
+      })
+    }
+
+    if (newFiles.length > 0) {
+      setFiles((prev) => [...prev, ...newFiles])
+    }
+  }, [defaultDocType, toast])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -163,7 +271,7 @@ function UploadViewContent() {
     }
   }, [])
 
-  // Upload file with real progress tracking
+  // Upload file using Convex file storage
   const uploadFile = async (fileId: string) => {
     // Demo mode: simulate upload progress then show paywall
     if (isDemo) {
@@ -221,21 +329,17 @@ function UploadViewContent() {
     )
 
     try {
-      // Create FormData
-      const formData = new FormData()
-      formData.append('file', fileData.file)
-      formData.append('companyId', selectedCompanyId)
-      formData.append('documentType', fileData.type)
+      // Step 1: Get upload URL from Convex
+      const uploadUrl = await generateUploadUrl({
+        companyId: selectedCompanyId as Id<"companies">,
+      })
 
-      // Use XMLHttpRequest for real progress tracking
-      const uploadResult = await new Promise<{
-        storageId: string
-        storageUrl: string
-        fileType: string
-      }>((resolve, reject) => {
+      // Step 2: Upload file directly to Convex storage using fetch with progress
+      // Note: fetch doesn't support upload progress, so we use XHR for progress tracking
+      const storageId = await new Promise<Id<"_storage">>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
 
-        // Track progress
+        // Track upload progress
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
             const percentComplete = Math.round((e.loaded / e.total) * 100)
@@ -252,21 +356,16 @@ function UploadViewContent() {
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const response = JSON.parse(xhr.responseText)
-              if (response.success) {
-                resolve(response)
+              if (response.storageId) {
+                resolve(response.storageId as Id<"_storage">)
               } else {
-                reject(new Error(response.error || 'Upload failed'))
+                reject(new Error('No storageId in response'))
               }
             } catch {
-              reject(new Error('Invalid response from server'))
+              reject(new Error('Invalid response from storage'))
             }
           } else {
-            try {
-              const error = JSON.parse(xhr.responseText)
-              reject(new Error(error.error || `Upload failed: ${xhr.status}`))
-            } catch {
-              reject(new Error(`Upload failed: ${xhr.status}`))
-            }
+            reject(new Error(`Upload failed: ${xhr.status}`))
           }
         })
 
@@ -278,21 +377,25 @@ function UploadViewContent() {
           reject(new Error('Upload cancelled'))
         })
 
-        // Store xhr reference in ref for potential cancellation (not in state)
+        // Store xhr reference for potential cancellation
         xhrMapRef.current.set(fileId, xhr)
 
-        xhr.open('POST', '/api/upload')
-        xhr.send(formData)
+        xhr.open('POST', uploadUrl)
+        xhr.setRequestHeader('Content-Type', fileData.file!.type)
+        xhr.send(fileData.file)
       })
 
-      // Create document record in Convex
+      // Get file extension
+      const fileExtension = fileData.name.split('.').pop()?.toLowerCase() || ''
+
+      // Step 3: Create document record in Convex
       const documentId = await createDocument({
         companyId: selectedCompanyId as Id<"companies">,
         fileName: fileData.name,
-        fileType: uploadResult.fileType,
+        fileType: fileExtension,
         fileSize: fileData.size,
-        storageId: uploadResult.storageId,
-        storageUrl: uploadResult.storageUrl,
+        contentType: fileData.file!.type,
+        storageId,
         documentType: fileData.type,
       })
 
@@ -306,7 +409,7 @@ function UploadViewContent() {
         )
       )
 
-      // Trigger extraction
+      // Step 4: Trigger extraction
       await triggerExtraction(documentId)
 
       toast.addToast({
@@ -317,7 +420,26 @@ function UploadViewContent() {
 
     } catch (error) {
       console.error('Upload error:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+      const rawMessage = error instanceof Error ? error.message : 'Upload failed'
+
+      // SECURITY: Provide user-friendly error messages without leaking internals
+      let errorTitle = 'Upload failed'
+      let errorMessage = rawMessage
+
+      if (rawMessage.includes('Rate limit exceeded')) {
+        errorTitle = 'Too many uploads'
+        errorMessage = 'Please wait a moment before uploading more files'
+      } else if (rawMessage.includes('File type not allowed')) {
+        errorTitle = 'Invalid file type'
+        errorMessage = 'Please upload PDF, CSV, Excel, or image files only'
+      } else if (rawMessage.includes('File too large')) {
+        errorTitle = 'File too large'
+        errorMessage = 'Maximum file size is 50MB'
+      } else if (rawMessage.includes('Authentication') || rawMessage.includes('Unauthorized')) {
+        errorTitle = 'Session expired'
+        errorMessage = 'Please refresh the page and try again'
+      }
+
       // Clear XHR reference on error
       xhrMapRef.current.delete(fileId)
       setFiles((prev) =>
@@ -329,7 +451,7 @@ function UploadViewContent() {
       )
       toast.addToast({
         type: 'error',
-        title: 'Upload failed',
+        title: errorTitle,
         description: errorMessage,
       })
     }

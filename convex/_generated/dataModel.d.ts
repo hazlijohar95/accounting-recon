@@ -322,8 +322,7 @@ export type DataModel = {
       periodEnd?: string;
       periodStart?: string;
       processedAt?: number;
-      storageId?: string;
-      storageUrl?: string;
+      storageId?: Id<"_storage">;
       uploadedAt: number;
       _id: Id<"documents">;
       _creationTime: number;
@@ -347,7 +346,6 @@ export type DataModel = {
       | "periodStart"
       | "processedAt"
       | "storageId"
-      | "storageUrl"
       | "uploadedAt";
     indexes: {
       by_id: ["_id"];
@@ -539,6 +537,31 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  rateLimits: {
+    document: {
+      action: string;
+      timestamps: Array<number>;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"rateLimits">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "action"
+      | "timestamps"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_user: ["userId", "_creationTime"];
+      by_user_action: ["userId", "action", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   reconciliationSessions: {
     document: {
       companyId: Id<"companies">;
@@ -673,6 +696,58 @@ export type DataModel = {
       by_session_type_status: ["sessionId", "type", "status", "_creationTime"];
       by_status: ["companyId", "status", "_creationTime"];
       by_type: ["companyId", "type", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  uploadRateLimits: {
+    document: {
+      companyId: Id<"companies">;
+      timestamps: Array<number>;
+      updatedAt: number;
+      _id: Id<"uploadRateLimits">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "companyId"
+      | "timestamps"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_company: ["companyId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  userPreferences: {
+    document: {
+      dateFormat?: string;
+      emailProductUpdates?: boolean;
+      emailReconciliation?: boolean;
+      emailWeeklyDigest?: boolean;
+      numberFormat?: string;
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"userPreferences">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "dateFormat"
+      | "emailProductUpdates"
+      | "emailReconciliation"
+      | "emailWeeklyDigest"
+      | "numberFormat"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_user: ["userId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

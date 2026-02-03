@@ -9,7 +9,7 @@ import {
   useAccrualTransactionsSafe,
   useActiveSessionSafe,
 } from '@/lib/store'
-import { useAction } from 'convex/react'
+import { useAction, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useRecentActivity } from '@/lib/convex-hooks'
 import {
@@ -21,6 +21,7 @@ import {
   IconPlay,
   IconClock,
   IconFileText,
+  IconSpinner,
 } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import {
@@ -84,31 +85,15 @@ function ReportsViewContent() {
   const { setShowPaywall, isDemo, selectedCompanyId } = useAppStore()
   const [selectedReport, setSelectedReport] = useState<ReportType>('summary')
 
-  // Empty state for Real mode with no data
-  const hasNoData = !isDemo && matches.length === 0 && cashTransactions.length === 0 && accrualTransactions.length === 0
-
-  if (hasNoData) {
-    return (
-      <BrandedEmptyState
-        variant="upload"
-        title="No reports available yet"
-        description="Upload and reconcile your bank statements and invoices to generate reports."
-        action={{
-          label: 'Upload Documents',
-          onClick: () => router.push('/upload'),
-        }}
-      />
-    )
-  }
-
-  // Derived loading state from data instead of fake setTimeout
+  // Derived loading state from data - no effect needed
   const hasData = useMemo(() =>
     matches.length > 0 || cashTransactions.length > 0 || accrualTransactions.length > 0,
     [matches, cashTransactions, accrualTransactions]
   )
-  const [isLoading, setIsLoading] = useState(!hasData)
-  const [exportLoading, setExportLoading] = useState<'csv' | 'xlsx' | 'accounting' | null>(null)
+  const isLoading = !hasData
+  const [exportLoading, setExportLoading] = useState<'csv' | 'xlsx' | 'accounting' | 'pdf' | null>(null)
   const [showAccountingMenu, setShowAccountingMenu] = useState(false)
+  const [pdfJobId, setPdfJobId] = useState<string | null>(null)
 
   // Toast notifications
   const toast = useToastHelpers()
@@ -116,6 +101,13 @@ function ReportsViewContent() {
   // Convex actions
   const generateExport = useAction(api.exports.index.generateExport)
   const generateAccountingExport = useAction(api.exports.index.generateAccountingExport)
+  const generatePDFExport = useAction(api.exports.index.generatePDFExport)
+
+  // PDF job status query (only runs when we have a job ID)
+  const pdfJobStatus = useQuery(
+    api.exports.index.getPDFJobStatus,
+    pdfJobId ? { jobId: pdfJobId } : 'skip'
+  )
 
   // Fetch real activity data from backend
   const recentActivity = useRecentActivity(
@@ -123,12 +115,34 @@ function ReportsViewContent() {
     10
   )
 
-  // Update loading state when data becomes available
+  // Handle PDF job completion
   useEffect(() => {
-    if (hasData) {
-      setIsLoading(false)
+    if (!pdfJobStatus || !pdfJobId) return
+
+    if (pdfJobStatus.status === 'completed' && pdfJobStatus.downloadUrl) {
+      // PDF is ready - download it
+      const link = document.createElement('a')
+      link.href = pdfJobStatus.downloadUrl
+      link.download = pdfJobStatus.fileName || 'report.pdf'
+      link.target = '_blank' // Open in new tab since it's a presigned URL
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast.success('PDF export ready', 'Your file is downloading')
+      setPdfJobId(null)
+      setExportLoading(null)
+    } else if (pdfJobStatus.status === 'failed') {
+      toast.error(
+        'PDF export failed',
+        pdfJobStatus.errorMessage
+          ? `${pdfJobStatus.errorMessage}. Try again?`
+          : 'Unknown error. Try again?'
+      )
+      setPdfJobId(null)
+      setExportLoading(null)
     }
-  }, [hasData])
+  }, [pdfJobStatus, pdfJobId, toast])
 
   // Close accounting menu when clicking outside
   useEffect(() => {
@@ -240,6 +254,65 @@ function ReportsViewContent() {
     }
   }, [isDemo, activeSession, generateAccountingExport, setShowPaywall, downloadFile, toast])
 
+  const handlePDFExport = useCallback(async () => {
+    if (isDemo) {
+      setShowPaywall(true)
+      return
+    }
+
+    if (!activeSession?.id) {
+      toast.error('No active session selected')
+      return
+    }
+
+    setExportLoading('pdf')
+    setShowAccountingMenu(false)
+
+    try {
+      const report = reports.find(r => r.id === selectedReport)
+      const reportType = report?.exportType || 'bank_recon'
+
+      const result = await generatePDFExport({
+        sessionId: activeSession.id as Id<"reconciliationSessions">,
+        reportType: reportType as "bank_recon" | "client_query" | "transaction_listing",
+        options: {
+          includeMatched: true,
+          includeSuspense: true,
+          includeJournal: true,
+        },
+      })
+
+      if (result.success && result.jobId) {
+        // Start polling for job status
+        setPdfJobId(result.jobId)
+        toast.info('PDF generating...', 'This may take a moment')
+      } else {
+        toast.error('PDF export failed', result.error || 'Unknown error')
+        setExportLoading(null)
+      }
+    } catch (err) {
+      toast.error('PDF export failed', err instanceof Error ? err.message : 'Unknown error')
+      setExportLoading(null)
+    }
+  }, [isDemo, activeSession, selectedReport, generatePDFExport, setShowPaywall, toast])
+
+  // Empty state for Real mode with no data - MUST be after ALL hooks (including useCallback)
+  const hasNoData = !isDemo && matches.length === 0 && cashTransactions.length === 0 && accrualTransactions.length === 0
+
+  if (hasNoData) {
+    return (
+      <BrandedEmptyState
+        variant="upload"
+        title="No reports available yet"
+        description="Upload and reconcile your bank statements and invoices to generate reports."
+        action={{
+          label: 'Upload Documents',
+          onClick: () => router.push('/upload'),
+        }}
+      />
+    )
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Page Header */}
@@ -287,6 +360,23 @@ function ReportsViewContent() {
                   className="w-full px-3 py-2 text-xs text-left hover:bg-secondary transition-colors"
                 >
                   Excel export
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handlePDFExport()
+                  }}
+                  disabled={exportLoading === 'pdf'}
+                  className="w-full px-3 py-2 text-xs text-left hover:bg-secondary transition-colors flex items-center gap-2"
+                >
+                  {exportLoading === 'pdf' ? (
+                    <>
+                      <IconSpinner size={12} className="animate-spin" />
+                      Generating PDF...
+                    </>
+                  ) : (
+                    'PDF report'
+                  )}
                 </button>
                 <div className="px-3 pt-3 pb-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-t border-border">
                   Accounting

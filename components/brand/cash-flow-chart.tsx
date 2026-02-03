@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import {
   LineChart,
   Line,
@@ -107,6 +108,12 @@ export function CashFlowChart({
   className,
   showNet = false,
 }: CashFlowChartProps) {
+  // Prevent Recharts SSR warning by only rendering after mount
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   // Use intersection animation hook for scroll-triggered animation
   const { ref: chartRef, isVisible } = useIntersectionAnimation<HTMLDivElement>({
     animate,
@@ -139,6 +146,16 @@ export function CashFlowChart({
     )
   }
 
+  // Show placeholder during SSR to avoid Recharts dimension warning
+  if (!isMounted) {
+    return (
+      <div
+        className={cn('animate-pulse bg-muted/20', className)}
+        style={{ height, minHeight: height }}
+      />
+    )
+  }
+
   return (
     <div
       ref={chartRef}
@@ -147,9 +164,9 @@ export function CashFlowChart({
         isVisible ? 'opacity-100' : 'opacity-0',
         className
       )}
-      style={{ height }}
+      style={{ height, minHeight: height }}
     >
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           {/* Subtle area fills */}
           <defs>

@@ -1,7 +1,68 @@
 import { v } from "convex/values";
-import { query, mutation, internalQuery } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { requireCompanyAccess, requireDocumentAccess, verifyQueryCompanyAccess, verifyQueryResourceAccess } from "./lib/auth";
 import { documentDocValidator, documentIdValidator } from "./lib/validators";
+
+// Allowed file types for upload validation
+const ALLOWED_CONTENT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "text/csv",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+];
+
+// Max file size (50MB) - validated post-upload
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
+/**
+ * SECURITY: Sanitize filename to prevent path traversal and injection attacks
+ * Server-side validation (defense in depth - client also validates)
+ * - Removes directory separators (/, \, ..)
+ * - Removes null bytes and control characters
+ * - Limits length to 255 characters
+ * - Preserves file extension
+ */
+// Rate limiting configuration for uploads
+const UPLOAD_RATE_LIMIT = {
+  maxUploads: 20,       // Maximum uploads allowed
+  windowMs: 60 * 1000,  // Per minute (60 seconds)
+};
+
+function sanitizeFilename(filename: string): string {
+  // Remove path separators and parent directory references
+  let sanitized = filename
+    .replace(/[/\\]/g, '_')
+    .replace(/\.\./g, '_')
+    // Remove null bytes and control characters (ASCII 0-31)
+    .replace(/[\x00-\x1f]/g, '')
+    // Remove other potentially dangerous characters
+    .replace(/[<>:"|?*]/g, '_')
+    .trim();
+
+  // Limit filename length (preserve extension if possible)
+  if (sanitized.length > 255) {
+    const lastDot = sanitized.lastIndexOf('.');
+    if (lastDot > 0 && sanitized.length - lastDot <= 10) {
+      // Has a reasonable extension (1-10 chars after last dot)
+      const ext = sanitized.substring(lastDot);
+      const baseName = sanitized.slice(0, 255 - ext.length);
+      sanitized = `${baseName}${ext}`;
+    } else {
+      // No extension or extension too long - just truncate
+      sanitized = sanitized.slice(0, 255);
+    }
+  }
+
+  // Fallback for empty filenames
+  if (!sanitized || sanitized === '.') {
+    sanitized = 'unnamed_file';
+  }
+
+  return sanitized;
+}
 
 // ============ QUERIES ============
 
@@ -77,6 +138,78 @@ export const getPendingExtraction = internalQuery({
   },
 });
 
+// ============ UPLOAD FUNCTIONS ============
+
+/**
+ * Generate a presigned URL for uploading a file to Convex storage.
+ * Returns the upload URL that the client uses to POST the file.
+ * SECURITY: Includes rate limiting to prevent abuse.
+ */
+export const generateUploadUrl = mutation({
+  args: {
+    companyId: v.id("companies"),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user owns the company
+    await requireCompanyAccess(ctx, args.companyId);
+
+    // SECURITY: Check rate limit (sliding window algorithm)
+    const now = Date.now();
+    const windowStart = now - UPLOAD_RATE_LIMIT.windowMs;
+
+    const rateLimitRecord = await ctx.db
+      .query("uploadRateLimits")
+      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+      .first();
+
+    if (rateLimitRecord) {
+      // Filter timestamps to only those within the window
+      const recentTimestamps = rateLimitRecord.timestamps.filter(
+        (ts) => ts > windowStart
+      );
+
+      if (recentTimestamps.length >= UPLOAD_RATE_LIMIT.maxUploads) {
+        throw new Error(
+          `Rate limit exceeded. Maximum ${UPLOAD_RATE_LIMIT.maxUploads} uploads per minute.`
+        );
+      }
+
+      // Add new timestamp and update record
+      await ctx.db.patch(rateLimitRecord._id, {
+        timestamps: [...recentTimestamps, now],
+        updatedAt: now,
+      });
+    } else {
+      // First upload for this company - create record
+      await ctx.db.insert("uploadRateLimits", {
+        companyId: args.companyId,
+        timestamps: [now],
+        updatedAt: now,
+      });
+    }
+
+    // Generate upload URL from Convex storage
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
+ * Get a URL to access a file in Convex storage (internal only).
+ * SECURITY: This is an internalQuery - not exposed to clients.
+ * Only callable from other Convex functions (actions/mutations).
+ * URLs from Convex storage don't expire, so this can be called anytime.
+ */
+export const getStorageUrl = internalQuery({
+  args: {
+    storageId: v.id("_storage"),
+  },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    return await ctx.storage.getUrl(args.storageId);
+  },
+});
+
 // ============ MUTATIONS ============
 
 // Create document record (after upload to storage)
@@ -86,8 +219,8 @@ export const create = mutation({
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
-    storageId: v.optional(v.string()),
-    storageUrl: v.optional(v.string()),
+    contentType: v.string(), // MIME type for validation
+    storageId: v.id("_storage"), // Convex storage ID from upload
     documentType: v.union(
       v.literal("bank_statement"),
       v.literal("invoice"),
@@ -100,8 +233,26 @@ export const create = mutation({
     // Verify company ownership
     await requireCompanyAccess(ctx, args.companyId);
 
+    // SECURITY: Validate file type
+    if (!ALLOWED_CONTENT_TYPES.includes(args.contentType)) {
+      throw new Error("File type not allowed");
+    }
+
+    // SECURITY: Validate file size
+    if (args.fileSize > MAX_FILE_SIZE) {
+      throw new Error(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+    }
+
+    // SECURITY: Sanitize filename (defense in depth - client also validates)
+    const safeFileName = sanitizeFilename(args.fileName);
+
     const documentId = await ctx.db.insert("documents", {
-      ...args,
+      companyId: args.companyId,
+      fileName: safeFileName,
+      fileType: args.fileType,
+      fileSize: args.fileSize,
+      storageId: args.storageId,
+      documentType: args.documentType,
       extractionStatus: "pending",
       uploadedAt: Date.now(),
     });
@@ -253,9 +404,13 @@ export const remove = mutation({
       await ctx.db.delete(doc._id);
     }
 
-    // 3. Delete the document itself
-    // TODO: Delete from cloud storage (R2/S3) - implement in Phase C
+    // 3. Delete file from Convex storage if it exists
+    if (document.storageId) {
+      await ctx.storage.delete(document.storageId);
+    }
+
+    // 4. Delete the document record
     await ctx.db.delete(args.id);
     return null;
   },
-});;;
+});

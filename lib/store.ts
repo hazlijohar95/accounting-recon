@@ -886,42 +886,25 @@ export const useDemoWorkspaceData = () => useAppStore(
 // =============================================================================
 // MODE-AWARE SELECTORS (auto-switch between demo/real data based on isDemo)
 // =============================================================================
-// These selectors automatically return the correct data based on the current mode.
-// Use these in views to ensure proper data isolation between Demo and Real modes.
+// IMPORTANT: These hooks are now implemented in convex-hooks.ts to properly
+// query Convex in real mode. Re-exported here for backward compatibility.
+//
+// FIX P0-1/P0-2: Previously returned [] or stale data in real mode.
+// Now properly query Convex backend in real mode.
 
-/** Returns cash transactions - demo data in Demo mode, real data in Real mode */
-export const useCashTransactionsSafe = () => useAppStore((state) =>
-  state.isDemo ? state.cashTransactions : state.realCashTransactions
-)
+// Re-export mode-aware safe hooks from convex-hooks.ts
+export {
+  useCashTransactionsSafe,
+  useAccrualDocumentsSafe,
+  useSuspenseItemsSafe,
+  useMatchesSafe,
+  useSessionsSafe,
+  useActiveSessionSafe,
+} from "./convex-hooks";
 
 /** Returns accrual transactions - demo data in Demo mode, real data in Real mode */
 export const useAccrualTransactionsSafe = () => useAppStore((state) =>
   state.isDemo ? state.accrualTransactions : state.realAccrualTransactions
-)
-
-/** Returns matches - demo data in Demo mode, real data in Real mode */
-export const useMatchesSafe = () => useAppStore((state) =>
-  state.isDemo ? state.matches : state.realMatches
-)
-
-/** Returns accrual documents - demo data in Demo mode, empty in Real mode */
-export const useAccrualDocumentsSafe = () => useAppStore((state) =>
-  state.isDemo ? state.accrualDocuments : []
-)
-
-/** Returns suspense items - demo data in Demo mode, empty in Real mode */
-export const useSuspenseItemsSafe = () => useAppStore((state) =>
-  state.isDemo ? state.suspenseItems : []
-)
-
-/** Returns sessions - demo data in Demo mode, real data in Real mode */
-export const useSessionsSafe = () => useAppStore((state) =>
-  state.isDemo ? state.sessions : state.realSessions
-)
-
-/** Returns active session - demo data in Demo mode, real data in Real mode */
-export const useActiveSessionSafe = () => useAppStore((state) =>
-  state.isDemo ? state.activeSession : state.realActiveSession
 )
 
 // =============================================================================

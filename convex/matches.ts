@@ -4,6 +4,7 @@ import { Id } from "./_generated/dataModel";
 import { requireSessionAccess, requireMatchAccess, verifyQuerySessionAccess, verifyQueryResourceAccess } from "./lib/auth";
 import { ValidationErrors, BusinessErrors } from "./lib/errors";
 import { enrichedMatchValidator, matchIdValidator, matchCountsValidator, accrualDocValidator } from "./lib/validators";
+import { matchCountsByStatus, matchCountsByConfidence } from "./lib/aggregates";
 
 // ============ HELPERS ============
 
@@ -77,30 +78,45 @@ export const listBySession = query({
         .collect();
     }
 
-    // Enrich with transaction/document details
-    const enrichedMatches = await Promise.all(
-      matches.map(async (match) => {
-        const cashTxn = await ctx.db.get(match.cashTransactionId);
+    // P1-9 FIX: Batch load related entities to avoid N+1 queries
+    // Collect all IDs first
+    const cashIds = [...new Set(matches.map((m) => m.cashTransactionId))];
+    const accrualDocIds = [...new Set(
+      matches.map((m) => m.accrualDocumentId).filter((id): id is Id<"accrualDocuments"> => !!id)
+    )];
+    const accrualTxnIds = [...new Set(
+      matches.map((m) => m.accrualTransactionId).filter((id): id is Id<"transactions"> => !!id)
+    )];
 
-        // Support both old (accrualTransactionId) and new (accrualDocumentId) schema
-        let accrualTxn = null;
-        let accrualDoc = null;
+    // Batch load all related entities in parallel
+    const [cashTxns, accrualDocs, accrualTxns] = await Promise.all([
+      Promise.all(cashIds.map((id) => ctx.db.get(id))),
+      Promise.all(accrualDocIds.map((id) => ctx.db.get(id))),
+      Promise.all(accrualTxnIds.map((id) => ctx.db.get(id))),
+    ]);
 
-        if (match.accrualDocumentId) {
-          accrualDoc = await ctx.db.get(match.accrualDocumentId);
-        }
-        if (match.accrualTransactionId) {
-          accrualTxn = await ctx.db.get(match.accrualTransactionId);
-        }
-
-        return {
-          ...match,
-          cashTransaction: cashTxn,
-          accrualTransaction: accrualTxn, // Legacy
-          accrualDocument: accrualDoc, // New
-        };
-      })
+    // Build lookup maps for O(1) access
+    const cashMap = new Map(
+      cashTxns.filter((t): t is NonNullable<typeof t> => t !== null).map((t) => [t._id, t])
     );
+    const accrualDocMap = new Map(
+      accrualDocs.filter((d): d is NonNullable<typeof d> => d !== null).map((d) => [d._id, d])
+    );
+    const accrualTxnMap = new Map(
+      accrualTxns.filter((t): t is NonNullable<typeof t> => t !== null).map((t) => [t._id, t])
+    );
+
+    // Enrich matches using the lookup maps (O(1) per match instead of O(n) DB calls)
+    const enrichedMatches = matches.map((match) => ({
+      ...match,
+      cashTransaction: cashMap.get(match.cashTransactionId) ?? null,
+      accrualTransaction: match.accrualTransactionId
+        ? accrualTxnMap.get(match.accrualTransactionId) ?? null
+        : null,
+      accrualDocument: match.accrualDocumentId
+        ? accrualDocMap.get(match.accrualDocumentId) ?? null
+        : null,
+    }));
 
     return enrichedMatches;
   },
@@ -163,19 +179,24 @@ export const getCounts = query({
     const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId);
     if (!allowed) return null;
 
-    const matches = await ctx.db
-      .query("matchedPairs")
-      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
+    // O(log n) counts using aggregates instead of O(n) collect + filter
+    const [pending, approved, rejected, highConfidence, mediumConfidence, lowConfidence] = await Promise.all([
+      matchCountsByStatus.count(ctx, { bounds: { prefix: [args.sessionId, "pending"] } }),
+      matchCountsByStatus.count(ctx, { bounds: { prefix: [args.sessionId, "approved"] } }),
+      matchCountsByStatus.count(ctx, { bounds: { prefix: [args.sessionId, "rejected"] } }),
+      matchCountsByConfidence.count(ctx, { bounds: { prefix: [args.sessionId, "high"] } }),
+      matchCountsByConfidence.count(ctx, { bounds: { prefix: [args.sessionId, "medium"] } }),
+      matchCountsByConfidence.count(ctx, { bounds: { prefix: [args.sessionId, "low"] } }),
+    ]);
 
     return {
-      total: matches.length,
-      pending: matches.filter((m) => m.status === "pending").length,
-      approved: matches.filter((m) => m.status === "approved").length,
-      rejected: matches.filter((m) => m.status === "rejected").length,
-      highConfidence: matches.filter((m) => m.confidence === "high").length,
-      mediumConfidence: matches.filter((m) => m.confidence === "medium").length,
-      lowConfidence: matches.filter((m) => m.confidence === "low").length,
+      total: pending + approved + rejected,
+      pending,
+      approved,
+      rejected,
+      highConfidence,
+      mediumConfidence,
+      lowConfidence,
     };
   },
 });
@@ -387,6 +408,13 @@ export const create = mutation({
       return ValidationErrors.missingField("accrualDocumentId or accrualTransactionId");
     }
 
+    // Update aggregates for O(log n) counts
+    const matchDoc = await ctx.db.get(matchId);
+    if (matchDoc) {
+      await matchCountsByStatus.insert(ctx, matchDoc);
+      await matchCountsByConfidence.insert(ctx, matchDoc);
+    }
+
     // Update cash transaction to reflect match
     await ctx.db.patch(args.cashTransactionId, {
       status: "matched",
@@ -410,7 +438,7 @@ export const create = mutation({
 
     return matchId;
   },
-});;
+});
 
 // Approve a match
 export const approve = mutation({
@@ -424,11 +452,24 @@ export const approve = mutation({
     // Verify match ownership
     const { user } = await requireMatchAccess(ctx, args.id);
 
+    // Get old doc for aggregate update
+    const oldDoc = await ctx.db.get(args.id);
+
     await ctx.db.patch(args.id, {
       status: "approved",
       reviewedAt: Date.now(),
       reviewedBy: user._id, // Server-derived from auth context
     });
+
+    // Update aggregates for status change
+    if (oldDoc) {
+      const newDoc = await ctx.db.get(args.id);
+      if (newDoc) {
+        await matchCountsByStatus.replace(ctx, oldDoc, newDoc);
+        // Confidence doesn't change, so no need to update matchCountsByConfidence
+      }
+    }
+
     return args.id;
   },
 });
@@ -469,6 +510,9 @@ export const reject = mutation({
       }
     }
 
+    // Get old doc for aggregate update
+    const oldDoc = await ctx.db.get(args.id);
+
     // All entities validated - now perform atomic update
     // Convex mutations are transactional: all succeed or all rollback
 
@@ -478,6 +522,14 @@ export const reject = mutation({
       reviewedAt: Date.now(),
       reviewedBy: user._id, // Server-derived from auth context
     });
+
+    // Update aggregates for status change
+    if (oldDoc) {
+      const newDoc = await ctx.db.get(args.id);
+      if (newDoc) {
+        await matchCountsByStatus.replace(ctx, oldDoc, newDoc);
+      }
+    }
 
     // 2. Reset cash transaction to pending
     await ctx.db.patch(match.cashTransactionId, {
@@ -501,7 +553,7 @@ export const reject = mutation({
 
     return args.id;
   },
-});;
+});
 
 // Bulk approve high-confidence matches
 export const approveHighConfidence = mutation({

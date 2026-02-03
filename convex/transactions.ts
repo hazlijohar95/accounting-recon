@@ -5,6 +5,7 @@ import { validateAmount, validateBulkSize, validateDate } from "./lib/validation
 import { MAX_BULK_IMPORT_SIZE } from "./lib/constants";
 import { BusinessErrors, ValidationErrors } from "./lib/errors";
 import { transactionDocValidator, transactionIdValidator } from "./lib/validators";
+import { transactionCounts, transactionSums } from "./lib/aggregates";
 
 // ============ QUERIES ============
 
@@ -150,9 +151,17 @@ export const create = mutation({
       status: "pending",
       createdAt: Date.now(),
     });
+
+    // Update aggregates for O(log n) counts and sums
+    const doc = await ctx.db.get(transactionId);
+    if (doc) {
+      await transactionCounts.insert(ctx, doc);
+      await transactionSums.insert(ctx, doc);
+    }
+
     return transactionId;
   },
-});
+});;
 
 // Bulk add transactions (for imports)
 export const createBulk = mutation({
@@ -207,11 +216,18 @@ export const createBulk = mutation({
         createdAt: now,
       });
       ids.push(id);
+
+      // Update aggregates for O(log n) counts and sums
+      const doc = await ctx.db.get(id);
+      if (doc) {
+        await transactionCounts.insert(ctx, doc);
+        await transactionSums.insert(ctx, doc);
+      }
     }
 
     return ids;
   },
-});
+});;
 
 // Update transaction status (when matched)
 export const updateStatus = mutation({
@@ -229,11 +245,25 @@ export const updateStatus = mutation({
     // Verify transaction ownership
     await requireTransactionAccess(ctx, args.id);
 
+    // Get old document for aggregate update
+    const oldDoc = await ctx.db.get(args.id);
+    if (!oldDoc) return args.id;
+
     const { id, ...updates } = args;
     await ctx.db.patch(id, updates);
+
+    // Update aggregates if status changed (sortKey includes status)
+    if (oldDoc.status !== args.status) {
+      const newDoc = await ctx.db.get(id);
+      if (newDoc) {
+        await transactionCounts.replace(ctx, oldDoc, newDoc);
+        // transactionSums sortKey doesn't include status, so no need to update
+      }
+    }
+
     return id;
   },
-});
+});;
 
 // Delete a transaction
 export const remove = mutation({
@@ -243,7 +273,17 @@ export const remove = mutation({
     // Verify transaction ownership
     await requireTransactionAccess(ctx, args.id);
 
+    // Get doc before delete for aggregate update
+    const oldDoc = await ctx.db.get(args.id);
+
     await ctx.db.delete(args.id);
+
+    // Remove from aggregates
+    if (oldDoc) {
+      await transactionCounts.delete(ctx, oldDoc);
+      await transactionSums.delete(ctx, oldDoc);
+    }
+
     return null;
   },
-});
+});;

@@ -454,8 +454,54 @@ function CompanySection({ company, isDemo }: CompanySectionProps) {
 
 function PreferencesSection() {
   const { theme, setTheme } = useTheme()
-  const [dateFormat, setDateFormat] = useState('DD/MM/YYYY')
-  const [numberFormat, setNumberFormat] = useState('1,234.56')
+  const isDemo = useIsDemo()
+  const preferences = useQuery(api.settings.getUserPreferences)
+  const updatePreferences = useMutation(api.settings.updateUserPreferences)
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Local state initialized from backend
+  const [dateFormat, setDateFormat] = useState(preferences?.dateFormat ?? 'DD/MM/YYYY')
+  const [numberFormat, setNumberFormat] = useState(preferences?.numberFormat ?? '1,234.56')
+
+  // Sync local state when preferences load
+  useEffect(() => {
+    if (preferences) {
+      setDateFormat(preferences.dateFormat)
+      setNumberFormat(preferences.numberFormat)
+    }
+  }, [preferences])
+
+  const handleDateFormatChange = async (newFormat: string) => {
+    setDateFormat(newFormat)
+    if (isDemo) return
+
+    setIsSaving(true)
+    try {
+      await updatePreferences({ dateFormat: newFormat })
+      toast.success('Date format updated')
+    } catch (error) {
+      toast.error('Failed to save preference')
+      setDateFormat(preferences?.dateFormat ?? 'DD/MM/YYYY')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleNumberFormatChange = async (newFormat: string) => {
+    setNumberFormat(newFormat)
+    if (isDemo) return
+
+    setIsSaving(true)
+    try {
+      await updatePreferences({ numberFormat: newFormat })
+      toast.success('Number format updated')
+    } catch (error) {
+      toast.error('Failed to save preference')
+      setNumberFormat(preferences?.numberFormat ?? '1,234.56')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const themes = [
     { value: 'light', label: 'Light', icon: <IconSun size={16} /> },
@@ -492,6 +538,9 @@ function PreferencesSection() {
             </button>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">
+          Theme is saved to your browser
+        </p>
       </div>
 
       {/* Date Format */}
@@ -499,8 +548,9 @@ function PreferencesSection() {
         <label className="text-sm font-medium">Date Format</label>
         <select
           value={dateFormat}
-          onChange={(e) => setDateFormat(e.target.value)}
-          className="w-full px-3 py-2 text-sm bg-background border border-border focus:outline-none focus:ring-1 focus:ring-foreground"
+          onChange={(e) => handleDateFormatChange(e.target.value)}
+          disabled={isSaving}
+          className="w-full px-3 py-2 text-sm bg-background border border-border focus:outline-none focus:ring-1 focus:ring-foreground disabled:opacity-50"
         >
           <option value="DD/MM/YYYY">DD/MM/YYYY (31/01/2025)</option>
           <option value="MM/DD/YYYY">MM/DD/YYYY (01/31/2025)</option>
@@ -513,8 +563,9 @@ function PreferencesSection() {
         <label className="text-sm font-medium">Number Format</label>
         <select
           value={numberFormat}
-          onChange={(e) => setNumberFormat(e.target.value)}
-          className="w-full px-3 py-2 text-sm bg-background border border-border focus:outline-none focus:ring-1 focus:ring-foreground"
+          onChange={(e) => handleNumberFormatChange(e.target.value)}
+          disabled={isSaving}
+          className="w-full px-3 py-2 text-sm bg-background border border-border focus:outline-none focus:ring-1 focus:ring-foreground disabled:opacity-50"
         >
           <option value="1,234.56">1,234.56 (US/UK)</option>
           <option value="1.234,56">1.234,56 (Europe)</option>
@@ -523,9 +574,16 @@ function PreferencesSection() {
       </div>
 
       <div className="pt-4 border-t border-border">
-        <p className="text-xs text-muted-foreground">
-          Preferences are saved automatically to your browser
-        </p>
+        {isDemo ? (
+          <p className="text-xs text-muted-foreground">
+            Sign in to save preferences across devices
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <IconCheck size={12} className="text-green-600" />
+            Preferences are saved to your account
+          </p>
+        )}
       </div>
     </div>
   )
@@ -536,14 +594,50 @@ function PreferencesSection() {
 // =============================================================================
 
 function NotificationsSection() {
+  const isDemo = useIsDemo()
+  const preferences = useQuery(api.settings.getUserPreferences)
+  const updatePreferences = useMutation(api.settings.updateUserPreferences)
+  const [isSaving, setIsSaving] = useState<string | null>(null)
+
+  // Local state initialized from backend
   const [emailNotifications, setEmailNotifications] = useState({
-    reconciliationComplete: true,
-    weeklyDigest: false,
-    newFeatures: true,
+    reconciliationComplete: preferences?.emailNotifications?.reconciliationComplete ?? true,
+    weeklyDigest: preferences?.emailNotifications?.weeklyDigest ?? false,
+    newFeatures: preferences?.emailNotifications?.newFeatures ?? true,
   })
 
-  const toggleNotification = (key: keyof typeof emailNotifications) => {
-    setEmailNotifications(prev => ({ ...prev, [key]: !prev[key] }))
+  // Sync local state when preferences load
+  useEffect(() => {
+    if (preferences?.emailNotifications) {
+      setEmailNotifications({
+        reconciliationComplete: preferences.emailNotifications.reconciliationComplete,
+        weeklyDigest: preferences.emailNotifications.weeklyDigest,
+        newFeatures: preferences.emailNotifications.newFeatures,
+      })
+    }
+  }, [preferences])
+
+  const toggleNotification = async (key: keyof typeof emailNotifications) => {
+    const newValue = !emailNotifications[key]
+    setEmailNotifications(prev => ({ ...prev, [key]: newValue }))
+
+    if (isDemo) return
+
+    setIsSaving(key)
+    try {
+      // Map frontend keys to backend field names
+      const fieldMap: Record<string, string> = {
+        reconciliationComplete: 'emailReconciliation',
+        weeklyDigest: 'emailWeeklyDigest',
+        newFeatures: 'emailProductUpdates',
+      }
+      await updatePreferences({ [fieldMap[key]]: newValue })
+    } catch (error) {
+      toast.error('Failed to save notification preference')
+      setEmailNotifications(prev => ({ ...prev, [key]: !newValue }))
+    } finally {
+      setIsSaving(null)
+    }
   }
 
   const notifications = [
@@ -585,8 +679,9 @@ function NotificationsSection() {
             </div>
             <button
               onClick={() => toggleNotification(notification.key)}
+              disabled={isSaving === notification.key}
               className={cn(
-                'relative w-10 h-6 rounded-full transition-colors',
+                'relative w-10 h-6 rounded-full transition-colors disabled:opacity-50',
                 emailNotifications[notification.key] ? 'bg-foreground' : 'bg-muted'
               )}
               role="switch"
@@ -604,9 +699,16 @@ function NotificationsSection() {
       </div>
 
       <div className="pt-4 border-t border-border">
-        <p className="text-xs text-muted-foreground">
-          You can unsubscribe from any email at any time
-        </p>
+        {isDemo ? (
+          <p className="text-xs text-muted-foreground">
+            Sign in to save notification preferences
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <IconCheck size={12} className="text-green-600" />
+            Preferences are saved to your account
+          </p>
+        )}
       </div>
     </div>
   )
@@ -627,20 +729,12 @@ function DataSection({ isDemo }: DataSectionProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const { logout } = useAuth()
 
-  // Note: These mutations will work after running `npx convex dev` to generate types
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const exportUserData = useMutation((api as any).settings?.exportUserData ?? null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const deleteAccount = useMutation((api as any).settings?.deleteAccount ?? null)
+  const exportUserData = useMutation(api.settings.exportUserData)
+  const deleteAccount = useMutation(api.settings.deleteAccount)
 
   const handleExport = async () => {
     if (isDemo) {
       toast.error('Sign in to export your data')
-      return
-    }
-
-    if (!exportUserData) {
-      toast.error('Export not available. Please try again later.')
       return
     }
 
@@ -660,8 +754,13 @@ function DataSection({ isDemo }: DataSectionProps) {
       URL.revokeObjectURL(url)
 
       toast.success('Data exported successfully')
-    } catch (error) {
-      toast.error('Failed to export data')
+    } catch (error: any) {
+      // Check if rate limited
+      if (error?.message?.includes('Rate limited')) {
+        toast.error(error.message)
+      } else {
+        toast.error('Failed to export data')
+      }
     } finally {
       setIsExporting(false)
     }
@@ -670,18 +769,18 @@ function DataSection({ isDemo }: DataSectionProps) {
   const handleDeleteAccount = async () => {
     if (deleteConfirmation !== 'DELETE') return
 
-    if (!deleteAccount) {
-      toast.error('Delete not available. Please try again later.')
-      return
-    }
-
     setIsDeleting(true)
     try {
       await deleteAccount()
       toast.success('Account deleted')
       await logout()
-    } catch (error) {
-      toast.error('Failed to delete account')
+    } catch (error: any) {
+      // Check if rate limited
+      if (error?.message?.includes('Rate limited')) {
+        toast.error(error.message)
+      } else {
+        toast.error('Failed to delete account')
+      }
       setIsDeleting(false)
     }
   }

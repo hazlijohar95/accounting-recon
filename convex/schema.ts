@@ -86,8 +86,7 @@ export default defineSchema({
     fileName: v.string(),
     fileType: v.string(), // "pdf", "csv", "xlsx"
     fileSize: v.number(), // bytes
-    storageId: v.optional(v.string()), // R2/S3 storage key
-    storageUrl: v.optional(v.string()), // Public URL for ML service access
+    storageId: v.optional(v.id("_storage")), // Convex file storage ID
     documentType: v.union(
       v.literal("bank_statement"),
       v.literal("invoice"),
@@ -456,6 +455,36 @@ export default defineSchema({
     value: v.number(),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  // User preferences - persists display settings and notification preferences
+  userPreferences: defineTable({
+    userId: v.id("users"),
+    dateFormat: v.optional(v.string()), // "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD"
+    numberFormat: v.optional(v.string()), // "1,234.56" | "1.234,56" | "1 234.56"
+    emailReconciliation: v.optional(v.boolean()), // Notify when reconciliation completes
+    emailWeeklyDigest: v.optional(v.boolean()), // Weekly summary email
+    emailProductUpdates: v.optional(v.boolean()), // New features notifications
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // Rate limit tracking for destructive operations (per-user)
+  rateLimits: defineTable({
+    userId: v.id("users"),
+    action: v.string(), // "deleteAccount" | "exportUserData"
+    timestamps: v.array(v.number()), // Array of attempt timestamps
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_action", ["userId", "action"]),
+
+  // Rate limit tracking for uploads (per-company)
+  // SECURITY: Prevents abuse by limiting uploads per company per minute
+  uploadRateLimits: defineTable({
+    companyId: v.id("companies"),
+    timestamps: v.array(v.number()), // Array of upload attempt timestamps
+    updatedAt: v.number(),
+  })
+    .index("by_company", ["companyId"]),
 
   // Worksheet chat messages for conversational AI queries on spreadsheet data
   worksheetMessages: defineTable({

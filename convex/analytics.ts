@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { verifyQueryCompanyAccess } from "./lib/auth";
+import { transactionCounts } from "./lib/aggregates";
 
 // Return validators for analytics
 const monthlyFlowReturnValidator = v.array(
@@ -218,16 +219,14 @@ export const getReconciliationStats = query({
     const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
     if (!allowed) return { matched: 0, pending: 0, suspense: 0, total: 0, matchRate: 0 };
 
-    const transactions = await ctx.db
-      .query("transactions")
-      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
-      .collect();
+    // O(log n) counts using aggregates instead of O(n) collect + filter
+    const [matched, pending, suspense] = await Promise.all([
+      transactionCounts.count(ctx, { bounds: { prefix: [args.companyId, "cash", "matched"] } }),
+      transactionCounts.count(ctx, { bounds: { prefix: [args.companyId, "cash", "pending"] } }),
+      transactionCounts.count(ctx, { bounds: { prefix: [args.companyId, "cash", "suspense"] } }),
+    ]);
 
-    const cashTxns = transactions.filter((t) => t.type === "cash");
-    const matched = cashTxns.filter((t) => t.status === "matched").length;
-    const pending = cashTxns.filter((t) => t.status === "pending").length;
-    const suspense = cashTxns.filter((t) => t.status === "suspense").length;
-    const total = cashTxns.length;
+    const total = matched + pending + suspense;
 
     return {
       matched,
@@ -237,7 +236,7 @@ export const getReconciliationStats = query({
       matchRate: total > 0 ? Math.round((matched / total) * 100) : 0,
     };
   },
-});
+});;
 
 // Return validator for recent activity
 const recentActivityReturnValidator = v.array(

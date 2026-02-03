@@ -45,6 +45,7 @@ export function VideoSection() {
               loop
               autoPlay={false}
               clickToPlay
+              acknowledgeRemotionLicense
               ref={(ref) => {
                 if (ref) {
                   setPlayerRef(ref as any)

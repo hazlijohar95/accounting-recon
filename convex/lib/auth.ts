@@ -11,16 +11,20 @@ import {
  * Check if running in production environment.
  * Uses CONVEX_CLOUD_URL to detect if we're on production deployment.
  * NODE_ENV is unreliable in Convex as it's often "production" even in dev.
+ *
+ * FIX P0-3: Now uses AUTH_DEV_MODE instead of AUTH_STRICT_MODE.
+ * Production mode is the DEFAULT - dev mode must be explicitly enabled.
  */
 export function isProductionMode(): boolean {
-  // Check for explicit production flag first
-  if (process.env.AUTH_STRICT_MODE === "true") {
-    return true;
+  // If dev mode is explicitly enabled, we're NOT in production
+  if (process.env.AUTH_DEV_MODE === "true") {
+    return false;
   }
   // In Convex, check if we're on the production deployment
   // Development deployments typically have "dev" in the URL
   const convexUrl = process.env.CONVEX_CLOUD_URL || "";
-  return convexUrl.includes(".convex.cloud") && !convexUrl.includes("-dev");
+  // Default to production mode for safety if not clearly a dev URL
+  return !convexUrl.includes("-dev");
 }
 
 /**
@@ -30,12 +34,21 @@ export function isProductionMode(): boolean {
  *
  * Security note: The fallback still requires a valid user in the database,
  * so the attack surface is limited to impersonating existing users.
- * For production, set AUTH_STRICT_MODE=true to disable this.
+ *
+ * FIX P0-3: SECURE BY DEFAULT - must explicitly opt-in to dev mode.
+ * Set AUTH_DEV_MODE=true ONLY in development environments.
  */
 function allowAuthFallback(): boolean {
-  // Always allow fallback unless explicitly in strict mode
+  // SECURE BY DEFAULT: Only allow fallback if explicitly in dev mode
   // The workosUserId must still exist in DB, limiting attack surface
-  return process.env.AUTH_STRICT_MODE !== "true";
+  const devMode = process.env.AUTH_DEV_MODE === "true";
+  if (devMode) {
+    console.warn(
+      "[Auth Security] AUTH_DEV_MODE is enabled - auth bypass allowed. " +
+      "DO NOT use in production!"
+    );
+  }
+  return devMode;
 }
 
 /**

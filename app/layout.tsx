@@ -20,6 +20,7 @@ const cormorant = Cormorant_Garamond({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://reconcile.app'),
   title: 'Reconcile',
   description: 'Numbers that agree. Automated cash-accrual reconciliation.',
   icons: {

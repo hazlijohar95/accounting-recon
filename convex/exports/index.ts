@@ -13,7 +13,7 @@ import { generateXeroExport } from "./accounting/xero";
 import { authKit } from "../auth";
 
 // Re-export PDF actions for convenience
-export { generatePDFExport, getPDFJobStatus } from "./pdf";
+export { generatePDFExport, getPDFJobStatus, retryPDFExport } from "./pdf";
 
 // Return validators for exports
 const verifyAccessReturnValidator = v.object({

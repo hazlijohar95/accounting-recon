@@ -82,3 +82,16 @@ export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; column
     </div>
   )
 }
+
+export function SkeletonStatCard({ className }: SkeletonProps) {
+  return (
+    <div className={cn('border border-border p-4 space-y-3', className)}>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-3" />
+      </div>
+      <Skeleton className="h-8 w-24" />
+      <Skeleton className="h-3 w-20" />
+    </div>
+  )
+}
