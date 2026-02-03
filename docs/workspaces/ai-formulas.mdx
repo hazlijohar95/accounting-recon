@@ -1,0 +1,260 @@
+---
+title: AI Formulas
+description: Using the ENRICH formula for AI-powered data enrichment
+---
+
+# AI Formulas
+
+The `=ENRICH()` formula is the core of workspace AI capabilities. It sends prompts to an AI model and returns the response directly in your cell.
+
+## Basic Syntax
+
+```
+=ENRICH("Your prompt here")
+```
+
+The formula takes a text prompt and returns the AI's response.
+
+**Simple example:**
+```
+=ENRICH("What category is 'Office Depot'?")
+→ "Office Supplies & Equipment"
+```
+
+## Referencing Cells
+
+Combine prompts with cell references using `&`:
+
+```
+=ENRICH("Categorize this vendor: " & A2)
+```
+
+If A2 contains "Staples Inc", the AI receives:
+> "Categorize this vendor: Staples Inc"
+
+### Multiple Cell References
+
+Reference multiple cells for richer context:
+
+```
+=ENRICH("Is " & A2 & " a recurring expense? Amount: " & B2)
+```
+
+### Cell Ranges
+
+Reference ranges for bulk analysis:
+
+```
+=ENRICH("Summarize these vendors: " & A2:A10)
+```
+
+## Prompt Patterns
+
+### Categorization
+
+Assign categories to items:
+
+```
+=ENRICH("Categorize this expense into one of: Office, Travel, Marketing, Utilities, Payroll. Expense: " & A2)
+```
+
+<Tip>
+  Provide a specific list of categories for consistent results.
+</Tip>
+
+### Yes/No Questions
+
+Binary classification:
+
+```
+=ENRICH("Answer YES or NO: Is this a recurring expense? " & A2)
+```
+
+### Extraction
+
+Pull specific information from text:
+
+```
+=ENRICH("Extract the invoice number from: " & A2)
+=ENRICH("Extract the vendor name from: " & A2)
+```
+
+### Summarization
+
+Condense information:
+
+```
+=ENRICH("Summarize in 10 words or less: " & A2)
+=ENRICH("One-line summary of this transaction: " & A2 & " - " & B2)
+```
+
+### Matching Suggestions
+
+Find related items:
+
+```
+=ENRICH("What invoice might match this bank transaction? Transaction: " & A2 & ", Amount: " & B2)
+```
+
+### Risk Assessment
+
+Flag potential issues:
+
+```
+=ENRICH("Rate risk level (Low/Medium/High) for this vendor: " & A2)
+=ENRICH("Any red flags in this transaction? " & A2)
+```
+
+## Formula Examples
+
+### Expense Categorization Worksheet
+
+| A (Description) | B (Amount) | C (Category) | D (Subcategory) |
+|-----------------|------------|--------------|-----------------|
+| Office Depot supplies | 450 | `=ENRICH("Main category: " & A2)` | `=ENRICH("Subcategory: " & A2)` |
+| Uber trip downtown | 35 | Office Supplies | Stationery |
+| Google Ads payment | 2500 | Transportation | Rideshare |
+
+### Vendor Risk Analysis
+
+| A (Vendor) | B (Total Spent) | C (Risk) | D (Notes) |
+|------------|-----------------|----------|-----------|
+| New Vendor LLC | 50000 | `=ENRICH("Risk level (L/M/H) for new vendor with " & B2 & " spend")` | `=ENRICH("Due diligence notes for: " & A2)` |
+
+### Transaction Classification
+
+| A (Description) | B (Recurring?) | C (Category) |
+|-----------------|----------------|--------------|
+| Monthly hosting fee | `=ENRICH("YES/NO recurring: " & A2)` | `=ENRICH("Category: " & A2)` |
+| One-time equipment | YES | IT Infrastructure |
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Be specific in prompts">
+    **Good:** "Categorize into: Office, Travel, Marketing, Other"
+
+    **Bad:** "What category?"
+
+    Specific prompts get consistent, useful responses.
+  </Accordion>
+
+  <Accordion title="Provide context">
+    **Good:** "Is this a recurring monthly expense? Description: " & A2 & ", Amount: " & B2
+
+    **Bad:** "Recurring?"
+
+    More context leads to better AI understanding.
+  </Accordion>
+
+  <Accordion title="Request specific formats">
+    **Good:** "Answer with only YES or NO: Is this..."
+
+    **Bad:** "Is this a recurring expense?"
+
+    Format instructions ensure parseable responses.
+  </Accordion>
+
+  <Accordion title="Use cell references liberally">
+    Instead of hardcoding values, reference cells so formulas work when data changes:
+
+    ```
+    =ENRICH("Categorize: " & A2)  // Good
+    =ENRICH("Categorize: Office Depot")  // Bad - won't update
+    ```
+  </Accordion>
+
+  <Accordion title="Keep prompts concise">
+    AI works better with clear, concise prompts. Avoid unnecessary words:
+
+    **Good:** "Category for: " & A2
+    **Bad:** "Could you please tell me what category you think this might fall into: " & A2
+  </Accordion>
+</AccordionGroup>
+
+## Processing and Status
+
+### How Processing Works
+
+1. When you enter an ENRICH formula, the cell shows ⏳ (Pending)
+2. The request is queued for AI processing
+3. Cell shows 🔄 (Running) while AI processes
+4. Result appears when complete ✅
+5. If error occurs, cell shows ❌ with error message
+
+### Batch Processing
+
+When you have many ENRICH formulas:
+- Formulas process in parallel (up to 10 concurrent)
+- Large batches may take 10-30 seconds to fully complete
+- Results appear as they finish (not necessarily in order)
+
+### Refresh Results
+
+To re-run an ENRICH formula:
+1. Click the cell
+2. Press F5 or click **Refresh** in the toolbar
+3. Formula re-executes with fresh AI call
+
+<Note>
+  Each ENRICH call counts toward your monthly AI call limit. Refreshing uses an additional call.
+</Note>
+
+## Error Handling
+
+Common errors and solutions:
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| "Rate limited" | Too many concurrent requests | Wait a moment and refresh |
+| "Prompt too long" | Cell references contain too much text | Shorten the referenced data |
+| "API error" | Temporary AI service issue | Wait and retry |
+| "Limit exceeded" | Monthly AI calls exhausted | Upgrade plan or wait for reset |
+
+## Advanced Patterns
+
+### Conditional Enrichment
+
+Use IF to conditionally enrich:
+
+```
+=IF(B2 > 10000, ENRICH("High-value transaction review: " & A2), "N/A")
+```
+
+Only calls AI for transactions over 10,000.
+
+### Chained Enrichment
+
+Reference other ENRICH results:
+
+```
+Column C: =ENRICH("Category: " & A2)
+Column D: =ENRICH("Subcategory of " & C2 & " for: " & A2)
+```
+
+<Warning>
+  Chained formulas must wait for dependencies. Column D won't process until Column C completes.
+</Warning>
+
+### Template Prompts
+
+Create a prompt template in a cell and reference it:
+
+```
+Cell Z1: "Categorize this expense into Office, Travel, Marketing, or Other: "
+Cell C2: =ENRICH(Z1 & A2)
+Cell C3: =ENRICH(Z1 & A3)
+```
+
+Changing Z1 updates all formulas using it (after refresh).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Workspace Overview" icon="table" href="/workspaces/overview">
+    Learn more about workspace features
+  </Card>
+  <Card title="Semantic Matching" icon="brain" href="/ai-features/semantic-matching">
+    See how AI powers reconciliation matching
+  </Card>
+</CardGroup>

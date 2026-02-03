@@ -47,6 +47,8 @@ function reconcileReducer(state: ReconcileState, action: ReconcileAction): Recon
       }
     case 'POP_UNDO':
       return { ...state, undoStack: state.undoStack.slice(1) }
+    case 'REMOVE_UNDO_BY_MATCH_ID':
+      return { ...state, undoStack: state.undoStack.filter((a) => a.matchId !== action.payload) }
     default:
       return state
   }
@@ -114,6 +116,10 @@ export function useReconcileState() {
     dispatch({ type: 'POP_UNDO' })
   }, [])
 
+  const removeUndoByMatchId = useCallback((matchId: string) => {
+    dispatch({ type: 'REMOVE_UNDO_BY_MATCH_ID', payload: matchId })
+  }, [])
+
   // Memoized filter check
   const hasActiveFilters = useMemo(() => {
     const { filters } = state
@@ -149,5 +155,6 @@ export function useReconcileState() {
     clearFilters,
     pushUndo,
     popUndo,
+    removeUndoByMatchId,
   }
 }

@@ -1,0 +1,116 @@
+<svg width="600" height="350" viewBox="0 0 600 350" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="600" height="350" fill="#FAFAFA"/>
+
+  <!-- Header -->
+  <rect width="600" height="48" fill="#000000"/>
+  <text x="24" y="30" font-family="system-ui" font-size="14" fill="white" font-weight="600">Workspace: Q4 Analysis</text>
+  <rect x="480" y="12" width="100" height="24" rx="4" fill="#333333"/>
+  <text x="530" y="28" font-family="system-ui" font-size="10" fill="white" text-anchor="middle">+ Add Column</text>
+
+  <!-- Sheet tabs -->
+  <rect y="48" width="600" height="32" fill="white" stroke="#E0E0E0"/>
+  <rect x="12" y="54" width="80" height="20" rx="2" fill="#000000"/>
+  <text x="52" y="68" font-family="system-ui" font-size="10" fill="white" text-anchor="middle">Sheet1</text>
+  <rect x="96" y="54" width="100" height="20" rx="2" fill="white" stroke="#E0E0E0"/>
+  <text x="146" y="68" font-family="system-ui" font-size="10" fill="#666666" text-anchor="middle">Vendor Analysis</text>
+  <rect x="200" y="54" width="24" height="20" rx="2" fill="white" stroke="#E0E0E0"/>
+  <text x="212" y="68" font-family="system-ui" font-size="12" fill="#666666" text-anchor="middle">+</text>
+
+  <!-- Column headers -->
+  <rect y="80" width="600" height="28" fill="#F5F5F5"/>
+  <rect x="0" y="80" width="40" height="28" fill="#EEEEEE"/>
+  <text x="20" y="98" font-family="system-ui" font-size="10" fill="#999999" text-anchor="middle">#</text>
+
+  <rect x="40" y="80" width="140" height="28" fill="#F5F5F5" stroke="#E0E0E0"/>
+  <text x="110" y="98" font-family="system-ui" font-size="10" fill="#000000" text-anchor="middle" font-weight="600">A: Vendor</text>
+
+  <rect x="180" y="80" width="100" height="28" fill="#F5F5F5" stroke="#E0E0E0"/>
+  <text x="230" y="98" font-family="system-ui" font-size="10" fill="#000000" text-anchor="middle" font-weight="600">B: Amount</text>
+
+  <rect x="280" y="80" width="140" height="28" fill="#F5F5F5" stroke="#E0E0E0"/>
+  <text x="350" y="98" font-family="system-ui" font-size="10" fill="#000000" text-anchor="middle" font-weight="600">C: Category</text>
+  <circle cx="400" cy="94" r="8" fill="#333333"/>
+  <text x="400" y="98" font-family="system-ui" font-size="8" fill="white" text-anchor="middle">AI</text>
+
+  <rect x="420" y="80" width="180" height="28" fill="#F5F5F5" stroke="#E0E0E0"/>
+  <text x="510" y="98" font-family="system-ui" font-size="10" fill="#000000" text-anchor="middle" font-weight="600">D: Notes</text>
+
+  <!-- Row 1 -->
+  <rect y="108" width="600" height="36" fill="white"/>
+  <rect x="0" y="108" width="40" height="36" fill="#FAFAFA"/>
+  <text x="20" y="130" font-family="system-ui" font-size="10" fill="#999999" text-anchor="middle">1</text>
+
+  <rect x="40" y="108" width="140" height="36" fill="white" stroke="#E0E0E0"/>
+  <text x="50" y="130" font-family="system-ui" font-size="11" fill="#000000">ABC Trading Sdn Bhd</text>
+
+  <rect x="180" y="108" width="100" height="36" fill="white" stroke="#E0E0E0"/>
+  <text x="270" y="130" font-family="system-ui" font-size="11" fill="#000000" text-anchor="end">RM 45,000</text>
+
+  <rect x="280" y="108" width="140" height="36" fill="#F0FFF4" stroke="#E0E0E0"/>
+  <text x="290" y="130" font-family="system-ui" font-size="11" fill="#22C55E">Office Supplies</text>
+  <circle cx="400" cy="126" r="6" fill="#22C55E"/>
+  <path d="M397 126 L399 128 L403 124" stroke="white" stroke-width="1.5" fill="none"/>
+
+  <rect x="420" y="108" width="180" height="36" fill="white" stroke="#E0E0E0"/>
+  <text x="430" y="130" font-family="system-ui" font-size="10" fill="#666666">Regular vendor, monthly orders</text>
+
+  <!-- Row 2 -->
+  <rect y="144" width="600" height="36" fill="#FAFAFA"/>
+  <rect x="0" y="144" width="40" height="36" fill="#F5F5F5"/>
+  <text x="20" y="166" font-family="system-ui" font-size="10" fill="#999999" text-anchor="middle">2</text>
+
+  <rect x="40" y="144" width="140" height="36" fill="#FAFAFA" stroke="#E0E0E0"/>
+  <text x="50" y="166" font-family="system-ui" font-size="11" fill="#000000">XYZ Corporation</text>
+
+  <rect x="180" y="144" width="100" height="36" fill="#FAFAFA" stroke="#E0E0E0"/>
+  <text x="270" y="166" font-family="system-ui" font-size="11" fill="#000000" text-anchor="end">RM 23,500</text>
+
+  <rect x="280" y="144" width="140" height="36" fill="#FFF7ED" stroke="#E0E0E0"/>
+  <text x="290" y="166" font-family="system-ui" font-size="11" fill="#F59E0B">Processing...</text>
+  <circle cx="400" cy="162" r="6" fill="#F59E0B"/>
+  <text x="400" y="166" font-family="system-ui" font-size="8" fill="white" text-anchor="middle">⟳</text>
+
+  <rect x="420" y="144" width="180" height="36" fill="#FAFAFA" stroke="#E0E0E0"/>
+
+  <!-- Row 3 -->
+  <rect y="180" width="600" height="36" fill="white"/>
+  <rect x="0" y="180" width="40" height="36" fill="#FAFAFA"/>
+  <text x="20" y="202" font-family="system-ui" font-size="10" fill="#999999" text-anchor="middle">3</text>
+
+  <rect x="40" y="180" width="140" height="36" fill="white" stroke="#E0E0E0"/>
+  <text x="50" y="202" font-family="system-ui" font-size="11" fill="#000000">DEF Services</text>
+
+  <rect x="180" y="180" width="100" height="36" fill="white" stroke="#E0E0E0"/>
+  <text x="270" y="202" font-family="system-ui" font-size="11" fill="#000000" text-anchor="end">RM 12,800</text>
+
+  <rect x="280" y="180" width="140" height="36" fill="#F0FFF4" stroke="#E0E0E0"/>
+  <text x="290" y="202" font-family="system-ui" font-size="11" fill="#22C55E">Professional Services</text>
+  <circle cx="400" cy="198" r="6" fill="#22C55E"/>
+  <path d="M397 198 L399 200 L403 196" stroke="white" stroke-width="1.5" fill="none"/>
+
+  <rect x="420" y="180" width="180" height="36" fill="white" stroke="#E0E0E0"/>
+  <text x="430" y="202" font-family="system-ui" font-size="10" fill="#666666">Quarterly consulting</text>
+
+  <!-- Row 4 - Empty -->
+  <rect y="216" width="600" height="36" fill="#FAFAFA"/>
+  <rect x="0" y="216" width="40" height="36" fill="#F5F5F5"/>
+  <text x="20" y="238" font-family="system-ui" font-size="10" fill="#999999" text-anchor="middle">4</text>
+
+  <rect x="40" y="216" width="140" height="36" fill="#FAFAFA" stroke="#E0E0E0"/>
+  <rect x="180" y="216" width="100" height="36" fill="#FAFAFA" stroke="#E0E0E0"/>
+  <rect x="280" y="216" width="140" height="36" fill="#FAFAFA" stroke="#E0E0E0"/>
+  <rect x="420" y="216" width="180" height="36" fill="#FAFAFA" stroke="#E0E0E0"/>
+
+  <!-- Formula bar -->
+  <rect y="260" width="600" height="40" fill="white" stroke="#E0E0E0"/>
+  <text x="16" y="284" font-family="system-ui" font-size="10" fill="#666666">fx</text>
+  <rect x="40" y="268" width="540" height="24" rx="4" fill="#F5F5F5"/>
+  <text x="50" y="284" font-family="system-ui" font-size="10" fill="#000000" font-family="monospace">=ENRICH("Categorize this vendor into a business category: " &amp; A2)</text>
+
+  <!-- Status bar -->
+  <rect y="310" width="600" height="40" fill="#F5F5F5"/>
+  <text x="20" y="334" font-family="system-ui" font-size="10" fill="#666666">3 rows • 1 AI formula running • 2 complete</text>
+  <circle cx="550" cy="330" r="6" fill="#22C55E"/>
+  <text x="560" y="334" font-family="system-ui" font-size="9" fill="#666666">Synced</text>
+</svg>

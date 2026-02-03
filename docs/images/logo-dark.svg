@@ -1,0 +1,11 @@
+<svg width="140" height="32" viewBox="0 0 140 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon: Two overlapping rectangles representing reconciliation -->
+  <rect x="2" y="6" width="16" height="20" rx="2" fill="#FFFFFF" fill-opacity="0.9"/>
+  <rect x="8" y="10" width="16" height="16" rx="2" fill="#FFFFFF" fill-opacity="0.6"/>
+
+  <!-- Checkmark overlay -->
+  <path d="M12 18L15 21L21 15" stroke="#0A0A0A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Text: Reconciled -->
+  <text x="34" y="22" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" fill="#FFFFFF">Reconciled</text>
+</svg>

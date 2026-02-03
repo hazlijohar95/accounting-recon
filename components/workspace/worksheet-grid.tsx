@@ -31,22 +31,42 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   IconPlus,
   IconPlay,
-  IconLoader,
-  IconWarningCircle,
-  IconCheck,
   IconMoreVertical,
   IconTrash,
   IconSparkle,
-  IconHash,
   IconText,
   IconDownload,
   IconRefresh,
   IconX,
+  IconCheck,
+  IconWarningCircle,
 } from '@/components/brand/icons'
+import { useGridNavigation, CellPosition } from '@/hooks/useGridNavigation'
+import { useGridHistory, createCellEditAction } from '@/hooks/useGridHistory'
+import { useGridSelection, cellKey } from '@/hooks/useGridSelection'
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { cn } from '@/lib/utils'
-import { PremiumButton, ButtonSecondary, ButtonDanger } from '@/components/brand'
+import { PremiumButton } from '@/components/brand'
+import { CustomSelect } from '@/components/brand/custom-select'
 import { useSetShowPaywall } from '@/lib/store'
 import { WorksheetChat } from './worksheet-chat'
+import { CellStatusIndicator } from './cell-status-indicator'
+import { AddColumnPopover, ColumnTypeIcon } from './add-column-popover'
+import { CompletelyEmptyState, NoRowsState } from './grid-empty-state'
+import { GRID_LIMITS, TOAST_DURATIONS } from './grid.constants'
 
 type WorksheetColumn = Doc<'worksheetColumns'>
 type WorksheetRow = Doc<'worksheetRows'>
@@ -62,457 +82,59 @@ interface WorksheetGridProps {
 }
 
 /**
- * Cell status indicator with brand-consistent styling
+ * Sortable column header for drag-drop reordering
  */
-function CellStatusIndicator({ status, error }: { status?: string; error?: string }) {
-  const [showTooltip, setShowTooltip] = useState(false)
-  const [copied, setCopied] = useState(false)
+interface SortableColumnHeaderProps {
+  id: string
+  children: React.ReactNode
+  width: number
+}
 
-  if (!status || status === 'idle') return null
+function SortableColumnHeader({ id, children, width }: SortableColumnHeaderProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
 
-  // Format error message for display (show more context)
-  const formatError = (err?: string) => {
-    if (!err) return 'An error occurred'
-    // Truncate very long errors but show more than before
-    if (err.length > 500) return err.slice(0, 500) + '...'
-    return err
-  }
-
-  // Copy full error to clipboard
-  const handleCopyError = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!error) return
-    try {
-      await navigator.clipboard.writeText(error)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Fallback
-      const textarea = document.createElement('textarea')
-      textarea.value = error
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    width,
   }
 
   return (
-    <div className="relative flex items-center justify-center shrink-0">
-      {status === 'pending' && (
-        <span title="Pending - waiting to process">
-          <div className="w-2 h-2 bg-muted-foreground/40 animate-pulse" />
-        </span>
+    <th
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'h-9 text-left border-b border-r border-border last:border-r-0 bg-muted relative group',
+        isDragging && 'opacity-50 z-20'
       )}
-      {status === 'running' && (
-        <span title="Running - AI enrichment in progress">
-          <IconLoader size={12} className="text-chart-5 animate-spin" />
-        </span>
-      )}
-      {status === 'complete' && (
-        <span title="Complete - enrichment successful">
-          <IconCheck size={12} className="text-success" />
-        </span>
-      )}
-      {status === 'error' && (
-        <span
-          className="cursor-help"
-          onMouseEnter={() => setShowTooltip(true)}
-          onMouseLeave={() => setShowTooltip(false)}
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowTooltip(!showTooltip)
-          }}
+      {...attributes}
+    >
+      <div className="flex items-center h-full">
+        {/* Drag handle */}
+        <div
+          {...listeners}
+          className="absolute left-0 top-0 bottom-0 w-4 flex items-center justify-center cursor-grab opacity-0 group-hover:opacity-100 transition-opacity hover:bg-secondary/50"
+          title="Drag to reorder"
         >
-          <IconWarningCircle size={12} className="text-destructive" />
-          {showTooltip && (
-            <div className="absolute z-50 left-0 top-full mt-1 max-w-md p-3 text-xs bg-background border border-destructive/30 shadow-lg">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <span className="font-medium text-destructive">Enrichment Error</span>
-                <button
-                  onClick={handleCopyError}
-                  className="text-muted-foreground hover:text-foreground shrink-0"
-                  title={copied ? "Copied!" : "Copy error"}
-                >
-                  {copied ? (
-                    <IconCheck size={12} className="text-success" />
-                  ) : (
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M4 4h8v8H4z" fillOpacity="0.3" />
-                      <path d="M2 2h8v8H2z" fill="currentColor" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              <div className="text-muted-foreground whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
-                {formatError(error)}
-              </div>
-              <p className="text-[10px] text-muted-foreground/70 mt-2 pt-2 border-t border-border">
-                Right-click the cell to retry
-              </p>
-            </div>
-          )}
-        </span>
-      )}
-    </div>
-  )
-}
-
-/**
- * Column type icon
- */
-function ColumnTypeIcon({ type }: { type: string }) {
-  switch (type) {
-    case 'number':
-      return <IconHash size={12} className="text-muted-foreground" />
-    case 'formula':
-      return <IconSparkle size={12} className="text-chart-5" />
-    default:
-      return <IconText size={12} className="text-muted-foreground" />
-  }
-}
-
-/**
- * Step indicator for multi-step wizard
- */
-function StepIndicator({
-  currentStep,
-  totalSteps
-}: {
-  currentStep: number
-  totalSteps: number
-}) {
-  return (
-    <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
-      <span className="text-[10px] text-muted-foreground font-medium">
-        Step {currentStep} of {totalSteps}
-      </span>
-      <div className="flex gap-1">
-        {Array.from({ length: totalSteps }, (_, i) => (
-          <div
-            key={i}
-            className={cn(
-              'w-1.5 h-1.5 transition-colors',
-              i < currentStep ? 'bg-foreground' : 'bg-muted-foreground/30'
-            )}
-          />
-        ))}
+          <svg width="10" height="10" viewBox="0 0 10 10" className="text-muted-foreground">
+            <circle cx="3" cy="2" r="1" fill="currentColor" />
+            <circle cx="7" cy="2" r="1" fill="currentColor" />
+            <circle cx="3" cy="5" r="1" fill="currentColor" />
+            <circle cx="7" cy="5" r="1" fill="currentColor" />
+            <circle cx="3" cy="8" r="1" fill="currentColor" />
+            <circle cx="7" cy="8" r="1" fill="currentColor" />
+          </svg>
+        </div>
+        <div className="flex-1">{children}</div>
       </div>
-    </div>
-  )
-}
-
-/**
- * Custom select dropdown matching design system
- */
-function CustomSelect({
-  value,
-  onChange,
-  options,
-  placeholder,
-  autoFocus,
-}: {
-  value: string
-  onChange: (value: string) => void
-  options: { value: string; label: string }[]
-  placeholder?: string
-  autoFocus?: boolean
-}) {
-  const [isOpen, setIsOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  // Close on outside click
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
-
-  // Auto focus
-  useEffect(() => {
-    if (autoFocus) {
-      setIsOpen(true)
-    }
-  }, [autoFocus])
-
-  const selectedOption = options.find(o => o.value === value)
-  const displayValue = selectedOption?.label || placeholder || 'Select...'
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          setIsOpen(!isOpen)
-        }}
-        className={cn(
-          'w-full px-2 py-1.5 text-sm text-left border border-border bg-background',
-          'focus:outline-none focus:border-foreground transition-colors',
-          'flex items-center justify-between gap-2',
-          !selectedOption && 'text-muted-foreground'
-        )}
-      >
-        <span className="truncate">{displayValue}</span>
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="currentColor"
-          className={cn(
-            'shrink-0 text-muted-foreground transition-transform',
-            isOpen && 'rotate-180'
-          )}
-        >
-          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border shadow-lg z-30 max-h-[200px] overflow-y-auto">
-          {placeholder && (
-            <button
-              type="button"
-              onClick={() => {
-                onChange('')
-                setIsOpen(false)
-              }}
-              className={cn(
-                'w-full px-2 py-1.5 text-sm text-left hover:bg-secondary transition-colors',
-                value === '' && 'bg-secondary'
-              )}
-            >
-              {placeholder}
-            </button>
-          )}
-          {options.map(option => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                onChange(option.value)
-                setIsOpen(false)
-              }}
-              className={cn(
-                'w-full px-2 py-1.5 text-sm text-left hover:bg-secondary transition-colors',
-                value === option.value && 'bg-secondary'
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * Add column popover
- */
-function AddColumnPopover({
-  isOpen,
-  onClose,
-  onAdd,
-  existingColumns,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onAdd: (type: 'text' | 'number' | 'formula', name: string, formula?: string, inputColumnId?: Id<'worksheetColumns'>) => void
-  existingColumns: WorksheetColumn[]
-}) {
-  const [step, setStep] = useState<'type' | 'name' | 'formula' | 'input'>('type')
-  const [selectedType, setSelectedType] = useState<'text' | 'number' | 'formula'>('text')
-  const [name, setName] = useState('')
-  const [formula, setFormula] = useState('')
-  const [selectedInputColumnId, setSelectedInputColumnId] = useState<string>('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  // Filter to only show non-formula columns as input options
-  const inputColumnOptions = existingColumns.filter(c => c.columnType !== 'formula')
-
-  useEffect(() => {
-    if (isOpen) {
-      setStep('type')
-      setName('')
-      setFormula('')
-      setSelectedInputColumnId('')
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    if (step === 'name' || step === 'formula') {
-      inputRef.current?.focus()
-    }
-  }, [step])
-
-  if (!isOpen) return null
-
-  const handleTypeSelect = (type: 'text' | 'number' | 'formula') => {
-    setSelectedType(type)
-    setStep('name')
-  }
-
-  const handleNameSubmit = () => {
-    if (!name.trim()) return
-    if (selectedType === 'formula') {
-      setStep('formula')
-    } else {
-      onAdd(selectedType, name.trim())
-      onClose()
-    }
-  }
-
-  const handleFormulaSubmit = () => {
-    if (!formula.trim()) return
-    // Show input selection step if there are input column options
-    if (inputColumnOptions.length > 0) {
-      setStep('input')
-    } else {
-      // No input columns available, just add the formula column
-      onAdd('formula', name.trim(), formula.trim())
-      onClose()
-    }
-  }
-
-  const handleInputSubmit = () => {
-    onAdd(
-      'formula',
-      name.trim(),
-      formula.trim(),
-      selectedInputColumnId ? selectedInputColumnId as Id<'worksheetColumns'> : undefined
-    )
-    onClose()
-  }
-
-  return (
-    <div className="absolute top-full left-0 mt-1 bg-background border border-border shadow-lg z-20 min-w-[220px] animate-in fade-in slide-in-from-top-1 duration-150">
-      {step === 'type' && (
-        <div className="p-3">
-          <StepIndicator currentStep={1} totalSteps={selectedType === 'formula' && inputColumnOptions.length > 0 ? 4 : selectedType === 'formula' ? 3 : 2} />
-          <div className="space-y-1">
-            <button
-              onClick={() => handleTypeSelect('text')}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary transition-colors text-left"
-            >
-              <IconText size={14} />
-              Text Column
-            </button>
-            <button
-              onClick={() => handleTypeSelect('number')}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary transition-colors text-left"
-            >
-              <IconHash size={14} />
-              Number Column
-            </button>
-            <div className="border-t border-border my-1" />
-            <button
-              onClick={() => handleTypeSelect('formula')}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary transition-colors text-left"
-            >
-              <IconSparkle size={14} className="text-chart-5" />
-              AI Formula Column
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 'name' && (
-        <div className="p-3 space-y-3">
-          <StepIndicator currentStep={2} totalSteps={selectedType === 'formula' && inputColumnOptions.length > 0 ? 4 : selectedType === 'formula' ? 3 : 2} />
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <ColumnTypeIcon type={selectedType} />
-            <span className="capitalize">{selectedType} column</span>
-          </div>
-          <input
-            ref={inputRef}
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Column name..."
-            className="w-full px-2 py-1.5 text-sm border border-border bg-background focus:outline-none focus:border-foreground transition-colors"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleNameSubmit()
-              if (e.key === 'Escape') onClose()
-            }}
-          />
-          <div className="flex gap-2">
-            <ButtonSecondary size="sm" onClick={() => setStep('type')} className="flex-1">
-              Back
-            </ButtonSecondary>
-            <PremiumButton size="sm" onClick={handleNameSubmit} disabled={!name.trim()} className="flex-1">
-              {selectedType === 'formula' ? 'Next' : 'Add'}
-            </PremiumButton>
-          </div>
-        </div>
-      )}
-
-      {step === 'formula' && (
-        <div className="p-3 space-y-3">
-          <StepIndicator currentStep={3} totalSteps={inputColumnOptions.length > 0 ? 4 : 3} />
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <IconSparkle size={12} className="text-chart-5" />
-            <span>AI prompt for "{name}"</span>
-          </div>
-          <input
-            ref={inputRef}
-            type="text"
-            value={formula}
-            onChange={(e) => setFormula(e.target.value)}
-            placeholder='e.g., "Find the CEO name"'
-            className="w-full px-2 py-1.5 text-sm border border-border bg-background focus:outline-none focus:border-foreground transition-colors"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleFormulaSubmit()
-              if (e.key === 'Escape') onClose()
-            }}
-          />
-          <div className="flex gap-2">
-            <ButtonSecondary size="sm" onClick={() => setStep('name')} className="flex-1">
-              Back
-            </ButtonSecondary>
-            <PremiumButton size="sm" onClick={handleFormulaSubmit} disabled={!formula.trim()} className="flex-1">
-              {inputColumnOptions.length > 0 ? 'Next' : 'Add Column'}
-            </PremiumButton>
-          </div>
-        </div>
-      )}
-
-      {step === 'input' && (
-        <div className="p-3 space-y-3">
-          <StepIndicator currentStep={4} totalSteps={4} />
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <IconSparkle size={12} className="text-chart-5" />
-            <span>Select input column</span>
-          </div>
-          <p className="text-[10px] text-muted-foreground">
-            Choose which column provides the input data for AI enrichment
-          </p>
-          <CustomSelect
-            value={selectedInputColumnId}
-            onChange={setSelectedInputColumnId}
-            options={inputColumnOptions.map(col => ({ value: col._id, label: col.name }))}
-            placeholder="First column (default)"
-            autoFocus
-          />
-          <div className="flex gap-2">
-            <ButtonSecondary size="sm" onClick={() => setStep('formula')} className="flex-1">
-              Back
-            </ButtonSecondary>
-            <PremiumButton size="sm" onClick={handleInputSubmit} className="flex-1">
-              Add Column
-            </PremiumButton>
-          </div>
-        </div>
-      )}
-    </div>
+    </th>
   )
 }
 
@@ -571,8 +193,43 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
   const addRows = useMutation(api.workspaces.addRows)
   const updateCell = useMutation(api.workspaces.updateCell)
   const deleteRows = useMutation(api.workspaces.deleteRows)
+  const reorderColumns = useMutation(api.workspaces.reorderColumns)
+  const updateColumnWidth = useMutation(api.workspaces.updateColumnWidth)
   const createBatchJobs = useMutation(api.agents.createBatchJobs)
   const createJob = useMutation(api.agents.createJob)
+
+  // DnD sensors for column reordering
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px movement before drag starts
+      },
+    })
+  )
+
+  // Handle column drag end
+  const handleColumnDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    // Get column IDs in new order
+    const oldIndex = columns.findIndex(c => c._id === active.id)
+    const newIndex = columns.findIndex(c => c._id === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) return
+
+    // Create new order array
+    const newColumnIds = columns.map(c => c._id)
+    const [removed] = newColumnIds.splice(oldIndex, 1)
+    newColumnIds.splice(newIndex, 0, removed)
+
+    // Optimistic update handled by Convex reactivity
+    await reorderColumns({
+      worksheetId,
+      columnIds: newColumnIds,
+      workosUserId,
+    })
+  }, [columns, worksheetId, workosUserId, reorderColumns])
 
   // State
   const [editingCell, setEditingCell] = useState<{ rowId: string; colKey: string } | null>(null)
@@ -599,8 +256,51 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
   // Show toast with auto-dismiss
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info', details?: string) => {
     setToast({ message, type, details })
-    setTimeout(() => setToast(null), type === 'error' ? 8000 : 4000)
+    const duration = type === 'error' ? TOAST_DURATIONS.ERROR : TOAST_DURATIONS.DEFAULT
+    setTimeout(() => setToast(null), duration)
   }, [])
+
+  // Undo/Redo history
+  const { pushAction, canUndo, canRedo, undo, redo } = useGridHistory({
+    onUndo: (action) => {
+      showToast(`Undone: ${action.description}`, 'info')
+    },
+    onRedo: (action) => {
+      showToast(`Redone: ${action.description}`, 'info')
+    },
+  })
+
+  // Helper to update cell with history tracking
+  const updateCellWithHistory = useCallback(async (
+    rowId: Id<'worksheetRows'>,
+    columnKey: string,
+    newValue: unknown,
+    previousValue: unknown
+  ) => {
+    // Perform the update
+    await updateCell({
+      rowId,
+      columnKey,
+      value: newValue,
+      workosUserId,
+    })
+
+    // Push to history
+    pushAction(createCellEditAction(
+      rowId,
+      columnKey,
+      previousValue,
+      newValue,
+      async (rId, cKey, value) => {
+        await updateCell({
+          rowId: rId as Id<'worksheetRows'>,
+          columnKey: cKey,
+          value,
+          workosUserId,
+        })
+      }
+    ))
+  }, [updateCell, workosUserId, pushAction])
 
   // Close menus on outside click
   useEffect(() => {
@@ -661,10 +361,131 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
     setColumnMenuOpen(null)
   }
 
-  const handleAddRow = async () => {
+  const handleAddRow = useCallback(async () => {
     if (guardAction('edit')) return
     await addRow({ worksheetId, workosUserId })
-  }
+  }, [guardAction, addRow, worksheetId, workosUserId])
+
+  // Convert editing cell to position format for navigation hook
+  const getEditingPosition = useCallback((): CellPosition | null => {
+    if (!editingCell) return null
+    const rowIndex = rowsWithLiveStatus.findIndex(r => r._id === editingCell.rowId)
+    const colIndex = columns.findIndex(c => `col_${c.order}` === editingCell.colKey)
+    if (rowIndex === -1 || colIndex === -1) return null
+    return { rowIndex, colIndex }
+  }, [editingCell, rowsWithLiveStatus, columns])
+
+  // Keyboard navigation handlers
+  const handleNavEditStart = useCallback((position: CellPosition, initialValue?: string) => {
+    if (guardAction('edit')) return
+    const row = rowsWithLiveStatus[position.rowIndex]
+    const col = columns[position.colIndex]
+    if (!row || !col) return
+    const colKey = `col_${col.order}`
+    const currentValue = row.cells[colKey]
+    setEditingCell({ rowId: row._id, colKey })
+    setEditValue(initialValue ?? String(currentValue ?? ''))
+  }, [rowsWithLiveStatus, columns, guardAction])
+
+  const handleNavEditConfirm = useCallback(async () => {
+    if (!editingCell) return
+    if (isDemo) {
+      setEditingCell(null)
+      return
+    }
+
+    const row = rows.find((r) => r._id === editingCell.rowId)
+    const currentValue = row?.cells[editingCell.colKey]
+
+    if (String(currentValue ?? '') !== editValue) {
+      await updateCellWithHistory(
+        editingCell.rowId as Id<'worksheetRows'>,
+        editingCell.colKey,
+        editValue,
+        currentValue
+      )
+    }
+    setEditingCell(null)
+  }, [editingCell, rows, editValue, isDemo, updateCellWithHistory])
+
+  const handleNavEditCancel = useCallback(() => {
+    setEditingCell(null)
+  }, [])
+
+  const handleNavClearCell = useCallback(async (position: CellPosition) => {
+    if (guardAction('edit')) return
+    const row = rowsWithLiveStatus[position.rowIndex]
+    const col = columns[position.colIndex]
+    if (!row || !col) return
+    const colKey = `col_${col.order}`
+    const currentValue = row.cells[colKey]
+    if (currentValue !== '' && currentValue != null) {
+      await updateCellWithHistory(
+        row._id as Id<'worksheetRows'>,
+        colKey,
+        '',
+        currentValue
+      )
+    }
+  }, [rowsWithLiveStatus, columns, guardAction, updateCellWithHistory])
+
+  // Grid navigation hook
+  const {
+    focusedCell,
+    setFocusedCell,
+    handleKeyDown: handleGridKeyDown,
+    handleCellFocus,
+    handleCellDoubleClick,
+    isCellFocused,
+    gridRef,
+  } = useGridNavigation({
+    rowCount: rowsWithLiveStatus.length,
+    colCount: columns.length,
+    onEditStart: handleNavEditStart,
+    onEditConfirm: handleNavEditConfirm,
+    onEditCancel: handleNavEditCancel,
+    onClearCell: handleNavClearCell,
+    onAddRow: handleAddRow,
+    isEditing: editingCell !== null,
+    editingPosition: getEditingPosition(),
+  })
+
+  // Cell selection hook
+  const {
+    selectedCells,
+    isCellSelected,
+    handleCellMouseDown: handleSelectionMouseDown,
+    handleCellMouseEnter: handleSelectionMouseEnter,
+    handleMouseUp: handleSelectionMouseUp,
+    selectRow: selectEntireRow,
+    selectColumn: selectEntireColumn,
+    selectAll,
+    clearSelection,
+    isDragging: isSelectionDragging,
+  } = useGridSelection({
+    rowCount: rowsWithLiveStatus.length,
+    colCount: columns.length,
+  })
+
+  // Handle Cmd/Ctrl+A for select all
+  useEffect(() => {
+    const handleSelectAllKeydown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !editingCell) {
+        e.preventDefault()
+        selectAll()
+      }
+    }
+    window.addEventListener('keydown', handleSelectAllKeydown)
+    return () => window.removeEventListener('keydown', handleSelectAllKeydown)
+  }, [selectAll, editingCell])
+
+  // End drag selection on global mouse up
+  useEffect(() => {
+    if (isSelectionDragging) {
+      window.addEventListener('mouseup', handleSelectionMouseUp)
+      return () => window.removeEventListener('mouseup', handleSelectionMouseUp)
+    }
+  }, [isSelectionDragging, handleSelectionMouseUp])
 
   const handleDeleteSelectedRows = async () => {
     if (guardAction('delete')) return
@@ -695,12 +516,12 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
     const currentValue = row?.cells[editingCell.colKey]
 
     if (String(currentValue ?? '') !== editValue) {
-      await updateCell({
-        rowId: editingCell.rowId as Id<'worksheetRows'>,
-        columnKey: editingCell.colKey,
-        value: editValue,
-        workosUserId,
-      })
+      await updateCellWithHistory(
+        editingCell.rowId as Id<'worksheetRows'>,
+        editingCell.colKey,
+        editValue,
+        currentValue
+      )
     }
 
     setEditingCell(null)
@@ -860,11 +681,6 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
     URL.revokeObjectURL(url)
   }, [columns, rowsWithLiveStatus, worksheetName])
 
-  // SECURITY: Paste validation limits
-  const MAX_PASTE_ROWS = 1000
-  const MAX_PASTE_COLUMNS = 50
-  const MAX_CELL_LENGTH = 10000
-
   const handlePaste = async (e: React.ClipboardEvent) => {
     if (guardAction('edit')) {
       e.preventDefault()
@@ -875,7 +691,8 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
     if (!text) return
 
     // SECURITY: Validate paste size to prevent memory issues
-    if (text.length > MAX_PASTE_ROWS * MAX_PASTE_COLUMNS * MAX_CELL_LENGTH) {
+    const maxTotalSize = GRID_LIMITS.MAX_PASTE_ROWS * GRID_LIMITS.MAX_PASTE_COLUMNS * GRID_LIMITS.MAX_CELL_LENGTH
+    if (text.length > maxTotalSize) {
       console.warn('Paste data too large, ignoring')
       return
     }
@@ -883,9 +700,9 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
     const lines = text.trim().split('\n')
 
     // SECURITY: Limit number of rows
-    if (lines.length > MAX_PASTE_ROWS) {
-      console.warn(`Paste truncated from ${lines.length} to ${MAX_PASTE_ROWS} rows`)
-      lines.length = MAX_PASTE_ROWS
+    if (lines.length > GRID_LIMITS.MAX_PASTE_ROWS) {
+      console.warn(`Paste truncated from ${lines.length} to ${GRID_LIMITS.MAX_PASTE_ROWS} rows`)
+      lines.length = GRID_LIMITS.MAX_PASTE_ROWS
     }
 
     const rowsData = lines.map((line) => {
@@ -893,12 +710,12 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
       const cells: Record<string, unknown> = {}
 
       // SECURITY: Limit columns and sanitize cell values
-      const limitedValues = values.slice(0, MAX_PASTE_COLUMNS)
+      const limitedValues = values.slice(0, GRID_LIMITS.MAX_PASTE_COLUMNS)
       limitedValues.forEach((val, i) => {
         // Truncate cell content and sanitize
         const sanitized = val
           .trim()
-          .slice(0, MAX_CELL_LENGTH)
+          .slice(0, GRID_LIMITS.MAX_CELL_LENGTH)
           // Remove null bytes and control characters (except newlines within cells)
           .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
         cells[`col_${i}`] = sanitized
@@ -1078,6 +895,13 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
             editingCell?.rowId === row.original._id && editingCell?.colKey === colKey
           const isFormulaCol = col.columnType === 'formula'
 
+          // Get row and column indices for keyboard navigation
+          const rowIndex = rowsWithLiveStatus.findIndex(r => r._id === row.original._id)
+          const colIndex = columns.findIndex(c => c._id === col._id)
+          const cellPosition = { rowIndex, colIndex }
+          const isFocused = isCellFocused(cellPosition)
+          const isSelected = isCellSelected(cellPosition)
+
           if (isEditing) {
             return (
               <input
@@ -1086,7 +910,7 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
                 onChange={(e) => setEditValue(e.target.value)}
                 onBlur={handleCellBlur}
                 onKeyDown={handleKeyDown}
-                className="w-full h-full px-2 py-1 text-sm bg-background border-none outline-none ring-2 ring-foreground"
+                className="w-full h-full px-2 py-1 text-sm bg-background border-none outline-none ring-2 ring-chart-5"
                 autoFocus
               />
             )
@@ -1095,7 +919,13 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
           return (
             <>
               <div
-                onClick={() => handleCellClick(row.original._id, colKey, value)}
+                onClick={(e) => {
+                  handleCellFocus(cellPosition)
+                  handleCellClick(row.original._id, colKey, value)
+                }}
+                onMouseDown={(e) => handleSelectionMouseDown(cellPosition, e)}
+                onMouseEnter={() => handleSelectionMouseEnter(cellPosition)}
+                onDoubleClick={() => handleCellDoubleClick(cellPosition)}
                 onContextMenu={(e) => {
                   // Only show context menu for formula columns
                   if (col.columnType !== 'formula') return
@@ -1107,12 +937,17 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
                     position: { x: e.clientX, y: e.clientY },
                   })
                 }}
+                tabIndex={isFocused ? 0 : -1}
                 className={cn(
-                  'w-full h-full px-2 py-1 text-sm cursor-cell flex items-center gap-1.5 transition-colors',
+                  'w-full h-full px-2 py-1 text-sm cursor-cell flex items-center gap-1.5 transition-all outline-none select-none',
                   status === 'running' && 'bg-chart-5/5',
                   status === 'error' && 'bg-destructive/5',
                   status === 'complete' && isFormulaCol && 'bg-success/5',
-                  col.columnType === 'number' && 'font-mono tabular-nums justify-end'
+                  col.columnType === 'number' && 'font-mono tabular-nums justify-end',
+                  // Selection styling - light blue background
+                  isSelected && !isFocused && 'bg-chart-5/10',
+                  // Focus ring styling - blue border for focused cell
+                  isFocused && 'ring-2 ring-chart-5 ring-inset z-10'
                 )}
               >
                 <CellStatusIndicator status={status} error={error} />
@@ -1151,7 +986,28 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
     })
 
     return [selectorColumn, ...dataColumns]
-  }, [columns, rowsWithLiveStatus, selectedRows, editingCell, editValue, columnMenuOpen])
+  }, [
+    columns,
+    rowsWithLiveStatus,
+    selectedRows,
+    editingCell,
+    editValue,
+    columnMenuOpen,
+    cellMenuOpen,
+    editingInputColumn,
+    isCellFocused,
+    handleCellFocus,
+    handleCellDoubleClick,
+    isCellSelected,
+    handleSelectionMouseDown,
+    handleSelectionMouseEnter,
+    handleRunColumn,
+    handleDeleteColumn,
+    handleUpdateInputColumn,
+    handleCellBlur,
+    handleCellClick,
+    handleRunCell,
+  ])
 
   // React Table instance
   const table = useReactTable({
@@ -1262,21 +1118,51 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
       </div>
 
       {/* Grid */}
-      <div ref={parentRef} className="flex-1 overflow-auto scrollbar-thin">
+      <div
+        ref={(node) => {
+          // Combine parentRef for virtualization and gridRef for keyboard navigation
+          parentRef.current = node
+          gridRef.current = node
+        }}
+        className="flex-1 overflow-auto scrollbar-thin focus:outline-none"
+        tabIndex={0}
+        onKeyDown={handleGridKeyDown}
+      >
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleColumnDragEnd}
+        >
         <table className="w-full border-collapse min-w-max">
           {/* Header */}
           <thead className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
+                {/* Non-sortable selector column */}
+                {headerGroup.headers.slice(0, 1).map((header) => (
                   <th
                     key={header.id}
                     style={{ width: header.getSize() }}
-                    className="h-9 text-left border-b border-r border-border last:border-r-0 bg-muted"
+                    className="h-9 text-left border-b border-r border-border bg-muted"
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
+                {/* Sortable data columns */}
+                <SortableContext
+                  items={columns.map(c => c._id)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  {headerGroup.headers.slice(1).map((header) => (
+                    <SortableColumnHeader
+                      key={header.id}
+                      id={header.id}
+                      width={header.getSize()}
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                    </SortableColumnHeader>
+                  ))}
+                </SortableContext>
               </tr>
             ))}
           </thead>
@@ -1316,62 +1202,40 @@ export function WorksheetGrid({ worksheetId, worksheetName = 'worksheet', column
                 <td style={{ height: `${paddingBottom}px` }} />
               </tr>
             )}
+            {/* Add row button at bottom */}
+            {columns.length > 0 && (
+              <tr className="group">
+                <td
+                  colSpan={columns.length + 1}
+                  className="h-9 border-b border-border"
+                >
+                  <button
+                    onClick={handleAddRow}
+                    className="w-full h-full px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors flex items-center gap-1.5 opacity-50 group-hover:opacity-100"
+                  >
+                    <IconPlus size={12} />
+                    Add row
+                  </button>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
+        </DndContext>
 
         {/* Empty state */}
         {rowsWithLiveStatus.length === 0 && columns.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="mb-4">
-              <svg
-                width="48"
-                height="48"
-                viewBox="0 0 48 48"
-                fill="none"
-                className="text-muted-foreground/30"
-              >
-                <rect x="8" y="8" width="14" height="10" fill="currentColor" />
-                <rect x="26" y="8" width="14" height="10" fill="currentColor" fillOpacity="0.6" />
-                <rect x="8" y="22" width="14" height="10" fill="currentColor" fillOpacity="0.4" />
-                <rect x="26" y="22" width="14" height="10" fill="currentColor" fillOpacity="0.2" />
-              </svg>
-            </div>
-            <p className="text-sm text-muted-foreground mb-1">
-              Empty worksheet
-            </p>
-            <p className="text-xs text-muted-foreground mb-4">
-              Add columns and rows, or paste data from a spreadsheet
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (guardAction('edit')) return
-                  setAddColumnOpen(true)
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors"
-              >
-                <IconPlus size={12} />
-                Add Column
-              </button>
-            </div>
-          </div>
+          <CompletelyEmptyState
+            onAddColumn={() => {
+              if (guardAction('edit')) return
+              setAddColumnOpen(true)
+            }}
+          />
         )}
 
         {/* Has columns but no rows */}
         {rowsWithLiveStatus.length === 0 && columns.length > 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-sm text-muted-foreground mb-4">
-              No rows yet. Add data or paste from spreadsheet.
-            </p>
-            <button
-              onClick={handleAddRow}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors"
-            >
-              <IconPlus size={12} />
-              Add Row
-            </button>
-          </div>
+          <NoRowsState onAddRow={handleAddRow} />
         )}
       </div>
       </div>

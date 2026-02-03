@@ -8,80 +8,80 @@ interface LogoWordmarkProps {
 }
 
 /**
- * Geometric lowercase "econcile" wordmark built from rectangles.
- * Designed to align and balance with the R mark.
+ * Geometric lowercase "econcile" wordmark with proper typographic proportions.
  *
- * Design specs (matching R mark proportions):
- * - Canvas: 48px tall (same as R mark canvas)
- * - Content area: y=8 to y=40 (32px, same as R mark content)
- * - Stroke width: 6px (optically balanced with R's 8px - wordmark is denser)
- * - Counter space: 7px (readable)
- * - Letter width: 18px for full letters, 6px for i/l
- * - Letter spacing: 4px
- *
- * Vertical rhythm within 32px content area (y=8 to y=40):
- * - Top bar: y=8, h=6
- * - Top counter: 7px gap
- * - Mid bar: y=21, h=6 (for "e")
- * - Bottom counter: 7px gap
- * - Bottom bar: y=34, h=6
+ * Design specs:
+ * - Canvas: 48px (matches R mark)
+ * - Baseline: y=40 (same as R bottom)
+ * - x-height: 24px (y=16 to y=40) - lowercase e, c, o, n
+ * - Ascender: y=8 (same as R top) - for l and i's dot
+ * - Stroke: 5px (lighter than R's 8px for optical balance)
+ * - Counter: 5px (readable negative space)
+ * - Letter width: 15px for x-height letters, 5px for i/l
+ * - Letter spacing: 3px
  */
 export function LogoWordmark({ height = 48, className }: LogoWordmarkProps) {
   const scale = height / 48
-  const viewWidth = 152 // 8 letters with spacing
+  const viewWidth = 124
 
   return (
     <svg
       width={viewWidth * scale}
       height={height}
-      viewBox="0 0 152 48"
+      viewBox="0 0 124 48"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={cn(className)}
       aria-hidden="true"
     >
-      {/* Letter "e" @ x=0, width=18 */}
-      {/* Content from y=8 to y=40 (32px), stroke=6px, counters=7px */}
-      <rect x="0" y="8" width="18" height="6" fill="currentColor" />
-      <rect x="0" y="8" width="6" height="32" fill="currentColor" />
-      <rect x="6" y="21" width="12" height="6" fill="currentColor" />
-      <rect x="0" y="34" width="18" height="6" fill="currentColor" />
+      {/*
+        Lowercase letter structure (x-height = 24px, y=16 to y=40):
+        - Top bar: y=16, h=5
+        - Counter: 5px gap
+        - Mid bar: y=26, h=5 (for "e")
+        - Counter: 5px gap
+        - Bottom bar: y=35, h=5
+      */}
 
-      {/* Letter "c" @ x=22 (18+4), width=18 */}
-      <rect x="22" y="8" width="18" height="6" fill="currentColor" />
-      <rect x="22" y="8" width="6" height="32" fill="currentColor" />
-      <rect x="22" y="34" width="18" height="6" fill="currentColor" />
+      {/* Letter "e" @ x=0, width=15, x-height */}
+      <rect x="0" y="16" width="15" height="5" fill="currentColor" />
+      <rect x="0" y="16" width="5" height="24" fill="currentColor" />
+      <rect x="5" y="26" width="10" height="5" fill="currentColor" />
+      <rect x="0" y="35" width="15" height="5" fill="currentColor" />
 
-      {/* Letter "o" @ x=44 (22+18+4), width=18 */}
-      <rect x="44" y="8" width="18" height="6" fill="currentColor" />
-      <rect x="44" y="8" width="6" height="32" fill="currentColor" />
-      <rect x="56" y="8" width="6" height="32" fill="currentColor" />
-      <rect x="44" y="34" width="18" height="6" fill="currentColor" />
+      {/* Letter "c" @ x=18, width=15, x-height */}
+      <rect x="18" y="16" width="15" height="5" fill="currentColor" />
+      <rect x="18" y="16" width="5" height="24" fill="currentColor" />
+      <rect x="18" y="35" width="15" height="5" fill="currentColor" />
 
-      {/* Letter "n" @ x=66 (44+18+4), width=18 */}
-      <rect x="66" y="8" width="18" height="6" fill="currentColor" />
-      <rect x="66" y="8" width="6" height="32" fill="currentColor" />
-      <rect x="78" y="8" width="6" height="32" fill="currentColor" />
+      {/* Letter "o" @ x=36, width=15, x-height */}
+      <rect x="36" y="16" width="15" height="5" fill="currentColor" />
+      <rect x="36" y="16" width="5" height="24" fill="currentColor" />
+      <rect x="46" y="16" width="5" height="24" fill="currentColor" />
+      <rect x="36" y="35" width="15" height="5" fill="currentColor" />
 
-      {/* Letter "c" @ x=88 (66+18+4), width=18 */}
-      <rect x="88" y="8" width="18" height="6" fill="currentColor" />
-      <rect x="88" y="8" width="6" height="32" fill="currentColor" />
-      <rect x="88" y="34" width="18" height="6" fill="currentColor" />
+      {/* Letter "n" @ x=54, width=15, x-height */}
+      <rect x="54" y="16" width="15" height="5" fill="currentColor" />
+      <rect x="54" y="16" width="5" height="24" fill="currentColor" />
+      <rect x="64" y="16" width="5" height="24" fill="currentColor" />
 
-      {/* Letter "i" @ x=110 (88+18+4), width=6 */}
-      <rect x="110" y="8" width="6" height="6" fill="currentColor" />
-      <rect x="110" y="18" width="6" height="22" fill="currentColor" />
+      {/* Letter "c" @ x=72, width=15, x-height */}
+      <rect x="72" y="16" width="15" height="5" fill="currentColor" />
+      <rect x="72" y="16" width="5" height="24" fill="currentColor" />
+      <rect x="72" y="35" width="15" height="5" fill="currentColor" />
 
-      {/* Letter "l" @ x=120 (110+6+4), width=6 */}
-      <rect x="120" y="8" width="6" height="32" fill="currentColor" />
+      {/* Letter "i" @ x=90, width=5, has tittle (dot) at ascender height */}
+      <rect x="90" y="8" width="5" height="5" fill="currentColor" />
+      <rect x="90" y="16" width="5" height="24" fill="currentColor" />
 
-      {/* Letter "e" @ x=130 (120+6+4), width=18 */}
-      <rect x="130" y="8" width="18" height="6" fill="currentColor" />
-      <rect x="130" y="8" width="6" height="32" fill="currentColor" />
-      <rect x="136" y="21" width="12" height="6" fill="currentColor" />
-      <rect x="130" y="34" width="18" height="6" fill="currentColor" />
+      {/* Letter "l" @ x=98, width=5, ascender (full height like R) */}
+      <rect x="98" y="8" width="5" height="32" fill="currentColor" />
 
-      {/* Total width: 130 + 18 + 4 padding = 152 */}
+      {/* Letter "e" @ x=106, width=15, x-height */}
+      <rect x="106" y="16" width="15" height="5" fill="currentColor" />
+      <rect x="106" y="16" width="5" height="24" fill="currentColor" />
+      <rect x="111" y="26" width="10" height="5" fill="currentColor" />
+      <rect x="106" y="35" width="15" height="5" fill="currentColor" />
     </svg>
   )
 }
@@ -90,13 +90,9 @@ interface LogoWordmarkAnimatedProps {
   height?: number
   className?: string
   animate?: boolean
-  /** Delay before animation starts (ms), useful for sequencing after LogoMark */
   startDelay?: number
 }
 
-/**
- * Animated geometric wordmark with staggered rectangle reveal.
- */
 export function LogoWordmarkAnimated({
   height = 48,
   className,
@@ -104,11 +100,10 @@ export function LogoWordmarkAnimated({
   startDelay = 0,
 }: LogoWordmarkAnimatedProps) {
   const scale = height / 48
-  const viewWidth = 152
+  const viewWidth = 124
 
   const stagger = 25
   let rectIndex = 0
-
   const getDelay = () => {
     const delay = startDelay + rectIndex * stagger
     rectIndex++
@@ -121,74 +116,74 @@ export function LogoWordmarkAnimated({
     <svg
       width={viewWidth * scale}
       height={height}
-      viewBox="0 0 152 48"
+      viewBox="0 0 124 48"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={cn(className)}
       aria-hidden="true"
     >
       {/* Letter "e" @ x=0 */}
-      <rect x="0" y="8" width="18" height="6" fill="currentColor"
+      <rect x="0" y="16" width="15" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="0" y="8" width="6" height="32" fill="currentColor"
+      <rect x="0" y="16" width="5" height="24" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="6" y="21" width="12" height="6" fill="currentColor"
+      <rect x="5" y="26" width="10" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="0" y="34" width="18" height="6" fill="currentColor"
-        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-
-      {/* Letter "c" @ x=22 */}
-      <rect x="22" y="8" width="18" height="6" fill="currentColor"
-        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="22" y="8" width="6" height="32" fill="currentColor"
-        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="22" y="34" width="18" height="6" fill="currentColor"
+      <rect x="0" y="35" width="15" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
 
-      {/* Letter "o" @ x=44 */}
-      <rect x="44" y="8" width="18" height="6" fill="currentColor"
+      {/* Letter "c" @ x=18 */}
+      <rect x="18" y="16" width="15" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="44" y="8" width="6" height="32" fill="currentColor"
+      <rect x="18" y="16" width="5" height="24" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="56" y="8" width="6" height="32" fill="currentColor"
-        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="44" y="34" width="18" height="6" fill="currentColor"
+      <rect x="18" y="35" width="15" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
 
-      {/* Letter "n" @ x=66 */}
-      <rect x="66" y="8" width="18" height="6" fill="currentColor"
+      {/* Letter "o" @ x=36 */}
+      <rect x="36" y="16" width="15" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="66" y="8" width="6" height="32" fill="currentColor"
+      <rect x="36" y="16" width="5" height="24" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="78" y="8" width="6" height="32" fill="currentColor"
+      <rect x="46" y="16" width="5" height="24" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-
-      {/* Letter "c" @ x=88 */}
-      <rect x="88" y="8" width="18" height="6" fill="currentColor"
-        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="88" y="8" width="6" height="32" fill="currentColor"
-        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="88" y="34" width="18" height="6" fill="currentColor"
+      <rect x="36" y="35" width="15" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
 
-      {/* Letter "i" @ x=110 */}
-      <rect x="110" y="8" width="6" height="6" fill="currentColor"
+      {/* Letter "n" @ x=54 */}
+      <rect x="54" y="16" width="15" height="5" fill="currentColor"
+        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
+      <rect x="54" y="16" width="5" height="24" fill="currentColor"
+        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
+      <rect x="64" y="16" width="5" height="24" fill="currentColor"
+        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
+
+      {/* Letter "c" @ x=72 */}
+      <rect x="72" y="16" width="15" height="5" fill="currentColor"
+        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
+      <rect x="72" y="16" width="5" height="24" fill="currentColor"
+        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
+      <rect x="72" y="35" width="15" height="5" fill="currentColor"
+        className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
+
+      {/* Letter "i" @ x=90 */}
+      <rect x="90" y="8" width="5" height="5" fill="currentColor"
         className={animate ? 'animate-rectangle-reveal' : ''} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="110" y="18" width="6" height="22" fill="currentColor"
+      <rect x="90" y="16" width="5" height="24" fill="currentColor"
         className={animate ? 'animate-rectangle-reveal origin-top' : ''} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
 
-      {/* Letter "l" @ x=120 */}
-      <rect x="120" y="8" width="6" height="32" fill="currentColor"
+      {/* Letter "l" @ x=98 */}
+      <rect x="98" y="8" width="5" height="32" fill="currentColor"
         className={animate ? 'animate-rectangle-reveal origin-top' : ''} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
 
-      {/* Letter "e" @ x=130 */}
-      <rect x="130" y="8" width="18" height="6" fill="currentColor"
+      {/* Letter "e" @ x=106 */}
+      <rect x="106" y="16" width="15" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="130" y="8" width="6" height="32" fill="currentColor"
+      <rect x="106" y="16" width="5" height="24" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="136" y="21" width="12" height="6" fill="currentColor"
+      <rect x="111" y="26" width="10" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
-      <rect x="130" y="34" width="18" height="6" fill="currentColor"
+      <rect x="106" y="35" width="15" height="5" fill="currentColor"
         className={animationClass} style={animate ? { animationDelay: `${getDelay()}ms` } : {}} />
     </svg>
   )

@@ -1,17 +1,15 @@
-import { captureException as sentryCaptureException } from '@sentry/nextjs'
 import type { ErrorInfo } from 'react'
 
-type CaptureContext = Parameters<typeof sentryCaptureException>[1]
+type CaptureContext = {
+  tags?: Record<string, string>
+  extra?: Record<string, unknown>
+}
 
 export function captureException(error: unknown, context?: CaptureContext) {
-  if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-    sentryCaptureException(error, context)
-    return
-  }
-
+  // Log errors to console in development
+  // TODO: Replace with proper error monitoring service when needed
   if (process.env.NODE_ENV !== 'production') {
-    // eslint-disable-next-line no-console
-    console.error('[Sentry disabled]', error)
+    console.error('[Error captured]', error, context)
   }
 }
 

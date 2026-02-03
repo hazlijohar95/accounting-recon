@@ -10,60 +10,11 @@
  */
 
 import { v } from "convex/values";
-import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
-import { Id, Doc } from "./_generated/dataModel";
+import { query, mutation } from "./_generated/server";
 import {
-  verifyQueryCompanyAccess,
-  requireCompanyAccess,
-} from "./lib/auth";
-
-// ============================================================================
-// Authorization Helpers
-// ============================================================================
-
-/**
- * Verify worksheet access for queries (returns allowed flag instead of throwing).
- */
-async function verifyQueryWorksheetAccess(
-  ctx: QueryCtx,
-  worksheetId: Id<"worksheets">,
-  workosUserId?: string
-): Promise<{ allowed: boolean; user: Doc<"users"> | null; worksheet: Doc<"worksheets"> | null }> {
-  const worksheet = await ctx.db.get(worksheetId);
-  if (!worksheet) {
-    return { allowed: false, user: null, worksheet: null };
-  }
-
-  const workspace = await ctx.db.get(worksheet.workspaceId);
-  if (!workspace) {
-    return { allowed: false, user: null, worksheet: null };
-  }
-
-  const { allowed, user } = await verifyQueryCompanyAccess(ctx, workspace.companyId, workosUserId);
-  return { allowed, user, worksheet };
-}
-
-/**
- * Require worksheet access for mutations (throws if unauthorized).
- */
-async function requireWorksheetAccess(
-  ctx: MutationCtx,
-  worksheetId: Id<"worksheets">,
-  workosUserId?: string
-): Promise<{ user: Doc<"users">; worksheet: Doc<"worksheets"> }> {
-  const worksheet = await ctx.db.get(worksheetId);
-  if (!worksheet) {
-    throw new Error("Worksheet not found");
-  }
-
-  const workspace = await ctx.db.get(worksheet.workspaceId);
-  if (!workspace) {
-    throw new Error("Workspace not found");
-  }
-
-  const { user } = await requireCompanyAccess(ctx, workspace.companyId, workosUserId);
-  return { user, worksheet };
-}
+  verifyQueryWorksheetAccess,
+  requireWorksheetAccess,
+} from "./lib/workspaceAuth";
 
 // ============================================================================
 // Chat Queries

@@ -1,0 +1,229 @@
+---
+title: Workspaces Overview
+description: AI-powered spreadsheets for accounting workflows
+---
+
+# Workspaces Overview
+
+Workspaces are AI-powered spreadsheets built into Reconciled. They combine the familiarity of spreadsheets with the power of AI enrichment, letting you analyze, categorize, and enhance your financial data.
+
+## What Are Workspaces?
+
+Think of workspaces as spreadsheets that can think. You can:
+
+- Create worksheets with custom columns
+- Import data from your transactions
+- Use AI formulas to enrich data automatically
+- Build custom views of your reconciliation data
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Workspace: Q4 2024 Analysis                    [+ Sheet]  │
+├─────────────────────────────────────────────────────────────┤
+│  Sheet1 │ Vendor Analysis │ Categories │                   │
+├─────────────────────────────────────────────────────────────┤
+│    A         │    B          │    C           │    D       │
+│  Vendor      │  Total Spent  │  Category      │  Notes     │
+│  ──────────────────────────────────────────────────────────│
+│  ABC Trading │  RM 45,000    │  =ENRICH(...)  │            │
+│  XYZ Supply  │  RM 23,500    │  =ENRICH(...)  │            │
+│  DEF Corp    │  RM 12,800    │  =ENRICH(...)  │            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Familiar Interface" icon="table">
+    Standard spreadsheet rows, columns, and cells. No learning curve if you know Excel or Google Sheets.
+  </Card>
+  <Card title="AI Formulas" icon="wand-magic-sparkles">
+    Use `=ENRICH()` to have AI analyze, categorize, or summarize data in any cell.
+  </Card>
+  <Card title="Multiple Sheets" icon="layer-group">
+    Create multiple worksheets within a workspace for different views or analyses.
+  </Card>
+  <Card title="Import Data" icon="file-import">
+    Paste directly from Excel/Google Sheets or import from your Reconciled transactions.
+  </Card>
+</CardGroup>
+
+## Creating a Workspace
+
+<Steps>
+  <Step title="Open Workspaces">
+    Click **Workspaces** in the sidebar navigation
+  </Step>
+
+  <Step title="Create New">
+    Click **New Workspace** and give it a name
+
+    Examples:
+    - "Q4 2024 Vendor Analysis"
+    - "Monthly Expense Breakdown"
+    - "Suspense Investigation"
+  </Step>
+
+  <Step title="Add Columns">
+    Click **+ Column** to add columns. Choose the column type:
+
+    | Type | Use For |
+    |------|---------|
+    | Text | Names, descriptions, notes |
+    | Number | Amounts, quantities |
+    | Date | Transaction dates |
+    | Formula | AI enrichment, calculations |
+  </Step>
+
+  <Step title="Enter Data">
+    - Type directly into cells
+    - Paste from Excel/Sheets (Ctrl+V / Cmd+V)
+    - Import from transactions
+  </Step>
+</Steps>
+
+## Column Types
+
+### Text Columns
+
+Standard text input for any data:
+- Vendor names
+- Descriptions
+- Notes and comments
+- Categories (manual)
+
+### Number Columns
+
+Numeric values with formatting:
+- Amounts (with currency symbol)
+- Quantities
+- Percentages
+- Supports decimal precision settings
+
+### Date Columns
+
+Date values with format options:
+- Transaction dates
+- Due dates
+- Period markers
+
+### Formula Columns
+
+The magic of workspaces—formulas that use AI:
+
+```
+=ENRICH("Categorize this vendor: " & A2)
+=ENRICH("Summarize this transaction in 10 words: " & B2)
+=ENRICH("Is this expense recurring? " & A2 & " - " & B2)
+```
+
+See [AI Formulas](/workspaces/ai-formulas) for complete formula documentation.
+
+## Importing Data
+
+### Paste from Excel/Sheets
+
+1. Copy data from Excel or Google Sheets
+2. Click a cell in Reconciled workspace
+3. Press Ctrl+V (Cmd+V on Mac)
+4. Data pastes with structure preserved
+
+<Tip>
+  When pasting, the first row can become headers. A dialog asks if your selection includes headers.
+</Tip>
+
+### Import from Transactions
+
+1. Click **Import** in the workspace toolbar
+2. Select **From Transactions**
+3. Choose filters:
+   - Date range
+   - Transaction type (cash/accrual)
+   - Match status
+4. Select columns to import
+5. Click **Import**
+
+### Import from CSV
+
+1. Click **Import** > **From CSV**
+2. Upload your CSV file
+3. Map columns (same as regular CSV import)
+4. Data appears in worksheet
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Vendor Analysis">
+    Analyze spending by vendor:
+
+    | Vendor | Total Spent | Category | Risk Level |
+    |--------|-------------|----------|------------|
+    | ABC Corp | RM 45,000 | =ENRICH(...) | =ENRICH(...) |
+
+    Use AI to automatically categorize vendors and flag high-risk spending.
+  </Accordion>
+
+  <Accordion title="Suspense Investigation">
+    Investigate unmatched items:
+
+    | Transaction | Amount | Possible Match | Notes |
+    |-------------|--------|----------------|-------|
+    | TT 15/1 | RM 5,000 | =ENRICH("Find possible match for: " & A2) | |
+
+    AI can suggest what unmatched transactions might relate to.
+  </Accordion>
+
+  <Accordion title="Expense Categorization">
+    Bulk categorize expenses:
+
+    | Description | Amount | Category | Subcategory |
+    |-------------|--------|----------|-------------|
+    | Office supplies | RM 450 | =ENRICH(...) | =ENRICH(...) |
+
+    AI categorizes based on description patterns.
+  </Accordion>
+
+  <Accordion title="Audit Preparation">
+    Prepare audit schedules:
+
+    | Item | Reference | Status | Notes for Auditor |
+    |------|-----------|--------|-------------------|
+    | Rev 001 | INV-2024-001 | Matched | =ENRICH("Summarize for auditor: " & A2) |
+
+    AI generates auditor-friendly summaries.
+  </Accordion>
+</AccordionGroup>
+
+## Cell Status Tracking
+
+AI formula cells show processing status:
+
+| Status | Icon | Meaning |
+|--------|------|---------|
+| Pending | ⏳ | Waiting to process |
+| Running | 🔄 | AI is processing |
+| Complete | ✅ | Result ready |
+| Error | ❌ | Processing failed |
+
+<Note>
+  AI processing happens asynchronously. Large worksheets may take a few seconds to fully populate.
+</Note>
+
+## Workspace Limits
+
+| Plan | Workspaces | Rows/Worksheet | AI Calls/Month |
+|------|------------|----------------|----------------|
+| Free | 3 | 100 | 500 |
+| Pro | Unlimited | 10,000 | 10,000 |
+| Enterprise | Unlimited | 100,000 | Unlimited |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Formulas" icon="function" href="/workspaces/ai-formulas">
+    Learn the ENRICH formula syntax
+  </Card>
+  <Card title="Reports" icon="chart-pie" href="/reports/dashboard">
+    View analysis on the dashboard
+  </Card>
+</CardGroup>

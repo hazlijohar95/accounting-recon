@@ -16,140 +16,32 @@ import { Id, Doc } from "./_generated/dataModel";
 import {
   requireCompanyAccess,
   verifyQueryCompanyAccess,
-  getOptionalAuth,
 } from "./lib/auth";
+import { ValidationErrors } from "./lib/errors";
+import { WORKSPACE_LIMITS } from "./lib/constants";
 import {
-  PermissionErrors,
-  ResourceErrors,
-  ValidationErrors,
-} from "./lib/errors";
-
-// ============================================================================
-// Authorization Helpers
-// ============================================================================
-
-/**
- * Maximum allowed length for cell values to prevent DoS
- */
-const MAX_CELL_VALUE_LENGTH = 100_000; // 100KB per cell
-const MAX_CELLS_PER_ROW = 100;
-
-/**
- * Verify workspace access for queries (returns allowed flag instead of throwing).
- * Uses standard auth helpers from lib/auth.
- */
-async function verifyQueryWorkspaceAccess(
-  ctx: QueryCtx,
-  workspaceId: Id<"workspaces">,
-  workosUserId?: string
-): Promise<{ allowed: boolean; user: Doc<"users"> | null; workspace: Doc<"workspaces"> | null }> {
-  const workspace = await ctx.db.get(workspaceId);
-  if (!workspace) {
-    return { allowed: false, user: null, workspace: null };
-  }
-
-  const { allowed, user } = await verifyQueryCompanyAccess(ctx, workspace.companyId, workosUserId);
-  return { allowed, user, workspace };
-}
-
-/**
- * Verify worksheet access for queries.
- */
-async function verifyQueryWorksheetAccess(
-  ctx: QueryCtx,
-  worksheetId: Id<"worksheets">,
-  workosUserId?: string
-): Promise<{ allowed: boolean; user: Doc<"users"> | null; worksheet: Doc<"worksheets"> | null; workspace: Doc<"workspaces"> | null }> {
-  const worksheet = await ctx.db.get(worksheetId);
-  if (!worksheet) {
-    return { allowed: false, user: null, worksheet: null, workspace: null };
-  }
-
-  const { allowed, user, workspace } = await verifyQueryWorkspaceAccess(ctx, worksheet.workspaceId, workosUserId);
-  return { allowed, user, worksheet, workspace };
-}
-
-/**
- * Require workspace access for mutations (throws if unauthorized).
- * Uses standard auth helpers from lib/auth.
- *
- * @param ctx - Mutation context
- * @param workspaceId - Workspace ID to verify access for
- * @param workosUserId - Optional fallback WorkOS user ID (for dev mode when JWT verification fails)
- */
-async function requireWorkspaceAccess(
-  ctx: MutationCtx,
-  workspaceId: Id<"workspaces">,
-  workosUserId?: string
-): Promise<{ user: Doc<"users">; workspace: Doc<"workspaces">; company: Doc<"companies"> }> {
-  const workspace = await ctx.db.get(workspaceId);
-  if (!workspace) {
-    return ResourceErrors.notFound("Workspace", workspaceId);
-  }
-
-  const { user, company } = await requireCompanyAccess(ctx, workspace.companyId, workosUserId);
-  return { user, workspace, company };
-}
-
-/**
- * Require worksheet access for mutations.
- *
- * @param ctx - Mutation context
- * @param worksheetId - Worksheet ID to verify access for
- * @param workosUserId - Optional fallback WorkOS user ID (for dev mode when JWT verification fails)
- */
-async function requireWorksheetAccess(
-  ctx: MutationCtx,
-  worksheetId: Id<"worksheets">,
-  workosUserId?: string
-): Promise<{ user: Doc<"users">; worksheet: Doc<"worksheets">; workspace: Doc<"workspaces">; company: Doc<"companies"> }> {
-  const worksheet = await ctx.db.get(worksheetId);
-  if (!worksheet) {
-    return ResourceErrors.notFound("Worksheet", worksheetId);
-  }
-
-  const { user, workspace, company } = await requireWorkspaceAccess(ctx, worksheet.workspaceId, workosUserId);
-  return { user, worksheet, workspace, company };
-}
-
-/**
- * Validate cell value to prevent DoS attacks.
- */
-function validateCellValue(value: unknown): boolean {
-  if (value === null || value === undefined) return true;
-  if (typeof value === "string") {
-    return value.length <= MAX_CELL_VALUE_LENGTH;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return true;
-  }
-  // For objects/arrays, stringify and check length
-  try {
-    const str = JSON.stringify(value);
-    return str.length <= MAX_CELL_VALUE_LENGTH;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Validate cells object.
- */
-function validateCells(cells: Record<string, unknown>): { valid: boolean; error?: string } {
-  const keys = Object.keys(cells);
-  if (keys.length > MAX_CELLS_PER_ROW) {
-    return { valid: false, error: `Too many cells (max ${MAX_CELLS_PER_ROW})` };
-  }
-  for (const [key, value] of Object.entries(cells)) {
-    if (!key.match(/^col_\d+$/)) {
-      return { valid: false, error: `Invalid column key: ${key}` };
-    }
-    if (!validateCellValue(value)) {
-      return { valid: false, error: `Cell value too large for ${key}` };
-    }
-  }
-  return { valid: true };
-}
+  verifyQueryWorkspaceAccess,
+  verifyQueryWorksheetAccess,
+  requireWorkspaceAccess,
+  requireWorksheetAccess,
+} from "./lib/workspaceAuth";
+import {
+  validateNameLength,
+  validateDescriptionLength,
+  validateFormulaLength,
+  validateCellValue,
+  validateCells,
+  validateColumnKeyFormat,
+  validateBatchSize,
+  clampColumnWidth,
+} from "./lib/workspaceValidators";
+import {
+  deleteWorksheetCascade,
+  deleteAgentJobsForRow,
+  clearCellsForColumn,
+  deleteTrashRows,
+  deleteTrashColumns,
+} from "./lib/workspaceCascade";
 
 // ============================================================================
 // Workspace Queries
@@ -237,11 +129,9 @@ export const createWorkspace = mutation({
     const { user } = await requireCompanyAccess(ctx, args.companyId, args.workosUserId);
 
     // Validate name length
-    if (args.name.length > 255) {
-      ValidationErrors.outOfRange("name", undefined, 255);
-    }
-    if (args.description && args.description.length > 1000) {
-      ValidationErrors.outOfRange("description", undefined, 1000);
+    validateNameLength(args.name);
+    if (args.description) {
+      validateDescriptionLength(args.description);
     }
 
     const now = Date.now();
@@ -283,11 +173,11 @@ export const updateWorkspace = mutation({
     await requireWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
 
     // Validate input lengths
-    if (args.name !== undefined && args.name.length > 255) {
-      ValidationErrors.outOfRange("name", undefined, 255);
+    if (args.name !== undefined) {
+      validateNameLength(args.name);
     }
-    if (args.description !== undefined && args.description.length > 1000) {
-      ValidationErrors.outOfRange("description", undefined, 1000);
+    if (args.description !== undefined) {
+      validateDescriptionLength(args.description);
     }
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
@@ -454,9 +344,7 @@ export const createWorksheet = mutation({
     await requireWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
 
     // Validate name length
-    if (args.name.length > 255) {
-      ValidationErrors.outOfRange("name", undefined, 255);
-    }
+    validateNameLength(args.name);
 
     const now = Date.now();
 
@@ -542,11 +430,9 @@ export const addColumn = mutation({
     await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
 
     // Validate inputs
-    if (args.name.length > 255) {
-      ValidationErrors.outOfRange("name", undefined, 255);
-    }
-    if (args.formula && args.formula.length > 10000) {
-      ValidationErrors.outOfRange("formula", undefined, 10000);
+    validateNameLength(args.name);
+    if (args.formula) {
+      validateFormulaLength(args.formula);
     }
 
     // Validate inputColumnId if provided
@@ -564,8 +450,8 @@ export const addColumn = mutation({
       .collect();
 
     // Limit number of columns
-    if (columns.length >= MAX_CELLS_PER_ROW) {
-      throw new Error(`Maximum columns reached (${MAX_CELLS_PER_ROW})`);
+    if (columns.length >= WORKSPACE_LIMITS.MAX_COLUMNS_PER_WORKSHEET) {
+      throw new Error(`Maximum columns reached (${WORKSPACE_LIMITS.MAX_COLUMNS_PER_WORKSHEET})`);
     }
 
     const maxOrder = columns.length > 0
@@ -684,11 +570,11 @@ export const updateColumn = mutation({
     await requireWorksheetAccess(ctx, column.worksheetId, args.workosUserId);
 
     // Validate inputs
-    if (args.name !== undefined && args.name.length > 255) {
-      ValidationErrors.outOfRange("name", undefined, 255);
+    if (args.name !== undefined) {
+      validateNameLength(args.name);
     }
-    if (args.formula !== undefined && args.formula.length > 10000) {
-      ValidationErrors.outOfRange("formula", undefined, 10000);
+    if (args.formula !== undefined) {
+      validateFormulaLength(args.formula);
     }
 
     // Validate inputColumnId if provided
@@ -718,6 +604,67 @@ export const updateColumn = mutation({
       await ctx.db.patch(args.columnId, updates);
       await ctx.db.patch(column.worksheetId, { updatedAt: Date.now() });
     }
+  },
+});
+
+/**
+ * Reorder columns in a worksheet by updating their order values.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const reorderColumns = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    columnIds: v.array(v.id("worksheetColumns")),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    // Verify all columns belong to this worksheet
+    const columns = await ctx.db
+      .query("worksheetColumns")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    const columnIdSet = new Set(columns.map((c) => c._id));
+    for (const columnId of args.columnIds) {
+      if (!columnIdSet.has(columnId)) {
+        throw new Error("Invalid column ID - column does not belong to this worksheet");
+      }
+    }
+
+    // Update order values based on position in array
+    const now = Date.now();
+    for (let i = 0; i < args.columnIds.length; i++) {
+      await ctx.db.patch(args.columnIds[i], { order: i });
+    }
+
+    await ctx.db.patch(args.worksheetId, { updatedAt: now });
+  },
+});
+
+/**
+ * Update a column's width.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const updateColumnWidth = mutation({
+  args: {
+    columnId: v.id("worksheetColumns"),
+    width: v.number(),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const column = await ctx.db.get(args.columnId);
+    if (!column) return;
+
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, column.worksheetId, args.workosUserId);
+
+    // Validate width
+    const validWidth = clampColumnWidth(args.width);
+
+    await ctx.db.patch(args.columnId, { width: validWidth });
   },
 });
 
@@ -790,10 +737,7 @@ export const addRows = mutation({
     await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
 
     // Limit batch size to prevent DoS
-    const MAX_BATCH_SIZE = 1000;
-    if (args.rowsData.length > MAX_BATCH_SIZE) {
-      ValidationErrors.bulkLimitExceeded(MAX_BATCH_SIZE, args.rowsData.length);
-    }
+    validateBatchSize(args.rowsData.length, "addRows");
 
     // Validate all cells
     for (const cells of args.rowsData) {
@@ -859,13 +803,13 @@ export const updateCell = mutation({
     await requireWorksheetAccess(ctx, row.worksheetId, args.workosUserId);
 
     // Validate column key format
-    if (!args.columnKey.match(/^col_\d+$/)) {
+    if (!validateColumnKeyFormat(args.columnKey)) {
       ValidationErrors.invalidFormat("columnKey", "col_N (e.g., col_0)");
     }
 
     // Validate cell value
     if (!validateCellValue(args.value)) {
-      ValidationErrors.outOfRange("value", undefined, MAX_CELL_VALUE_LENGTH);
+      ValidationErrors.outOfRange("value", undefined, WORKSPACE_LIMITS.MAX_CELL_VALUE_LENGTH);
     }
 
     // OPTIMISTIC CONCURRENCY: Check version if provided
@@ -947,10 +891,7 @@ export const deleteRows = mutation({
     if (args.rowIds.length === 0) return;
 
     // Limit batch size
-    const MAX_BATCH_SIZE = 1000;
-    if (args.rowIds.length > MAX_BATCH_SIZE) {
-      ValidationErrors.bulkLimitExceeded(MAX_BATCH_SIZE, args.rowIds.length);
-    }
+    validateBatchSize(args.rowIds.length, "deleteRows");
 
     // SECURITY FIX: Collect all rows first and verify they all belong to the same worksheet
     const rows: Array<{ id: Id<"worksheetRows">; worksheetId: Id<"worksheets"> }> = [];
@@ -1087,10 +1028,7 @@ export const restoreRows = mutation({
   handler: async (ctx, args) => {
     if (args.rowIds.length === 0) return;
 
-    const MAX_BATCH_SIZE = 1000;
-    if (args.rowIds.length > MAX_BATCH_SIZE) {
-      ValidationErrors.bulkLimitExceeded(MAX_BATCH_SIZE, args.rowIds.length);
-    }
+    validateBatchSize(args.rowIds.length, "restoreRows");
 
     let worksheetId: Id<"worksheets"> | null = null;
     const now = Date.now();

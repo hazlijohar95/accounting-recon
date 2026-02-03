@@ -72,3 +72,39 @@ export const EXTRACTION_STATUS = {
   COMPLETED: "completed",
   FAILED: "failed",
 } as const;
+
+/**
+ * Workspace and worksheet limits
+ * Used by: workspaces.ts, agents.ts
+ */
+export const WORKSPACE_LIMITS = {
+  /** Maximum cells allowed per row */
+  MAX_CELLS_PER_ROW: 100,
+  /** Maximum character length for cell values */
+  MAX_CELL_VALUE_LENGTH: 100_000,
+  /** Maximum items in a single batch operation */
+  MAX_BATCH_SIZE: 1000,
+  /** Maximum columns per worksheet */
+  MAX_COLUMNS_PER_WORKSHEET: 100,
+  /** Maximum length for names (workspace, worksheet, column) */
+  MAX_NAME_LENGTH: 255,
+  /** Maximum length for description fields */
+  MAX_DESCRIPTION_LENGTH: 1000,
+  /** Maximum length for formulas */
+  MAX_FORMULA_LENGTH: 10_000,
+  /** Minimum column width in pixels */
+  MIN_COLUMN_WIDTH: 40,
+  /** Maximum column width in pixels */
+  MAX_COLUMN_WIDTH: 1000,
+} as const;
+
+/**
+ * Cell status values for AI enrichment
+ */
+export const CELL_STATUS = {
+  IDLE: "idle",
+  PENDING: "pending",
+  RUNNING: "running",
+  COMPLETE: "complete",
+  ERROR: "error",
+} as const;

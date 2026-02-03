@@ -1,0 +1,121 @@
+---
+title: Quick Start
+description: Get up and running with Reconciled in 5 minutes
+---
+
+# Quick Start Guide
+
+This guide walks you through your first reconciliation—from signup to matched transactions.
+
+## Prerequisites
+
+- A bank statement (PDF, CSV, or image)
+- Corresponding invoices or receipts
+- An email address for signup
+
+## Steps
+
+<Steps>
+  <Step title="Create Your Account">
+    Go to [reconciled.app](https://reconciled.app) and click **Get Started**.
+
+    Sign up using:
+    - Google or Microsoft account (recommended)
+    - Email and password
+
+    You'll be redirected to complete onboarding.
+  </Step>
+
+  <Step title="Set Up Your Company">
+    The onboarding wizard collects your company details:
+
+    - **Company name** — Your business name
+    - **Currency** — Default currency for transactions (MYR, USD, SGD, etc.)
+    - **Fiscal year** — Your financial year end date
+
+    <Tip>
+      You can also use **AI onboarding** which asks questions conversationally instead of forms.
+    </Tip>
+  </Step>
+
+  <Step title="Upload Your First Files">
+    From the dashboard, click **Upload** and drag your files:
+
+    **Bank Statement**
+    - PDF bank statement from your bank portal
+    - CSV export from online banking
+    - Screenshot or scanned image
+
+    **Invoices/Receipts**
+    - PDF invoices
+    - Receipt images
+    - Bulk CSV of invoice data
+
+    Reconciled automatically categorizes files as cash (bank) or accrual (invoices).
+  </Step>
+
+  <Step title="Review Extracted Data">
+    After upload, Reconciled extracts transaction data:
+
+    - Transaction dates
+    - Amounts and currencies
+    - Descriptions and references
+    - Vendor/customer names
+
+    Verify the extraction is accurate. You can edit any field if needed.
+  </Step>
+
+  <Step title="Run Reconciliation">
+    Click **Reconcile** to start the 5-layer matching process:
+
+    1. Exact matches appear first (same amount, same date)
+    2. Window matches find transactions within date range
+    3. Reference matching links invoice numbers
+    4. Fuzzy matching catches partial description matches
+    5. AI semantic matching understands context
+
+    Each match shows a confidence percentage.
+  </Step>
+
+  <Step title="Review Matches">
+    The review screen shows all matches:
+
+    | Status | Action Needed |
+    |--------|---------------|
+    | ✅ Auto-matched (90%+) | None, verified automatically |
+    | 🔶 Suggested (70-89%) | Quick review, press A to approve |
+    | ❓ Suspense (below 70%) | Manual matching required |
+
+    **Keyboard shortcuts:**
+    - `A` — Approve match
+    - `R` — Reject match
+    - `↑/↓` — Navigate between matches
+  </Step>
+
+  <Step title="Export Your Report">
+    Once reconciliation is complete, export your results:
+
+    - **Summary Report** — High-level reconciliation overview
+    - **All Matches** — Complete match listing
+    - **Differences** — Unmatched items only
+
+    Export formats: CSV, Excel, or direct import to QuickBooks/Xero.
+  </Step>
+</Steps>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Upload Formats" icon="file-import" href="/upload/overview">
+    Learn about all supported file formats
+  </Card>
+  <Card title="5-Layer Matching" icon="layer-group" href="/reconciliation/how-it-works">
+    Understand how matching works in detail
+  </Card>
+  <Card title="AI Workspaces" icon="table" href="/workspaces/overview">
+    Create AI-powered spreadsheets
+  </Card>
+  <Card title="Company Settings" icon="building" href="/settings/company">
+    Configure your company preferences
+  </Card>
+</CardGroup>

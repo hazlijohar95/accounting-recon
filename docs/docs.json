@@ -1,0 +1,79 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Reconciled",
+  "logo": {
+    "light": "/images/logo-light.svg",
+    "dark": "/images/logo-dark.svg"
+  },
+  "favicon": "/images/favicon.svg",
+  "colors": {
+    "primary": "#000000",
+    "light": "#FFFFFF",
+    "dark": "#000000"
+  },
+  "theme": "mint",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "getting-started/signup",
+              "getting-started/onboarding",
+              "getting-started/demo-mode"
+            ]
+          },
+          {
+            "group": "Upload",
+            "pages": [
+              "upload/overview",
+              "upload/csv-import"
+            ]
+          },
+          {
+            "group": "Reconciliation",
+            "pages": [
+              "reconciliation/how-it-works",
+              "reconciliation/review-workflow"
+            ]
+          },
+          {
+            "group": "Workspaces",
+            "pages": [
+              "workspaces/overview",
+              "workspaces/ai-formulas"
+            ]
+          },
+          {
+            "group": "Reports",
+            "pages": [
+              "reports/dashboard",
+              "reports/exporting"
+            ]
+          },
+          {
+            "group": "Settings",
+            "pages": ["settings/company"]
+          },
+          {
+            "group": "AI Features",
+            "pages": [
+              "ai-features/semantic-matching"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/hazlijohar95/reconciled"
+    }
+  }
+}

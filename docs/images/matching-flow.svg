@@ -1,0 +1,73 @@
+<svg width="800" height="200" viewBox="0 0 800 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Layer 1: Exact -->
+  <g transform="translate(20, 60)">
+    <rect width="120" height="80" rx="8" fill="#000000"/>
+    <text x="60" y="30" font-family="system-ui" font-size="12" fill="white" text-anchor="middle" font-weight="600">Layer 1</text>
+    <text x="60" y="50" font-family="system-ui" font-size="14" fill="white" text-anchor="middle">Exact Match</text>
+    <text x="60" y="68" font-family="system-ui" font-size="10" fill="#CCCCCC" text-anchor="middle">Amount + Date</text>
+  </g>
+
+  <!-- Arrow 1 -->
+  <path d="M150 100 L170 100" stroke="#000000" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- Layer 2: Window -->
+  <g transform="translate(180, 60)">
+    <rect width="120" height="80" rx="8" fill="#333333"/>
+    <text x="60" y="30" font-family="system-ui" font-size="12" fill="white" text-anchor="middle" font-weight="600">Layer 2</text>
+    <text x="60" y="50" font-family="system-ui" font-size="14" fill="white" text-anchor="middle">Window Match</text>
+    <text x="60" y="68" font-family="system-ui" font-size="10" fill="#CCCCCC" text-anchor="middle">Amount ± 7 days</text>
+  </g>
+
+  <!-- Arrow 2 -->
+  <path d="M310 100 L330 100" stroke="#000000" stroke-width="2"/>
+
+  <!-- Layer 3: Reference -->
+  <g transform="translate(340, 60)">
+    <rect width="120" height="80" rx="8" fill="#555555"/>
+    <text x="60" y="30" font-family="system-ui" font-size="12" fill="white" text-anchor="middle" font-weight="600">Layer 3</text>
+    <text x="60" y="50" font-family="system-ui" font-size="14" fill="white" text-anchor="middle">Reference</text>
+    <text x="60" y="68" font-family="system-ui" font-size="10" fill="#CCCCCC" text-anchor="middle">Invoice/Check #</text>
+  </g>
+
+  <!-- Arrow 3 -->
+  <path d="M470 100 L490 100" stroke="#000000" stroke-width="2"/>
+
+  <!-- Layer 4: Fuzzy -->
+  <g transform="translate(500, 60)">
+    <rect width="120" height="80" rx="8" fill="#777777"/>
+    <text x="60" y="30" font-family="system-ui" font-size="12" fill="white" text-anchor="middle" font-weight="600">Layer 4</text>
+    <text x="60" y="50" font-family="system-ui" font-size="14" fill="white" text-anchor="middle">Fuzzy Match</text>
+    <text x="60" y="68" font-family="system-ui" font-size="10" fill="#CCCCCC" text-anchor="middle">String Similarity</text>
+  </g>
+
+  <!-- Arrow 4 -->
+  <path d="M630 100 L650 100" stroke="#000000" stroke-width="2"/>
+
+  <!-- Layer 5: Semantic -->
+  <g transform="translate(660, 60)">
+    <rect width="120" height="80" rx="8" fill="#999999" stroke="#000000" stroke-width="2"/>
+    <text x="60" y="30" font-family="system-ui" font-size="12" fill="white" text-anchor="middle" font-weight="600">Layer 5</text>
+    <text x="60" y="50" font-family="system-ui" font-size="14" fill="white" text-anchor="middle">AI Semantic</text>
+    <text x="60" y="68" font-family="system-ui" font-size="10" fill="#333333" text-anchor="middle">LLM Analysis</text>
+  </g>
+
+  <!-- Confidence labels -->
+  <text x="80" y="160" font-family="system-ui" font-size="10" fill="#000000" text-anchor="middle">95-100%</text>
+  <text x="240" y="160" font-family="system-ui" font-size="10" fill="#333333" text-anchor="middle">85-94%</text>
+  <text x="400" y="160" font-family="system-ui" font-size="10" fill="#555555" text-anchor="middle">80-94%</text>
+  <text x="560" y="160" font-family="system-ui" font-size="10" fill="#777777" text-anchor="middle">70-89%</text>
+  <text x="720" y="160" font-family="system-ui" font-size="10" fill="#999999" text-anchor="middle">70-89%</text>
+
+  <!-- Title -->
+  <text x="400" y="30" font-family="system-ui" font-size="16" fill="#000000" text-anchor="middle" font-weight="600">5-Layer Matching Pipeline</text>
+
+  <!-- Legend -->
+  <text x="400" y="185" font-family="system-ui" font-size="10" fill="#666666" text-anchor="middle">Transactions flow through each layer until matched or reach suspense</text>
+
+  <!-- Arrow marker definition -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#000000"/>
+    </marker>
+  </defs>
+</svg>

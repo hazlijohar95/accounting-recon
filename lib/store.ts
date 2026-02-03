@@ -114,7 +114,9 @@ export interface MatchPair {
   accrualTransaction: Transaction
   accrualDocument?: AccrualDocument // New - for accrualDocuments table
   confidence: MatchConfidence
+  confidenceScore?: number // Numeric confidence (0-100)
   matchLayer: 1 | 2 | 3 | 4 | 5 | 6
+  matchReason?: string // Why this match was suggested (especially for AI matches)
   approved: boolean
 }
 
@@ -181,6 +183,8 @@ interface AppState {
   matches: MatchPair[]
   approveMatch: (matchId: string) => void
   rejectMatch: (matchId: string) => void
+  revertMatchApproval: (matchId: string) => void
+  revertMatchRejection: (matchId: string, match: MatchPair) => void
   createManualMatch: (cashTxId: string, accrualDocId: string, confidence: MatchConfidence) => void
 
   // Sessions
@@ -502,6 +506,15 @@ export const useAppStore = create<AppState>()(
   rejectMatch: (matchId) => set((state) => ({
     matches: state.matches.filter(m => m.id !== matchId)
   })),
+  revertMatchApproval: (matchId) => set((state) => ({
+    matches: state.matches.map(m => m.id === matchId ? { ...m, approved: false } : m)
+  })),
+  revertMatchRejection: (matchId, match) => set((state) => {
+    // Only add back if not already present (prevents duplicates)
+    const exists = state.matches.some(m => m.id === matchId)
+    if (exists) return state
+    return { matches: [...state.matches, match] }
+  }),
   createManualMatch: (cashTxId, accrualDocId, confidence) => set((state) => {
     // Find the cash transaction
     const cashTx = state.cashTransactions.find(t => t.id === cashTxId)
@@ -741,6 +754,8 @@ export const useAddTransactions = () => useAppStore((state) => state.addTransact
 export const useMatches = () => useAppStore((state) => state.matches)
 export const useApproveMatch = () => useAppStore((state) => state.approveMatch)
 export const useRejectMatch = () => useAppStore((state) => state.rejectMatch)
+export const useRevertMatchApproval = () => useAppStore((state) => state.revertMatchApproval)
+export const useRevertMatchRejection = () => useAppStore((state) => state.revertMatchRejection)
 export const useCreateManualMatch = () => useAppStore((state) => state.createManualMatch)
 
 export const useAccrualDocuments = () => useAppStore((state) => state.accrualDocuments)
@@ -907,4 +922,90 @@ export const useSessionsSafe = () => useAppStore((state) =>
 /** Returns active session - demo data in Demo mode, real data in Real mode */
 export const useActiveSessionSafe = () => useAppStore((state) =>
   state.isDemo ? state.activeSession : state.realActiveSession
+)
+
+// =============================================================================
+// DOMAIN-GROUPED SELECTORS
+// =============================================================================
+// These composite selectors group related state for cleaner imports and better DX.
+
+/**
+ * Combined reconciliation state and actions.
+ * Use this when working with match approval/rejection workflows.
+ *
+ * @example
+ * ```tsx
+ * const { matches, approveMatch, rejectMatch, revertMatchApproval } = useReconciliationState()
+ * ```
+ */
+export const useReconciliationState = () => useAppStore(
+  useShallow((state) => ({
+    matches: state.matches,
+    approveMatch: state.approveMatch,
+    rejectMatch: state.rejectMatch,
+    revertMatchApproval: state.revertMatchApproval,
+    revertMatchRejection: state.revertMatchRejection,
+    createManualMatch: state.createManualMatch,
+    showCelebration: state.showCelebration,
+    setShowCelebration: state.setShowCelebration,
+  }))
+)
+
+/**
+ * Combined session management state and actions.
+ * Use this when working with reconciliation sessions.
+ *
+ * @example
+ * ```tsx
+ * const { sessions, activeSession, createSession } = useSessionManagement()
+ * ```
+ */
+export const useSessionManagement = () => useAppStore(
+  useShallow((state) => ({
+    sessions: state.sessions,
+    activeSession: state.activeSession,
+    createSession: state.createSession,
+    isProcessing: state.isProcessing,
+    processingProgress: state.processingProgress,
+    startProcessing: state.startProcessing,
+  }))
+)
+
+/**
+ * Combined transaction data for reconciliation views.
+ * Use this for read-only access to transaction data.
+ *
+ * @example
+ * ```tsx
+ * const { cashTransactions, accrualTransactions, accrualDocuments, suspenseItems } = useTransactionData()
+ * ```
+ */
+export const useTransactionData = () => useAppStore(
+  useShallow((state) => ({
+    cashTransactions: state.cashTransactions,
+    accrualTransactions: state.accrualTransactions,
+    accrualDocuments: state.accrualDocuments,
+    suspenseItems: state.suspenseItems,
+    addTransactions: state.addTransactions,
+  }))
+)
+
+/**
+ * Combined UI state for modals and overlays.
+ * Use this for managing global UI visibility states.
+ *
+ * @example
+ * ```tsx
+ * const { showPaywall, setShowPaywall, assistantOpen, setAssistantOpen } = useUIState()
+ * ```
+ */
+export const useUIState = () => useAppStore(
+  useShallow((state) => ({
+    showPaywall: state.showPaywall,
+    setShowPaywall: state.setShowPaywall,
+    assistantOpen: state.assistantOpen,
+    setAssistantOpen: state.setAssistantOpen,
+    showReasoningOverlay: state.showReasoningOverlay,
+    setShowReasoningOverlay: state.setShowReasoningOverlay,
+  }))
 )

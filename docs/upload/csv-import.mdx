@@ -1,0 +1,232 @@
+---
+title: CSV Import
+description: Bulk import transactions with flexible column mapping
+---
+
+# CSV Import
+
+For bulk transaction data, CSV import offers the most control. Map your columns to Reconciled fields with a visual mapper.
+
+## When to Use CSV Import
+
+CSV import is ideal when you have:
+
+- Large transaction lists (100+ records)
+- Exports from accounting software
+- Spreadsheet data you've prepared
+- Multiple periods of data
+
+## Import Process
+
+<Steps>
+  <Step title="Prepare Your CSV">
+    Ensure your CSV file has:
+    - Headers in the first row
+    - One transaction per row
+    - Consistent date and number formats
+    - UTF-8 encoding (recommended)
+
+    **Example CSV structure:**
+    ```csv
+    Date,Description,Reference,Debit,Credit
+    2024-01-15,Payment to Supplier A,INV-001,,5000.00
+    2024-01-16,Receipt from Customer B,REC-042,3500.00,
+    ```
+  </Step>
+
+  <Step title="Upload the File">
+    1. Go to **Upload** > **Import CSV**
+    2. Drag your CSV file or click to browse
+    3. The column mapper opens automatically
+  </Step>
+
+  <Step title="Select Transaction Type">
+    Choose what type of data you're importing:
+
+    | Type | Description | Use For |
+    |------|-------------|---------|
+    | Cash (Bank) | Bank transactions | Bank statement exports |
+    | Accrual (Invoice) | Invoice records | AR/AP data |
+  </Step>
+
+  <Step title="Map Columns">
+    The mapper shows your CSV columns on the left and Reconciled fields on the right.
+
+    **Required fields:**
+    - Date
+    - Amount (or separate Debit/Credit columns)
+    - Description
+
+    **Optional fields:**
+    - Reference/Invoice Number
+    - Vendor/Customer Name
+    - Category
+    - Notes
+
+    Drag and drop to map, or use the dropdown menus.
+  </Step>
+
+  <Step title="Configure Options">
+    Set import options:
+
+    - **Date format** — Match your CSV (DD/MM/YYYY, MM/DD/YYYY, etc.)
+    - **Decimal separator** — Period (.) or comma (,)
+    - **Skip rows** — Header rows to skip (usually 1)
+    - **Amount handling** — Single column vs Debit/Credit
+  </Step>
+
+  <Step title="Preview & Import">
+    Review the preview showing:
+    - First 10 rows as they'll be imported
+    - Field mapping validation
+    - Error highlighting for issues
+
+    Click **Import** to proceed.
+  </Step>
+</Steps>
+
+## Column Mapping Reference
+
+### Required Fields
+
+| Reconciled Field | Description | Example Values |
+|------------------|-------------|----------------|
+| Date | Transaction date | 2024-01-15, 15/01/2024 |
+| Amount | Transaction amount | 1500.00, -500.00 |
+| Description | Transaction description | "Payment to ABC Corp" |
+
+### Optional Fields
+
+| Reconciled Field | Description | Improves |
+|------------------|-------------|----------|
+| Reference | Invoice/check number | Reference matching |
+| Vendor/Customer | Counterparty name | Fuzzy & AI matching |
+| Category | Transaction category | Reporting |
+| Notes | Additional context | AI matching |
+
+## Handling Amount Columns
+
+<Tabs>
+  <Tab title="Single Amount Column">
+    If your CSV has one amount column with positive/negative values:
+
+    ```csv
+    Date,Description,Amount
+    2024-01-15,Payment,-5000.00
+    2024-01-16,Receipt,3500.00
+    ```
+
+    Map the `Amount` column directly. Negative values are outflows, positive are inflows.
+  </Tab>
+
+  <Tab title="Separate Debit/Credit">
+    If your CSV has separate debit and credit columns:
+
+    ```csv
+    Date,Description,Debit,Credit
+    2024-01-15,Payment,,5000.00
+    2024-01-16,Receipt,3500.00,
+    ```
+
+    Enable **Split Debit/Credit** in options, then map both columns.
+  </Tab>
+</Tabs>
+
+## Date Format Options
+
+Select the format that matches your CSV:
+
+| Format | Example | Common In |
+|--------|---------|-----------|
+| YYYY-MM-DD | 2024-01-15 | ISO standard |
+| DD/MM/YYYY | 15/01/2024 | UK, EU, Asia |
+| MM/DD/YYYY | 01/15/2024 | USA |
+| DD-MM-YYYY | 15-01-2024 | Alternative EU |
+| DD.MM.YYYY | 15.01.2024 | German format |
+
+<Warning>
+  Incorrect date format selection causes import errors or wrong dates. Double-check the preview before importing.
+</Warning>
+
+## Troubleshooting
+
+<Accordion title="Import fails with encoding error">
+  Your CSV may not be UTF-8 encoded.
+
+  **Fix:**
+  1. Open the CSV in Excel or Google Sheets
+  2. Save As > CSV UTF-8
+  3. Re-upload the new file
+</Accordion>
+
+<Accordion title="Dates are parsing incorrectly">
+  The date format selection doesn't match your data.
+
+  **Fix:**
+  1. Check your CSV dates
+  2. Select the correct format in options
+  3. Verify in the preview before importing
+</Accordion>
+
+<Accordion title="Amounts show as zero">
+  Number format mismatch (decimal separator).
+
+  **Fix:**
+  1. Check if your CSV uses comma (1.000,00) or period (1,000.00)
+  2. Select the matching decimal separator
+  3. Preview to verify amounts parse correctly
+</Accordion>
+
+<Accordion title="Some rows are skipped">
+  Empty or malformed rows in your CSV.
+
+  **Fix:**
+  1. Open CSV in spreadsheet software
+  2. Remove empty rows
+  3. Fix any cells with irregular formatting
+  4. Re-export and upload
+</Accordion>
+
+## Example Import Scenarios
+
+### Bank Statement Export
+
+```csv
+Date,Description,Reference,Amount,Balance
+15/01/2024,TT TO SUPPLIER A,TT240115001,-15000.00,85000.00
+16/01/2024,IBG FROM CUSTOMER B,IBG240116002,8500.00,93500.00
+```
+
+**Mapping:**
+- Date → Date (DD/MM/YYYY format)
+- Description → Description
+- Reference → Reference
+- Amount → Amount
+- Balance → Skip (not needed)
+
+### Accounting Software Export
+
+```csv
+Doc No,Doc Date,Account,Debit (MYR),Credit (MYR),Description
+INV-001,2024-01-15,1100,5000.00,,Sales to Customer A
+INV-002,2024-01-16,1100,3200.00,,Sales to Customer B
+```
+
+**Mapping:**
+- Doc No → Reference
+- Doc Date → Date (YYYY-MM-DD format)
+- Debit (MYR) → Debit
+- Credit (MYR) → Credit
+- Description → Description
+- Enable Split Debit/Credit mode
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Review Data" icon="eye" href="/reconciliation/how-it-works">
+    Review imported transactions before reconciling
+  </Card>
+  <Card title="Run Matching" icon="check-double" href="/reconciliation/review-workflow">
+    Start the 5-layer matching process
+  </Card>
+</CardGroup>

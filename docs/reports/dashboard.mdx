@@ -1,0 +1,228 @@
+---
+title: Dashboard
+description: Understanding your reconciliation analytics
+---
+
+# Dashboard
+
+The Reconciled dashboard provides a real-time overview of your reconciliation status, cash flow, and key metrics. It's your command center for understanding your financial data at a glance.
+
+## Dashboard Overview
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  Dashboard                                    Last updated: Now   │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
+│  │  Matched     │  │  Pending     │  │  Suspense    │             │
+│  │     156      │  │      23      │  │       8      │             │
+│  │    83%       │  │     12%      │  │      5%      │             │
+│  └──────────────┘  └──────────────┘  └──────────────┘             │
+│                                                                    │
+│  ┌────────────────────────────────────────────────────────────┐   │
+│  │  Cash Flow (12 Months)                                     │   │
+│  │  ▂▃▅▇█▇▅▃▂▃▄▅                                               │   │
+│  │  J F M A M J J A S O N D                                   │   │
+│  └────────────────────────────────────────────────────────────┘   │
+│                                                                    │
+│  ┌──────────────────────┐  ┌──────────────────────────────────┐   │
+│  │  Expense Breakdown   │  │  Recent Activity                 │   │
+│  │      [Donut]         │  │  • Matched INV-001 (2m ago)      │   │
+│  │                      │  │  • Uploaded bank.pdf (5m ago)    │   │
+│  │  ● Payroll    45%    │  │  • Approved 12 matches (1h ago)  │   │
+│  │  ● Operating  30%    │  │                                  │   │
+│  │  ● Marketing  15%    │  │                                  │   │
+│  │  ● Other      10%    │  │                                  │   │
+│  └──────────────────────┘  └──────────────────────────────────┘   │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+## Key Metrics
+
+### Reconciliation Status
+
+Three cards show your current reconciliation progress:
+
+<CardGroup cols={3}>
+  <Card title="Matched" icon="check-circle">
+    Transactions successfully matched (auto + manual).
+
+    **Target:** 95%+
+  </Card>
+  <Card title="Pending" icon="clock">
+    Suggested matches awaiting review.
+
+    **Action:** Review and approve
+  </Card>
+  <Card title="Suspense" icon="circle-question">
+    Unmatched items requiring investigation.
+
+    **Action:** Manual matching needed
+  </Card>
+</CardGroup>
+
+### Metric Calculations
+
+| Metric | Formula |
+|--------|---------|
+| Match Rate | (Matched Transactions / Total Transactions) × 100 |
+| Pending Rate | (Pending Matches / Total Transactions) × 100 |
+| Suspense Rate | (Suspense Items / Total Transactions) × 100 |
+
+## Cash Flow Chart
+
+The 12-month cash flow visualization shows:
+
+- **Inflows** (positive bars) — Receipts, payments received
+- **Outflows** (negative bars) — Payments, expenses
+- **Net flow** (line) — Monthly net position
+
+### Interacting with the Chart
+
+- **Hover** — See exact amounts for any month
+- **Click** — Drill down to that month's transactions
+- **Toggle** — Show/hide inflows, outflows, or net line
+
+### Time Period Options
+
+| Period | Shows |
+|--------|-------|
+| 12 Months | Rolling 12-month view (default) |
+| YTD | January to current month |
+| Last Year | Previous full year |
+| Custom | Select date range |
+
+## Expense Breakdown
+
+The donut chart visualizes expenses by category:
+
+- **Hover** — See category amount and percentage
+- **Click** — Filter transactions to that category
+- **Legend** — Shows top categories with "Other" grouping small ones
+
+### Default Categories
+
+| Category | Includes |
+|----------|----------|
+| Payroll | Salaries, wages, benefits |
+| Operating | Rent, utilities, supplies |
+| Marketing | Advertising, promotions |
+| Professional | Legal, accounting, consulting |
+| Travel | Transportation, accommodation |
+| Other | Uncategorized, miscellaneous |
+
+<Tip>
+  Categories are auto-assigned during reconciliation. Edit transaction categories in the review screen to improve accuracy.
+</Tip>
+
+## Recent Activity
+
+The activity feed shows real-time updates:
+
+- File uploads
+- Match completions
+- Manual approvals
+- Report generations
+- System notifications
+
+### Activity Types
+
+| Icon | Activity Type |
+|------|---------------|
+| 📤 | File uploaded |
+| ✅ | Match approved |
+| 🔄 | Reconciliation run |
+| 📊 | Report generated |
+| ⚠️ | Attention needed |
+
+## Dashboard Widgets
+
+### Customizing Your Dashboard
+
+1. Click **Customize** in the top-right
+2. Drag widgets to rearrange
+3. Toggle widgets on/off
+4. Resize widgets as needed
+5. Click **Save Layout**
+
+### Available Widgets
+
+| Widget | Description |
+|--------|-------------|
+| Reconciliation Status | Three metric cards |
+| Cash Flow Chart | 12-month visualization |
+| Expense Breakdown | Category donut chart |
+| Recent Activity | Activity feed |
+| Top Vendors | Highest spend vendors |
+| Unmatched Alerts | Suspense items needing attention |
+| Month Comparison | This vs last month |
+
+## Filters and Date Ranges
+
+Filter dashboard data using the controls:
+
+### Date Range Picker
+
+- **This Month** — Current month only
+- **Last Month** — Previous month
+- **This Quarter** — Current quarter
+- **YTD** — Year to date
+- **Last Year** — Previous full year
+- **Custom** — Select specific dates
+
+### Additional Filters
+
+- **Transaction Type** — Cash only, Accrual only, or All
+- **Category** — Filter to specific expense categories
+- **Vendor** — Filter to specific vendors
+- **Status** — Matched, Pending, Suspense
+
+## Refresh and Real-Time Updates
+
+The dashboard updates automatically when:
+
+- New files are uploaded
+- Matches are approved/rejected
+- Reconciliation runs complete
+
+### Manual Refresh
+
+Click the refresh icon (🔄) to force an update.
+
+<Note>
+  Real-time updates require an active connection. If updates seem stale, refresh the page.
+</Note>
+
+## Dashboard Actions
+
+Quick actions available from the dashboard:
+
+| Action | Location | Does |
+|--------|----------|------|
+| Upload Files | Top-right button | Opens upload modal |
+| Run Reconciliation | Quick action card | Starts matching |
+| Review Pending | Click pending count | Goes to review screen |
+| View Suspense | Click suspense count | Shows suspense items |
+| Generate Report | Reports dropdown | Opens report options |
+
+## Mobile Dashboard
+
+On mobile devices, the dashboard adapts:
+
+- Widgets stack vertically
+- Charts are swipeable
+- Tap metrics to see details
+- Activity feed is collapsible
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Generate Reports" icon="file-lines" href="/reports/exporting">
+    Export your reconciliation data
+  </Card>
+  <Card title="Review Workflow" icon="list-check" href="/reconciliation/review-workflow">
+    Process pending matches
+  </Card>
+</CardGroup>

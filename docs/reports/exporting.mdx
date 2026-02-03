@@ -1,0 +1,318 @@
+---
+title: Exporting Reports
+description: Export formats and accounting software integrations
+---
+
+# Exporting Reports
+
+Reconciled generates reports in multiple formats for your records, auditors, and accounting software. This page covers all export options and integrations.
+
+## Report Types
+
+<CardGroup cols={2}>
+  <Card title="Summary Report" icon="file-lines">
+    High-level reconciliation overview with totals and match statistics.
+  </Card>
+  <Card title="All Matches" icon="list">
+    Complete listing of every matched transaction pair.
+  </Card>
+  <Card title="Differences Report" icon="not-equal">
+    Only unmatched and suspense items for investigation.
+  </Card>
+  <Card title="Activity Log" icon="clock-rotate-left">
+    Audit trail of all actions taken during reconciliation.
+  </Card>
+</CardGroup>
+
+## Generating Reports
+
+<Steps>
+  <Step title="Open Reports">
+    Click **Reports** in the sidebar or dashboard
+  </Step>
+
+  <Step title="Select Report Type">
+    Choose the report you need:
+    - Summary Report
+    - All Matches
+    - Differences
+    - Activity Log
+  </Step>
+
+  <Step title="Configure Options">
+    Set report parameters:
+    - **Date Range** — Period to include
+    - **Format** — CSV, Excel, PDF, or software-specific
+    - **Include** — Choose data columns to include
+  </Step>
+
+  <Step title="Generate & Download">
+    Click **Generate Report** and download when ready
+  </Step>
+</Steps>
+
+## Export Formats
+
+### Standard Formats
+
+<Tabs>
+  <Tab title="CSV">
+    **Comma-Separated Values**
+
+    Best for:
+    - Importing into spreadsheets
+    - Data analysis tools
+    - Custom processing
+
+    ```csv
+    Date,Bank Description,Bank Amount,Invoice No,Invoice Amount,Confidence,Status
+    2024-01-15,TT TO ABC TRADING,5000.00,INV-001,5000.00,95%,Matched
+    2024-01-16,PAYMENT SUPPLIER XYZ,3200.00,INV-002,3200.00,82%,Matched
+    ```
+  </Tab>
+
+  <Tab title="Excel">
+    **Microsoft Excel (.xlsx)**
+
+    Best for:
+    - Formatted reports
+    - Further analysis in Excel
+    - Sharing with stakeholders
+
+    Features:
+    - Formatted headers and columns
+    - Currency formatting
+    - Filter-ready tables
+    - Summary row with totals
+  </Tab>
+
+  <Tab title="PDF">
+    **Portable Document Format**
+
+    Best for:
+    - Printing
+    - Archiving
+    - Sharing with auditors
+
+    Features:
+    - Professional formatting
+    - Company branding
+    - Page numbers and date stamps
+    - Digital signature ready
+  </Tab>
+</Tabs>
+
+### Accounting Software Formats
+
+<Tabs>
+  <Tab title="SQL Accounting">
+    Export format compatible with SQL Accounting (Malaysia):
+
+    - **Format:** CSV with SQL Accounting column structure
+    - **Includes:** Document type codes, account mappings
+    - **Import Path:** SQL Accounting → Import → Bank Reconciliation
+
+    ```csv
+    DocType,DocNo,DocDate,DebitAmt,CreditAmt,Description,RefNo
+    OR,OR-0001,15/01/2024,5000.00,0.00,Payment from Customer,INV-001
+    ```
+  </Tab>
+
+  <Tab title="AutoCount">
+    Export format for AutoCount Accounting:
+
+    - **Format:** CSV with AutoCount structure
+    - **Includes:** Account codes, tax codes
+    - **Import Path:** AutoCount → Tools → Import Data
+
+    ```csv
+    DocNo,DocDate,Account,Description,Debit,Credit,TaxType
+    JV-001,2024-01-15,1100,Customer Payment,5000.00,0.00,SR
+    ```
+  </Tab>
+
+  <Tab title="QuickBooks">
+    Export format for QuickBooks Online/Desktop:
+
+    - **Format:** IIF (Desktop) or CSV (Online)
+    - **Includes:** QB account mappings, classes
+    - **Import Path:** QB → File → Import
+
+    Features:
+    - Automatic account mapping suggestions
+    - Multi-currency support
+    - Class/Location tracking
+  </Tab>
+
+  <Tab title="Xero">
+    Export format for Xero:
+
+    - **Format:** CSV with Xero column structure
+    - **Includes:** Tracking categories, tax rates
+    - **Import Path:** Xero → Accounting → Bank Accounts → Import
+
+    Features:
+    - Contact matching
+    - Tax code mapping
+    - Tracking category support
+  </Tab>
+</Tabs>
+
+## Report Contents
+
+### Summary Report
+
+| Section | Contents |
+|---------|----------|
+| Header | Company name, period, generation date |
+| Overview | Total transactions, matched count, match rate |
+| By Status | Breakdown: Auto-matched, Manual, Pending, Suspense |
+| By Category | Spending by category with totals |
+| Totals | Cash total, Accrual total, Difference |
+
+### All Matches Report
+
+| Column | Description |
+|--------|-------------|
+| Bank Date | Transaction date from bank |
+| Bank Description | Bank transaction description |
+| Bank Amount | Bank transaction amount |
+| Invoice No | Matched invoice number |
+| Invoice Date | Invoice date |
+| Invoice Amount | Invoice amount |
+| Confidence | Match confidence percentage |
+| Match Type | Which layer matched (Exact, Window, etc.) |
+| Status | Current status |
+
+### Differences Report
+
+Shows only items requiring attention:
+
+- Unmatched bank transactions
+- Unmatched invoices
+- Suspense items with notes
+- Amount discrepancies
+
+### Activity Log
+
+Audit trail including:
+
+| Field | Description |
+|-------|-------------|
+| Timestamp | When action occurred |
+| User | Who performed action |
+| Action | What was done |
+| Details | Affected items |
+| Before/After | State changes |
+
+## Scheduled Reports
+
+Set up automatic report generation:
+
+<Steps>
+  <Step title="Open Report Settings">
+    Go to **Settings** > **Reports** > **Scheduled Reports**
+  </Step>
+
+  <Step title="Create Schedule">
+    Click **Add Schedule** and configure:
+    - **Report Type** — Which report to generate
+    - **Frequency** — Daily, Weekly, Monthly
+    - **Format** — Your preferred export format
+  </Step>
+
+  <Step title="Set Delivery">
+    Choose how to receive:
+    - **Email** — Send to specified addresses
+    - **Download** — Save to your account
+    - **Cloud Storage** — Export to Dropbox/Google Drive
+  </Step>
+
+  <Step title="Activate">
+    Toggle the schedule on and save
+  </Step>
+</Steps>
+
+## Export Options
+
+### Include/Exclude Options
+
+| Option | Description |
+|--------|-------------|
+| Matched Only | Include only confirmed matches |
+| Include Pending | Include suggested matches |
+| Include Suspense | Include unmatched items |
+| With Notes | Include any notes/comments |
+| With Attachments | Include file attachment links |
+
+### Formatting Options
+
+| Option | Description |
+|--------|-------------|
+| Date Format | DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD |
+| Number Format | 1,000.00 or 1.000,00 |
+| Currency Symbol | Show/hide currency symbols |
+| Negative Numbers | (1,000) or -1,000 |
+
+## Integration Setup
+
+### Connecting Accounting Software
+
+For direct integration (QuickBooks, Xero):
+
+<Steps>
+  <Step title="Go to Integrations">
+    Navigate to **Settings** > **Integrations**
+  </Step>
+
+  <Step title="Select Software">
+    Click on QuickBooks or Xero
+  </Step>
+
+  <Step title="Authorize">
+    Log in and authorize Reconciled to access your account
+  </Step>
+
+  <Step title="Map Accounts">
+    Configure account mappings between Reconciled and your software
+  </Step>
+
+  <Step title="Test Export">
+    Run a test export to verify the connection
+  </Step>
+</Steps>
+
+<Note>
+  Direct integration with SQL Accounting and AutoCount requires manual CSV import. These systems don't support API connections.
+</Note>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Export after completing review">
+    Always finish reviewing pending matches before generating final reports. Incomplete reconciliations produce incomplete reports.
+  </Accordion>
+
+  <Accordion title="Use PDF for audit purposes">
+    PDF reports are immutable and include timestamps—ideal for audit documentation.
+  </Accordion>
+
+  <Accordion title="Keep activity logs">
+    The Activity Log provides an audit trail. Export monthly for your records.
+  </Accordion>
+
+  <Accordion title="Test accounting imports">
+    When setting up accounting software exports, run a test import with a small data set first.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dashboard" icon="chart-pie" href="/reports/dashboard">
+    View reconciliation analytics
+  </Card>
+  <Card title="Company Settings" icon="building" href="/settings/company">
+    Configure export preferences
+  </Card>
+</CardGroup>

@@ -1,0 +1,247 @@
+---
+title: Company Settings
+description: Configure your company profile and preferences
+---
+
+# Company Settings
+
+Company settings control how Reconciled handles your data, displays information, and generates reports. Configure these settings to match your business requirements.
+
+## Accessing Settings
+
+1. Click **Settings** in the sidebar
+2. Select **Company** from the settings menu
+
+## Company Profile
+
+### Basic Information
+
+| Field | Description | Editable |
+|-------|-------------|----------|
+| Company Name | Your registered business name | ✅ Yes |
+| Company Code | Unique identifier (auto-generated) | ❌ No |
+| Industry | Business sector classification | ✅ Yes |
+| Registration No. | Business registration number | ✅ Yes |
+
+<Note>
+  Company Code is set during onboarding and cannot be changed. It's used internally for data organization.
+</Note>
+
+### Contact Information
+
+| Field | Description |
+|-------|-------------|
+| Address | Business address (for reports) |
+| Phone | Contact phone number |
+| Email | Primary business email |
+| Website | Company website URL |
+
+## Financial Settings
+
+### Currency Configuration
+
+<Steps>
+  <Step title="Primary Currency">
+    Set your main operating currency. All reports and dashboards use this currency by default.
+
+    Supported currencies include:
+    - MYR (Malaysian Ringgit)
+    - USD (US Dollar)
+    - SGD (Singapore Dollar)
+    - EUR (Euro)
+    - GBP (British Pound)
+    - And 50+ others
+  </Step>
+
+  <Step title="Multi-Currency">
+    Enable multi-currency support if you deal in multiple currencies:
+
+    - Set additional currencies
+    - Configure exchange rate source
+    - Choose manual or automatic rates
+  </Step>
+
+  <Step title="Decimal Precision">
+    Configure decimal places for amounts:
+    - **2 decimals** — Standard (1,234.56)
+    - **0 decimals** — Whole numbers only (1,235)
+    - **3+ decimals** — High precision (1,234.567)
+  </Step>
+</Steps>
+
+### Fiscal Year
+
+Configure your financial year:
+
+| Setting | Options |
+|---------|---------|
+| Year End Date | Any date (e.g., Dec 31, Mar 31, Jun 30) |
+| First Period | Month your fiscal year starts |
+| Period Type | Monthly or 4-4-5 week calendar |
+
+<Tip>
+  Setting the correct fiscal year ensures reports and period comparisons align with your actual financial periods.
+</Tip>
+
+### Tax Settings
+
+| Field | Description |
+|-------|-------------|
+| Tax Registration No. | GST/VAT/Sales tax number |
+| Default Tax Rate | Standard tax rate for your jurisdiction |
+| Tax Inclusive | Whether amounts include tax by default |
+
+## Display Preferences
+
+### Date Format
+
+Choose how dates appear throughout the app:
+
+| Format | Example | Common In |
+|--------|---------|-----------|
+| DD/MM/YYYY | 15/01/2024 | UK, EU, Asia |
+| MM/DD/YYYY | 01/15/2024 | USA |
+| YYYY-MM-DD | 2024-01-15 | ISO standard |
+| DD-MMM-YYYY | 15-Jan-2024 | Reports |
+
+### Number Format
+
+Configure number display:
+
+| Setting | Option A | Option B |
+|---------|----------|----------|
+| Decimal Separator | Period (.) | Comma (,) |
+| Thousands Separator | Comma (,) | Period (.) |
+| Example | 1,234.56 | 1.234,56 |
+
+### Negative Numbers
+
+Choose negative number display:
+
+| Style | Example |
+|-------|---------|
+| Minus sign | -1,234.56 |
+| Parentheses | (1,234.56) |
+| Red color | 1,234.56 (in red) |
+
+## Reconciliation Settings
+
+### Matching Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Date Window | 7 days | Days before/after to consider for window matching |
+| Auto-Match Threshold | 90% | Minimum confidence for automatic matching |
+| Fuzzy Match Threshold | 70% | Minimum similarity for fuzzy matches |
+| Enable AI Matching | Yes | Use Layer 5 semantic matching |
+
+### Auto-Categorization
+
+Configure automatic expense categorization:
+
+<Steps>
+  <Step title="Enable/Disable">
+    Toggle automatic categorization on or off
+  </Step>
+
+  <Step title="Category Mapping">
+    Map keywords to categories:
+
+    | Keywords | Category |
+    |----------|----------|
+    | salary, wages, payroll | Payroll |
+    | rent, utilities, office | Operating |
+    | ads, marketing, promo | Marketing |
+  </Step>
+
+  <Step title="Default Category">
+    Set a fallback category for unmatched items (e.g., "Other" or "Uncategorized")
+  </Step>
+</Steps>
+
+### Vendor Aliases
+
+Add vendor name aliases for better matching:
+
+```
+Primary Name          →    Aliases
+────────────────────────────────────
+ABC Trading Sdn Bhd   →    ABC Trading, ABC SDN BHD, A.B.C.
+```
+
+<Accordion title="Why use aliases?">
+  Bank statements often abbreviate vendor names. Adding aliases helps the matching engine recognize variations:
+
+  - "GRAB*GRABFOOD" → "Grab Holdings"
+  - "AMZN MKTP" → "Amazon"
+  - "SQ *COFFEE SHOP" → "The Coffee Shop"
+</Accordion>
+
+## Notification Settings
+
+Configure email notifications:
+
+| Notification | Description | Default |
+|--------------|-------------|---------|
+| Upload Complete | When file processing finishes | ✅ On |
+| Reconciliation Done | When matching completes | ✅ On |
+| Weekly Summary | Weekly reconciliation status | ✅ On |
+| Suspense Alerts | When suspense items exceed threshold | ✅ On |
+| Report Ready | When scheduled reports generate | ❌ Off |
+
+## Data Management
+
+### Export Company Data
+
+Download all your company data:
+
+1. Go to **Settings** > **Data Management**
+2. Click **Export All Data**
+3. Choose format (JSON or CSV bundle)
+4. Download the archive
+
+<Note>
+  Data export includes transactions, matches, settings, and activity logs. It does not include uploaded files (available separately).
+</Note>
+
+### Delete Account
+
+To permanently delete your company and all data:
+
+1. Go to **Settings** > **Data Management**
+2. Click **Delete Company**
+3. Type your company name to confirm
+4. Click **Permanently Delete**
+
+<Warning>
+  Account deletion is irreversible. All data, transactions, and settings will be permanently removed. Export your data first if needed.
+</Warning>
+
+## Settings by Plan
+
+| Setting | Free | Pro | Enterprise |
+|---------|------|-----|------------|
+| Multi-Currency | ❌ | ✅ | ✅ |
+| Custom Categories | 5 | 50 | Unlimited |
+| Vendor Aliases | 10 | 100 | Unlimited |
+| API Access | ❌ | ✅ | ✅ |
+| SSO | ❌ | ❌ | ✅ |
+
+## Saving Changes
+
+After making changes:
+
+1. Click **Save Changes** at the bottom of each section
+2. Changes take effect immediately
+3. Some changes (like fiscal year) may require data reprocessing
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Profile Settings" icon="user" href="/settings/profile">
+    Manage your personal profile
+  </Card>
+  <Card title="Export Reports" icon="file-export" href="/reports/exporting">
+    Generate reports with your settings
+  </Card>
+</CardGroup>

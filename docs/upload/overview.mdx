@@ -1,0 +1,176 @@
+---
+title: Upload Overview
+description: Supported file formats and upload methods
+---
+
+# Uploading Files
+
+Reconciled accepts a wide variety of file formats for both bank statements (cash basis) and invoices/receipts (accrual basis). This page covers all supported formats and upload methods.
+
+## Supported Formats
+
+<Tabs>
+  <Tab title="Bank Statements">
+    **PDF Files**
+    - Bank-generated statement PDFs
+    - Scanned paper statements
+    - Multi-page documents supported
+
+    **CSV/Excel**
+    - CSV exports from online banking
+    - Excel (.xlsx, .xls) exports
+    - Custom column mapping available
+
+    **Images**
+    - PNG, JPG, JPEG screenshots
+    - Scanned document images
+    - Mobile photos of statements
+  </Tab>
+
+  <Tab title="Invoices & Receipts">
+    **PDF Files**
+    - Invoice PDFs from suppliers
+    - Receipt PDFs
+    - Multi-invoice PDFs (auto-split)
+
+    **CSV/Excel**
+    - Bulk invoice lists
+    - Accounting software exports
+    - Custom column mapping
+
+    **Images**
+    - Receipt photos
+    - Invoice screenshots
+    - Scanned documents
+  </Tab>
+</Tabs>
+
+## Upload Methods
+
+### Drag and Drop
+
+The fastest way to upload:
+
+1. Open the **Upload** page from the dashboard
+2. Drag files from your computer onto the upload zone
+3. Release to start upload
+
+<Tip>
+  You can drag multiple files at once. Reconciled processes them in parallel.
+</Tip>
+
+### File Browser
+
+Traditional file selection:
+
+1. Click **Browse Files** in the upload zone
+2. Select one or more files from your computer
+3. Click **Open** to start upload
+
+### Bulk Import
+
+For large datasets, use CSV import:
+
+1. Click **Import CSV** in the upload options
+2. Upload your CSV file
+3. Map columns to Reconciled fields
+4. Review and confirm import
+
+See [CSV Import](/upload/csv-import) for detailed instructions.
+
+## File Processing
+
+After upload, Reconciled processes your files:
+
+```mermaid
+flowchart LR
+    A[Upload] --> B[Store in R2]
+    B --> C[OCR/Parse]
+    C --> D[Extract Data]
+    D --> E[Ready for Matching]
+```
+
+### Processing Steps
+
+<Steps>
+  <Step title="Upload">
+    File is uploaded to secure cloud storage (Cloudflare R2)
+  </Step>
+  <Step title="Classification">
+    AI determines if the file is cash basis (bank) or accrual basis (invoice)
+  </Step>
+  <Step title="Extraction">
+    OCR extracts text from images/PDFs, parsers extract structured data
+  </Step>
+  <Step title="Validation">
+    Extracted data is validated for completeness and accuracy
+  </Step>
+  <Step title="Ready">
+    Transactions appear in your transaction list, ready for reconciliation
+  </Step>
+</Steps>
+
+## Extraction Accuracy
+
+Reconciled uses multiple extraction methods:
+
+| File Type | Method | Typical Accuracy |
+|-----------|--------|------------------|
+| Bank PDF | Native text extraction | 99%+ |
+| Scanned PDF | OCR (Tesseract/Cloud) | 95%+ |
+| Images | OCR with preprocessing | 90%+ |
+| CSV/Excel | Direct parsing | 100% |
+
+<Note>
+  After extraction, review the data before running reconciliation. You can edit any extracted field.
+</Note>
+
+## File Size Limits
+
+| Plan | Max File Size | Max Files/Upload |
+|------|---------------|------------------|
+| Free | 10 MB | 10 files |
+| Pro | 50 MB | 100 files |
+| Enterprise | 200 MB | Unlimited |
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use native PDFs when possible">
+    PDFs with selectable text extract more accurately than scanned images. Export directly from your bank portal rather than scanning paper statements.
+  </Accordion>
+
+  <Accordion title="Ensure good image quality">
+    For photos and scans:
+    - Use good lighting
+    - Avoid shadows and glare
+    - Keep documents flat
+    - Use at least 300 DPI for scans
+  </Accordion>
+
+  <Accordion title="Organize before uploading">
+    Group related files:
+    - All bank statements for one period together
+    - All invoices for the same period
+    - Consistent file naming helps track uploads
+  </Accordion>
+
+  <Accordion title="Check extraction results">
+    Always review extracted data:
+    - Verify amounts are correct
+    - Check dates parsed correctly
+    - Confirm descriptions are complete
+    - Edit any OCR errors before reconciling
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CSV Import" icon="file-csv" href="/upload/csv-import">
+    Learn about bulk CSV imports with column mapping
+  </Card>
+  <Card title="Run Reconciliation" icon="check-double" href="/reconciliation/how-it-works">
+    Start matching your uploaded transactions
+  </Card>
+</CardGroup>

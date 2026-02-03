@@ -1,7 +1,7 @@
 import type { MatchPair, Transaction, MatchConfidence } from '@/lib/store'
 
 /** Tab options for the reconcile view */
-export type Tab = 'pending' | 'matched' | 'suspense'
+export type Tab = 'pending' | 'review' | 'matched' | 'suspense'
 
 /** Undo action type for tracking reversible actions */
 export interface UndoAction {
@@ -86,3 +86,4 @@ export type ReconcileAction =
   | { type: 'CLEAR_FILTERS' }
   | { type: 'PUSH_UNDO'; payload: UndoAction }
   | { type: 'POP_UNDO' }
+  | { type: 'REMOVE_UNDO_BY_MATCH_ID'; payload: string }

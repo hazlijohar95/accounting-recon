@@ -1,0 +1,260 @@
+---
+title: Review Workflow
+description: Approving and rejecting matches efficiently
+---
+
+# Review Workflow
+
+After the matching engine runs, you'll review the results. Reconciled provides an efficient interface with keyboard shortcuts for fast processing.
+
+## The Review Interface
+
+The review screen shows matches organized by status:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Reconciliation Review                          [Export ▼] │
+├─────────────────────────────────────────────────────────────┤
+│  Filters: [All ▼] [90%+ ▼] [Date Range ▼]       Search: [  ]│
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✅ Auto-Matched (156)  🔶 Suggested (23)  ❓ Suspense (8)  │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  Bank Transaction          │  Invoice/Receipt    │ Actions │
+│  ─────────────────────────────────────────────────────────  │
+│  RM 5,000 | Jan 15         │  INV-001 | Jan 15   │ [A] [R] │
+│  TT to ABC Trading         │  ABC Trading        │ 95%     │
+│  ─────────────────────────────────────────────────────────  │
+│  RM 3,200 | Jan 18         │  INV-002 | Jan 16   │ [A] [R] │
+│  Payment Supplier XYZ      │  XYZ Supplies       │ 82%     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Match Statuses
+
+<CardGroup cols={3}>
+  <Card title="Auto-Matched" icon="check-circle">
+    **90%+ confidence**
+
+    Already approved. Review only if you want to verify.
+  </Card>
+  <Card title="Suggested" icon="circle-question">
+    **70-89% confidence**
+
+    Needs quick review. Press A to approve or R to reject.
+  </Card>
+  <Card title="Suspense" icon="circle-exclamation">
+    **Below 70% or unmatched**
+
+    Requires manual matching or investigation.
+  </Card>
+</CardGroup>
+
+## Keyboard Shortcuts
+
+Master these shortcuts for 10x faster review:
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| `A` | Approve | Approve the selected match |
+| `R` | Reject | Reject the selected match |
+| `↑` | Previous | Move to previous match |
+| `↓` | Next | Move to next match |
+| `Enter` | Details | Open match details panel |
+| `Esc` | Close | Close details/modal |
+| `Space` | Select | Toggle selection for bulk actions |
+| `?` | Help | Show keyboard shortcuts |
+
+<Tip>
+  Start with the Suggested tab and work through matches using `↓` to move and `A` to approve. You can process 50+ matches per minute this way.
+</Tip>
+
+## Reviewing a Match
+
+Each match row shows:
+
+**Left side (Bank Transaction):**
+- Amount and date
+- Transaction description
+- Bank reference
+
+**Right side (Invoice/Receipt):**
+- Invoice number and date
+- Vendor/customer name
+- Invoice amount
+
+**Match Info:**
+- Confidence percentage
+- Which layer matched it
+- Matching factors (hover for details)
+
+### Match Details Panel
+
+Press `Enter` to see full details:
+
+- Complete transaction description
+- Full invoice details
+- Why it matched (matching criteria met)
+- Historical matches with same vendor
+- Amount breakdown (if split)
+
+## Approval Workflow
+
+<Steps>
+  <Step title="Filter to Suggested">
+    Click the **Suggested** tab to see matches needing review
+  </Step>
+
+  <Step title="Review First Match">
+    Check the bank transaction matches the invoice:
+    - Amounts align
+    - Dates make sense
+    - Descriptions relate
+  </Step>
+
+  <Step title="Approve or Reject">
+    - Press `A` to approve (match is confirmed)
+    - Press `R` to reject (goes back to unmatched)
+  </Step>
+
+  <Step title="Next Match">
+    Press `↓` to move to the next suggested match
+  </Step>
+
+  <Step title="Repeat">
+    Continue until all suggested matches are reviewed
+  </Step>
+</Steps>
+
+## Handling Suspense Items
+
+Suspense items require more attention:
+
+### Finding a Manual Match
+
+1. Select an unmatched bank transaction
+2. Click **Find Match** or press `M`
+3. Search available invoices by:
+   - Amount range
+   - Date range
+   - Vendor name
+   - Description keywords
+4. Select the matching invoice
+5. Confirm the manual match
+
+### Marking as No Match
+
+Some transactions won't have a match (bank fees, interest, etc.):
+
+1. Select the transaction
+2. Click **No Match** or press `N`
+3. Choose a reason:
+   - Bank charge
+   - Interest
+   - Timing (will match next period)
+   - Write-off
+4. Add optional notes
+5. Confirm
+
+### Creating an Invoice
+
+If an invoice is missing:
+
+1. Select the unmatched bank transaction
+2. Click **Create Invoice**
+3. Pre-filled form opens with transaction details
+4. Complete any missing fields
+5. Save—automatically matches to the transaction
+
+## Bulk Actions
+
+For efficiency with many similar items:
+
+1. Use `Space` to select multiple matches
+2. Or use **Select All** in current filter
+3. Choose bulk action:
+   - **Approve All** — Approve all selected
+   - **Reject All** — Reject all selected
+   - **Export Selected** — Export for review
+
+<Warning>
+  Bulk approve carefully. Always filter first to ensure you're only approving appropriate matches.
+</Warning>
+
+## Filtering and Searching
+
+### Quick Filters
+
+| Filter | Shows |
+|--------|-------|
+| All | All matches |
+| Auto-Matched | 90%+ confidence |
+| Suggested | 70-89% confidence |
+| Suspense | Below 70% or unmatched |
+| Approved Today | Today's approvals |
+
+### Advanced Filters
+
+- **Confidence Range** — Set min/max percentage
+- **Date Range** — Filter by transaction date
+- **Amount Range** — Filter by transaction amount
+- **Vendor** — Filter by specific vendor
+- **Match Layer** — Filter by which layer matched
+
+### Search
+
+Search across:
+- Transaction descriptions
+- Invoice numbers
+- Vendor/customer names
+- Reference numbers
+
+## Progress Tracking
+
+The review screen shows your progress:
+
+```
+Reconciliation Progress
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 85%
+
+Matched: 179 of 210 transactions
+├─ Auto-Matched: 156
+├─ Manually Approved: 23
+└─ Remaining: 31
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Review in order of confidence">
+    Start with highest confidence suggested matches. These are quickest to verify and approve.
+  </Accordion>
+
+  <Accordion title="Use keyboard exclusively">
+    Mouse clicking is 5x slower than keyboard shortcuts. Learn the shortcuts for major speed gains.
+  </Accordion>
+
+  <Accordion title="Review suspicious low-confidence matches">
+    If a match seems wrong, reject it. It's easier to manually match later than fix an incorrect auto-match.
+  </Accordion>
+
+  <Accordion title="Process suspense items last">
+    Focus on suggested matches first. Suspense items take more time and might resolve as you process other matches.
+  </Accordion>
+
+  <Accordion title="Take notes on patterns">
+    If you notice recurring mismatches (e.g., vendor name variations), note them. You can add aliases in Settings to improve future matching.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Export Reports" icon="file-export" href="/reports/exporting">
+    Export your completed reconciliation
+  </Card>
+  <Card title="Dashboard" icon="chart-line" href="/reports/dashboard">
+    View reconciliation analytics
+  </Card>
+</CardGroup>

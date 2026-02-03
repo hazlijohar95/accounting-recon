@@ -2059,6 +2059,16 @@ export declare const api: {
       { companyId: Id<"companies">; workosUserId?: string },
       any
     >;
+    reorderColumns: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnIds: Array<Id<"worksheetColumns">>;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
     restoreColumn: FunctionReference<
       "mutation",
       "public",
@@ -2097,6 +2107,16 @@ export declare const api: {
         formula?: string;
         inputColumnId?: Id<"worksheetColumns"> | null;
         name?: string;
+        workosUserId?: string;
+      },
+      any
+    >;
+    updateColumnWidth: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnId: Id<"worksheetColumns">;
+        width: number;
         workosUserId?: string;
       },
       any

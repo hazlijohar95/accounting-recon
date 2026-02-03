@@ -245,7 +245,8 @@ export interface MatchingResult {
   suspenseItems: number;
   unmatchedCash: number;
   unmatchedAccrual: number;
-  usedMockLLM?: boolean; // True if LLM fallback to mock was used
+  usedMockLLM?: boolean; // True if LLM fallback to smart heuristics was used
+  llmError?: string; // Error message if Bedrock failed
   error?: string;
 }
 
@@ -376,13 +377,15 @@ export const runMatchingEngine = action({
       // Layer 5: LLM Matching (optional)
       let llmMatches: MatchCandidate[] = [];
       let usedMockLLM = false;
+      let llmErrorMessage: string | undefined;
       if (useLLM && unmatchedCash.length > 0 && unmatchedAccrual.length > 0) {
         try {
           const llmInput = formatForLLM(unmatchedCash, unmatchedAccrual);
 
-          // Try real LLM first, fall back to mock with logging
+          // Try real LLM first, fall back to smart mock with logging
           let llmSuggestions;
           try {
+            console.log(`[Layer 5] Attempting AWS Bedrock with ${llmInput.cashItems.length} cash, ${llmInput.accrualItems.length} accrual items`);
             llmSuggestions = await ctx.runAction(
               api.matching.llm.runLLMMatching,
               {
@@ -391,11 +394,16 @@ export const runMatchingEngine = action({
                 maxItems: 50,
               }
             );
-            console.log(`Layer 5 LLM: Real Bedrock returned ${llmSuggestions.length} suggestions`);
+            console.log(`[Layer 5] AWS Bedrock SUCCESS: ${llmSuggestions.length} suggestions`);
           } catch (llmError) {
-            // Log the error and fall back to mock LLM
-            console.warn("Layer 5 LLM: Bedrock failed, falling back to mock matching:", llmError);
+            // Log the error clearly and fall back to smart mock LLM
+            const errorMsg = llmError instanceof Error ? llmError.message : String(llmError);
+            console.error(`[Layer 5] AWS Bedrock FAILED: ${errorMsg}`);
+            console.log("[Layer 5] Falling back to smart heuristic matching...");
+
             usedMockLLM = true;
+            llmErrorMessage = errorMsg;
+
             llmSuggestions = await ctx.runAction(
               api.matching.llm.runMockLLMMatching,
               {
@@ -403,7 +411,7 @@ export const runMatchingEngine = action({
                 accrualItems: llmInput.accrualItems,
               }
             );
-            console.log(`Layer 5 LLM: Mock returned ${llmSuggestions.length} suggestions`);
+            console.log(`[Layer 5] Smart fallback: ${llmSuggestions.length} suggestions`);
           }
 
           // Create matches from LLM suggestions
@@ -502,6 +510,7 @@ export const runMatchingEngine = action({
         unmatchedCash: finalUnmatchedCash.length,
         unmatchedAccrual: finalUnmatchedAccrual.length,
         usedMockLLM,
+        llmError: llmErrorMessage,
       };
     } catch (error) {
       console.error("Matching engine error:", error);

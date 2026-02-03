@@ -1,0 +1,72 @@
+---
+title: Introduction
+description: Automated cash-accrual reconciliation powered by 5-layer AI matching
+---
+
+# Welcome to Reconciled
+
+Reconciled is an accounting reconciliation platform that automatically matches your bank transactions (cash basis) with invoices and receipts (accrual basis) using a sophisticated 5-layer AI matching system.
+
+## Why Reconciled?
+
+Manual reconciliation is tedious, error-prone, and time-consuming. Accountants spend countless hours matching bank statements to invoices, hunting for discrepancies, and documenting differences.
+
+Reconciled automates this entire process:
+
+<CardGroup cols={2}>
+  <Card title="5-Layer AI Matching" icon="brain">
+    From exact matches to semantic AI understanding, our multi-layer system handles simple and complex matches automatically
+  </Card>
+  <Card title="Confidence Scoring" icon="chart-simple">
+    Every match comes with a confidence score so you know exactly when human review is needed
+  </Card>
+  <Card title="Multiple Formats" icon="file-import">
+    Upload PDFs, images, CSV, or Excel files—Reconciled extracts and processes them all
+  </Card>
+  <Card title="Export Anywhere" icon="file-export">
+    Generate reports for SQL Accounting, AutoCount, QuickBooks, Xero, or standard CSV/Excel
+  </Card>
+</CardGroup>
+
+## How It Works
+
+```mermaid
+flowchart LR
+    A[Upload Files] --> B[AI Extraction]
+    B --> C[5-Layer Matching]
+    C --> D[Review Matches]
+    D --> E[Export Reports]
+```
+
+1. **Upload** your bank statements and invoices in any format
+2. **AI extracts** transaction data automatically using OCR and document parsing
+3. **5-layer matching** identifies matches with confidence scores
+4. **Review** suggested matches and resolve suspense items
+5. **Export** reconciliation reports to your accounting software
+
+## The 5-Layer Matching System
+
+| Layer | Method | What It Does |
+|-------|--------|--------------|
+| 1 | Exact | Matches identical amounts on the same date |
+| 2 | Window | Matches amounts within 7-day date range |
+| 3 | Reference | Matches invoice numbers, check numbers, references |
+| 4 | Fuzzy | Uses string similarity for partial matches |
+| 5 | Semantic | AI understands context and intent using LLMs |
+
+## Confidence Thresholds
+
+- **90%+** — Auto-matched, no review needed
+- **70-89%** — Suggested match, quick review recommended
+- **Below 70%** — Suspense item, requires manual matching
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in 5 minutes
+  </Card>
+  <Card title="Demo Mode" icon="eye" href="/getting-started/demo-mode">
+    Try Reconciled without creating an account
+  </Card>
+</CardGroup>

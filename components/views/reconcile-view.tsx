@@ -26,18 +26,15 @@
  */
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   useAppStore,
-  useMatchesSafe,
-  useCashTransactionsSafe,
-  useAccrualTransactionsSafe,
-  useAccrualDocumentsSafe,
-  useActiveSessionSafe,
   MatchPair,
   Transaction,
   MatchConfidence,
 } from '@/lib/store'
+import { useReconcileData } from '@/lib/use-reconcile-data'
+import { Id } from '@/convex/_generated/dataModel'
 import { confidenceToPercent } from '@/lib/matching-utils'
 import { useDemoGuard } from '@/hooks/useDemoGuard'
 import {
@@ -55,10 +52,8 @@ import {
   IconCaretDown,
   IconDollarSign,
 } from '@/components/brand/icons'
-import { useToast } from '@/components/ui/toast'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import { useRunMatching, usePreviewMatching, useApproveMatch, useRejectMatch } from '@/lib/convex-hooks'
-import { Id } from '@/convex/_generated/dataModel'
+import { useRunMatching, usePreviewMatching } from '@/lib/convex-hooks'
 import { cn } from '@/lib/utils'
 import {
   ConfidenceBar,
@@ -77,6 +72,10 @@ import { ReconcileAssistant } from '@/components/ai'
 import type { MatchLayer } from '@/components/brand'
 import type { Tab, UndoAction, FilterState } from './reconcile-view/types'
 import { initialFilterState } from './reconcile-view/types'
+import { useReconcileState } from './reconcile-view/use-reconcile-state'
+import { useMatchActions } from '@/hooks/useMatchActions'
+import { MatchDetailPanel, MobileMatchDetailPanel } from './reconcile-view/match-detail-panel'
+import { ReconcileFilterBar } from './reconcile-view/filter-bar'
 
 /**
  * Main reconciliation workspace with match review and approval workflow.
@@ -106,49 +105,62 @@ export function ReconcileView() {
 
 function ReconcileViewContent() {
   const router = useRouter()
-  // Mode-aware selectors - automatically return correct data based on isDemo
-  const matches = useMatchesSafe()
-  const cashTransactions = useCashTransactionsSafe()
-  const accrualTransactions = useAccrualTransactionsSafe()
-  const accrualDocuments = useAccrualDocumentsSafe()
-  const activeSession = useActiveSessionSafe()
-  // Actions still from store (they operate on current mode's data)
-  const { approveMatch, rejectMatch, showCelebration, setShowCelebration } = useAppStore()
-  const { isDemo, guardAction } = useDemoGuard()
-  const toast = useToast()
-  const [activeTab, setActiveTab] = useState<Tab>('pending')
-  const [selectedMatch, setSelectedMatch] = useState<MatchPair | null>(null)
-  const [manualMatchItem, setManualMatchItem] = useState<Transaction | null>(null)
-  const [isRunningMatching, setIsRunningMatching] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [matchingResult, setMatchingResult] = useState<{
-    totalMatches: number
-    matchesByLayer: Record<number, number>
-    suspenseItems: number
-  } | null>(null)
-  // New state for UX improvements
-  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
-  const [filters, setFilters] = useState<FilterState>(initialFilterState)
-  const [showFilters, setShowFilters] = useState(false)
-  const [undoStack, setUndoStack] = useState<UndoAction[]>([])
-  const MAX_UNDO_STACK = 10
+  const searchParams = useSearchParams()
 
-  // SAFETY: Track mounted state to prevent state updates after unmount
-  const isMountedRef = React.useRef(true)
-  React.useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [])
+  // Get session ID from URL params (real mode) or fall back to store
+  const urlSessionId = searchParams.get('sessionId')
+  const convexSessionId = urlSessionId
+    ? (urlSessionId as Id<'reconciliationSessions'>)
+    : undefined
+
+  // Use the unified data hook - handles demo/real mode automatically
+  const {
+    matches,
+    pendingMatches: rawPendingMatches,
+    approvedMatches: rawApprovedMatches,
+    suspenseTransactions,
+    sessionId,
+    sessionName,
+    isLoading: dataIsLoading,
+    isDemo,
+    counts,
+  } = useReconcileData(convexSessionId)
+
+  // Actions from store (they operate on current mode's data)
+  const { showCelebration, setShowCelebration } = useAppStore()
+  const { guardAction } = useDemoGuard()
+
+  // Use consolidated state hook instead of 12+ individual useState calls
+  const {
+    activeTab,
+    selectedMatch,
+    manualMatchItem,
+    isRunningMatching,
+    isLoading,
+    matchingResult,
+    showKeyboardHelp,
+    filters,
+    showFilters,
+    undoStack,
+    hasActiveFilters,
+    setActiveTab,
+    setSelectedMatch,
+    setManualMatchItem,
+    setRunningMatching,
+    setLoading,
+    setMatchingResult,
+    setShowKeyboardHelp,
+    updateFilters,
+    setShowFilters,
+    clearFilters,
+    pushUndo,
+    popUndo,
+    removeUndoByMatchId,
+  } = useReconcileState()
 
   // Convex hooks for matching engine
   const runMatching = useRunMatching()
   const previewMatching = usePreviewMatching()
-
-  // Convex hooks for match persistence
-  const approveMatchBackend = useApproveMatch()
-  const rejectMatchBackend = useRejectMatch()
 
   // Apply filters to matches
   const filterMatches = useCallback((matchList: MatchPair[]) => {
@@ -186,19 +198,46 @@ function ReconcileViewContent() {
     })
   }, [filters])
 
+  // Separate pending matches by confidence level:
+  // - High confidence (≥90%): Show in "Pending" tab - ready for quick approval
+  // - Medium confidence (70-89%): Show in "Review" tab - needs careful review
+  const highConfidencePending = useMemo(() =>
+    rawPendingMatches.filter((m) => m.confidence === 'high'),
+    [rawPendingMatches]
+  )
+  const mediumConfidencePending = useMemo(() =>
+    rawPendingMatches.filter((m) => m.confidence === 'medium' || m.confidence === 'low'),
+    [rawPendingMatches]
+  )
+
   const pendingMatches = useMemo(() =>
-    filterMatches(matches.filter((m) => !m.approved)),
-    [matches, filterMatches]
+    filterMatches(highConfidencePending),
+    [highConfidencePending, filterMatches]
+  )
+  const reviewMatches = useMemo(() =>
+    filterMatches(mediumConfidencePending),
+    [mediumConfidencePending, filterMatches]
   )
   const approvedMatches = useMemo(() =>
-    filterMatches(matches.filter((m) => m.approved)),
-    [matches, filterMatches]
+    filterMatches(rawApprovedMatches),
+    [rawApprovedMatches, filterMatches]
   )
-  const suspenseItems = cashTransactions.filter((t) => t.status === 'suspense')
+  // Suspense items are now from the unified hook
+  const suspenseItems = suspenseTransactions
+
+  // Get the correct list for the active tab
+  const getActiveList = useCallback((tab: Tab) => {
+    switch (tab) {
+      case 'pending': return pendingMatches
+      case 'review': return reviewMatches
+      case 'matched': return approvedMatches
+      default: return []
+    }
+  }, [pendingMatches, reviewMatches, approvedMatches])
 
   // Auto-select the first match in the active tab for a clearer default state
   useEffect(() => {
-    const list = activeTab === 'pending' ? pendingMatches : approvedMatches
+    const list = getActiveList(activeTab)
     if (list.length === 0) {
       if (selectedMatch) setSelectedMatch(null)
       return
@@ -206,23 +245,25 @@ function ReconcileViewContent() {
     if (!selectedMatch || !list.find((m) => m.id === selectedMatch.id)) {
       setSelectedMatch(list[0])
     }
-  }, [activeTab, pendingMatches, approvedMatches, selectedMatch])
+  }, [activeTab, getActiveList, selectedMatch])
 
   // Get current match index for keyboard navigation
   const currentMatchIndex = useMemo(() => {
     if (!selectedMatch) return -1
-    const list = activeTab === 'pending' ? pendingMatches : approvedMatches
+    const list = getActiveList(activeTab)
     return list.findIndex((m) => m.id === selectedMatch.id)
-  }, [selectedMatch, activeTab, pendingMatches, approvedMatches])
+  }, [selectedMatch, activeTab, getActiveList])
 
   // Use refs to avoid recreating the keyboard handler on every state change
   const stateRef = React.useRef({
     selectedMatch,
     activeTab,
     pendingMatches,
+    reviewMatches,
     approvedMatches,
     currentMatchIndex,
     undoStack,
+    getActiveList,
   })
 
   // Update refs when state changes (doesn't cause re-render)
@@ -231,15 +272,17 @@ function ReconcileViewContent() {
       selectedMatch,
       activeTab,
       pendingMatches,
+      reviewMatches,
       approvedMatches,
       currentMatchIndex,
       undoStack,
+      getActiveList,
     }
-  }, [selectedMatch, activeTab, pendingMatches, approvedMatches, currentMatchIndex, undoStack])
+  }, [selectedMatch, activeTab, pendingMatches, reviewMatches, approvedMatches, currentMatchIndex, undoStack, getActiveList])
 
-  // Empty state for Real mode with no data
+  // Empty state for Real mode with no data (and not loading)
   const hasNoData =
-    !isDemo && matches.length === 0 && cashTransactions.length === 0 && accrualTransactions.length === 0
+    !isDemo && !dataIsLoading && matches.length === 0 && suspenseTransactions.length === 0
 
   if (hasNoData) {
     return (
@@ -266,185 +309,25 @@ function ReconcileViewContent() {
     } else {
       setSelectedMatch(null)
     }
-  }, [currentMatchIndex, pendingMatches])
+  }, [currentMatchIndex, pendingMatches, setSelectedMatch])
 
-  const handleApprove = useCallback(
-    async (matchId: string) => {
-      if (guardAction()) return
+  // Use unified match actions hook - handles approval/rejection workflow
+  const {
+    handleApprove,
+    handleReject,
+    handleUndo: matchActionsUndo,
+  } = useMatchActions({
+    matches,
+    onApproveSuccess: advanceToNextMatch,
+    onRejectSuccess: advanceToNextMatch,
+    pushUndo,
+    removeUndoByMatchId,
+  })
 
-      // Store for undo before approving
-      const matchToApprove = matches.find((m) => m.id === matchId)
-      if (matchToApprove) {
-        const undoAction: UndoAction = {
-          id: crypto.randomUUID(),
-          type: 'approve',
-          matchId,
-          match: { ...matchToApprove },
-          timestamp: Date.now(),
-        }
-        setUndoStack((prev) => [undoAction, ...prev].slice(0, MAX_UNDO_STACK))
-      }
-
-      setShowCelebration(true)
-      approveMatch(matchId) // Local store (optimistic update)
-
-      // Persist to backend - handle ID format (local uses string, backend uses Id)
-      try {
-        await approveMatchBackend(matchId as Id<"matchedPairs">)
-      } catch (error) {
-        console.error('Failed to persist match approval:', error)
-
-        // SAFETY: Check if component is still mounted before state updates
-        if (!isMountedRef.current) return
-
-        // ROLLBACK: Revert local state on backend failure
-        const store = useAppStore.getState()
-        const updatedMatches = store.matches.map((m) =>
-          m.id === matchId ? { ...m, approved: false } : m
-        )
-        useAppStore.setState({ matches: updatedMatches })
-
-        // Remove from undo stack since we're rolling back
-        setUndoStack((prev) => prev.filter((a) => a.matchId !== matchId))
-
-        toast.addToast({
-          type: 'error',
-          title: 'Failed to save',
-          description: 'Match approval could not be saved. Please try again.',
-          duration: 5000,
-        })
-        return // Don't advance or show success toast
-      }
-
-      // SAFETY: Check if component is still mounted before state updates
-      if (!isMountedRef.current) return
-
-      // Only advance to next match AFTER backend confirmation
-      advanceToNextMatch()
-
-      // Show toast with undo option (only on success)
-      toast.addToast({
-        type: 'success',
-        title: 'Match approved',
-        description: 'Press Ctrl+Z to undo',
-        duration: 5000,
-      })
-    },
-    [guardAction, setShowCelebration, approveMatch, matches, advanceToNextMatch, toast, approveMatchBackend]
-  )
-
-  const handleReject = useCallback(
-    async (matchId: string) => {
-      if (guardAction()) return
-
-      // Store for undo before rejecting
-      const matchToReject = matches.find((m) => m.id === matchId)
-      if (matchToReject) {
-        const undoAction: UndoAction = {
-          id: crypto.randomUUID(),
-          type: 'reject',
-          matchId,
-          match: { ...matchToReject },
-          timestamp: Date.now(),
-        }
-        setUndoStack((prev) => [undoAction, ...prev].slice(0, MAX_UNDO_STACK))
-      }
-
-      rejectMatch(matchId) // Local store (optimistic update)
-
-      // Persist to backend - handle ID format (local uses string, backend uses Id)
-      try {
-        await rejectMatchBackend(matchId as Id<"matchedPairs">)
-      } catch (error) {
-        console.error('Failed to persist match rejection:', error)
-
-        // SAFETY: Check if component is still mounted before state updates
-        if (!isMountedRef.current) return
-
-        // ROLLBACK: Re-add the match back to the list on backend failure
-        if (matchToReject) {
-          const store = useAppStore.getState()
-          // Avoid duplicates - only add if not already present
-          const exists = store.matches.some((m) => m.id === matchToReject.id)
-          if (!exists) {
-            useAppStore.setState({ matches: [...store.matches, matchToReject] })
-          }
-        }
-
-        // Remove from undo stack since we're rolling back
-        setUndoStack((prev) => prev.filter((a) => a.matchId !== matchId))
-
-        toast.addToast({
-          type: 'error',
-          title: 'Failed to save',
-          description: 'Match rejection could not be saved. Please try again.',
-          duration: 5000,
-        })
-        return // Don't advance or show success toast
-      }
-
-      // SAFETY: Check if component is still mounted before state updates
-      if (!isMountedRef.current) return
-
-      // Only advance to next match AFTER backend confirmation
-      advanceToNextMatch()
-
-      // Show toast with undo option (only on success)
-      toast.addToast({
-        type: 'info',
-        title: 'Match rejected',
-        description: 'Press Ctrl+Z to undo',
-        duration: 5000,
-      })
-    },
-    [guardAction, rejectMatch, matches, advanceToNextMatch, toast, rejectMatchBackend]
-  )
-
-  // Undo last action
+  // Wrapper for undo that provides current stack
   const handleUndo = useCallback(() => {
-    if (undoStack.length === 0) return
-
-    const lastAction = undoStack[0]
-    setUndoStack((prev) => prev.slice(1))
-
-    try {
-      // Restore the match to pending state
-      // Note: This is a simplified undo that works with local store.
-      // For Convex, you'd need a proper revert mutation.
-      if (lastAction.type === 'approve') {
-        // In the local store, approved matches are still in the list
-        // We need to toggle their approved state back
-        const store = useAppStore.getState()
-        const updatedMatches = store.matches.map((m) =>
-          m.id === lastAction.matchId ? { ...m, approved: false } : m
-        )
-        useAppStore.setState({ matches: updatedMatches })
-      } else if (lastAction.type === 'reject') {
-        // Re-add the rejected match back to the list
-        const store = useAppStore.getState()
-        // Avoid duplicates - only add if not already present
-        const exists = store.matches.some((m) => m.id === lastAction.match.id)
-        if (!exists) {
-          useAppStore.setState({ matches: [...store.matches, lastAction.match] })
-        }
-      }
-
-      toast.addToast({
-        type: 'success',
-        title: 'Action undone',
-        description: `Match ${lastAction.type === 'approve' ? 'un-approved' : 'restored'}`,
-        duration: 3000,
-      })
-    } catch (error) {
-      console.error('Undo failed:', error)
-      toast.addToast({
-        type: 'error',
-        title: 'Undo failed',
-        description: 'Could not restore the previous state',
-        duration: 3000,
-      })
-    }
-  }, [undoStack, toast])
+    matchActionsUndo(undoStack, popUndo)
+  }, [matchActionsUndo, undoStack, popUndo])
 
   // Keyboard shortcuts effect - handler is stable, uses refs for current state
   useEffect(() => {
@@ -454,8 +337,8 @@ function ReconcileViewContent() {
         return
       }
 
-      const { selectedMatch: match, activeTab: tab, pendingMatches: pending, approvedMatches: approved, currentMatchIndex: idx, undoStack: undo } = stateRef.current
-      const currentList = tab === 'pending' ? pending : approved
+      const { selectedMatch: match, activeTab: tab, currentMatchIndex: idx, undoStack: undo, getActiveList: getList } = stateRef.current
+      const currentList = getList(tab)
 
       switch (e.key.toLowerCase()) {
         case 'a':
@@ -520,26 +403,23 @@ function ReconcileViewContent() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleApprove, handleReject, handleUndo])
 
-  // Clear filters
-  const clearFilters = useCallback(() => {
-    setFilters(initialFilterState)
-  }, [])
+  // clearFilters is provided by useReconcileState hook
 
   // Handle running the matching engine
   const handleRunMatching = useCallback(
     async (useLLM: boolean = false) => {
       if (guardAction()) return
 
-      if (!activeSession?.id) {
+      if (!sessionId) {
         console.warn('No active session - cannot run matching')
         return
       }
 
-      setIsRunningMatching(true)
+      setRunningMatching(true)
       setMatchingResult(null)
 
       try {
-        const result = await runMatching(activeSession.id as Id<'reconciliationSessions'>, useLLM)
+        const result = await runMatching(sessionId, useLLM)
         if (result.success) {
           setMatchingResult({
             totalMatches: result.totalMatches,
@@ -553,10 +433,10 @@ function ReconcileViewContent() {
       } catch (error) {
         console.error('Matching failed:', error)
       } finally {
-        setIsRunningMatching(false)
+        setRunningMatching(false)
       }
     },
-    [guardAction, activeSession, runMatching, setShowCelebration]
+    [guardAction, sessionId, runMatching, setShowCelebration]
   )
 
   const handleCelebrationComplete = useCallback(() => {
@@ -580,9 +460,16 @@ function ReconcileViewContent() {
       case 'pending':
         return {
           icon: <IconFileText size={32} className="text-muted-foreground/40" />,
-          title: 'No pending matches',
-          description: 'All matches have been reviewed. Run the matching engine to find new matches.',
+          title: 'No high-confidence matches',
+          description: 'All high-confidence matches have been reviewed. Check the Review tab for medium-confidence matches.',
           className: 'empty-state-pending',
+        }
+      case 'review':
+        return {
+          icon: <IconCheckCircle size={32} className="text-success/40" />,
+          title: 'No matches need review',
+          description: 'All medium-confidence matches have been reviewed. Great work!',
+          className: 'empty-state-review',
         }
       case 'matched':
         return {
@@ -594,7 +481,7 @@ function ReconcileViewContent() {
       case 'suspense':
         return {
           icon: <IconWarningCircle size={32} className="text-warning/40" />,
-          title: 'Nothing needs review',
+          title: 'Nothing needs manual matching',
           description: "Transactions we couldn't match automatically will appear here.",
           className: 'empty-state-suspense',
         }
@@ -642,174 +529,17 @@ function ReconcileViewContent() {
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="px-4 py-3 border-b border-border bg-secondary/30">
-          <div className="flex items-center gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-xs">
-              <IconSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <input
-                type="text"
-                placeholder="Search transactions... (/)"
-                value={filters.searchQuery}
-                onChange={(e) => setFilters((f) => ({ ...f, searchQuery: e.target.value }))}
-                aria-label="Search transactions"
-                className="w-full pl-9 pr-3 py-2 text-sm bg-background border border-border focus:outline-none focus:border-foreground transition-colors"
-              />
-            </div>
-
-            {/* Filter Toggle */}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              aria-expanded={showFilters}
-              aria-controls="filter-panel"
-              aria-label={`Filters${filters.matchLayers.length + filters.confidenceLevels.length > 0 ? ` (${filters.matchLayers.length + filters.confidenceLevels.length} active)` : ''}`}
-              className={cn(
-                'flex items-center gap-2 px-3 py-2 text-sm border transition-colors',
-                showFilters ? 'bg-foreground text-background border-foreground' : 'border-border hover:bg-secondary/50',
-                (filters.matchLayers.length > 0 || filters.confidenceLevels.length > 0 || filters.minAmount !== null || filters.maxAmount !== null) && 'border-foreground'
-              )}
-            >
-              <IconFilter size={16} aria-hidden="true" />
-              Filters
-              {(filters.matchLayers.length > 0 || filters.confidenceLevels.length > 0) && (
-                <span className="px-1.5 py-0.5 text-[10px] bg-foreground text-background rounded-full" aria-hidden="true">
-                  {filters.matchLayers.length + filters.confidenceLevels.length}
-                </span>
-              )}
-              <IconCaretDown size={12} className={cn('transition-transform', showFilters && 'rotate-180')} aria-hidden="true" />
-            </button>
-
-            {/* Clear Filters */}
-            {(filters.searchQuery || filters.matchLayers.length > 0 || filters.confidenceLevels.length > 0 || filters.minAmount !== null || filters.maxAmount !== null) && (
-              <button
-                onClick={clearFilters}
-                className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Clear all
-              </button>
-            )}
-
-            {/* Results count */}
-            <span className="text-xs text-muted-foreground ml-auto">
-              {activeTab === 'pending' ? pendingMatches.length : approvedMatches.length} matches
-            </span>
-          </div>
-
-          {/* Expanded Filters Panel */}
-          {showFilters && (
-            <div id="filter-panel" className="mt-3 pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Match Layer Filter */}
-              <fieldset>
-                <legend className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Match Layer</legend>
-                <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by match layer">
-                  {([1, 2, 3, 4, 5, 6] as const).map((layer) => (
-                    <button
-                      key={layer}
-                      aria-pressed={filters.matchLayers.includes(layer)}
-                      onClick={() => {
-                        setFilters((f) => ({
-                          ...f,
-                          matchLayers: f.matchLayers.includes(layer)
-                            ? f.matchLayers.filter((l) => l !== layer)
-                            : [...f.matchLayers, layer],
-                        }))
-                      }}
-                      className={cn(
-                        'px-2 py-1 text-xs border transition-colors',
-                        filters.matchLayers.includes(layer)
-                          ? 'bg-foreground text-background border-foreground'
-                          : 'border-border hover:bg-secondary/50'
-                      )}
-                    >
-                      L{layer}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-
-              {/* Confidence Filter */}
-              <fieldset>
-                <legend className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Confidence</legend>
-                <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by confidence level">
-                  {(['high', 'medium', 'low'] as const).map((level) => (
-                    <button
-                      key={level}
-                      aria-pressed={filters.confidenceLevels.includes(level)}
-                      onClick={() => {
-                        setFilters((f) => ({
-                          ...f,
-                          confidenceLevels: f.confidenceLevels.includes(level)
-                            ? f.confidenceLevels.filter((l) => l !== level)
-                            : [...f.confidenceLevels, level],
-                        }))
-                      }}
-                      className={cn(
-                        'px-2 py-1 text-xs border transition-colors capitalize',
-                        filters.confidenceLevels.includes(level)
-                          ? 'bg-foreground text-background border-foreground'
-                          : 'border-border hover:bg-secondary/50'
-                      )}
-                    >
-                      {level}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-
-              {/* Amount Range Filter */}
-              <fieldset>
-                <legend className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Amount Range</legend>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <IconDollarSign size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <input
-                      type="number"
-                      placeholder="Min"
-                      aria-label="Minimum amount"
-                      value={filters.minAmount ?? ''}
-                      onChange={(e) => setFilters((f) => ({ ...f, minAmount: e.target.value ? parseFloat(e.target.value) : null }))}
-                      className="w-full pl-7 pr-2 py-1.5 text-xs bg-background border border-border focus:outline-none focus:border-foreground"
-                    />
-                  </div>
-                  <span className="text-muted-foreground" aria-hidden="true">-</span>
-                  <div className="relative flex-1">
-                    <IconDollarSign size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <input
-                      type="number"
-                      placeholder="Max"
-                      aria-label="Maximum amount"
-                      value={filters.maxAmount ?? ''}
-                      onChange={(e) => setFilters((f) => ({ ...f, maxAmount: e.target.value ? parseFloat(e.target.value) : null }))}
-                      className="w-full pl-7 pr-2 py-1.5 text-xs bg-background border border-border focus:outline-none focus:border-foreground"
-                    />
-                  </div>
-                </div>
-              </fieldset>
-
-              {/* Date Range Filter */}
-              <fieldset>
-                <legend className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Date Range</legend>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    aria-label="Start date"
-                    value={filters.dateFrom ?? ''}
-                    onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value || null }))}
-                    className="flex-1 px-2 py-1.5 text-xs bg-background border border-border focus:outline-none focus:border-foreground"
-                  />
-                  <span className="text-muted-foreground" aria-hidden="true">-</span>
-                  <input
-                    type="date"
-                    aria-label="End date"
-                    value={filters.dateTo ?? ''}
-                    onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value || null }))}
-                    className="flex-1 px-2 py-1.5 text-xs bg-background border border-border focus:outline-none focus:border-foreground"
-                  />
-                </div>
-              </fieldset>
-            </div>
-          )}
-        </div>
+        <ReconcileFilterBar
+          filters={filters}
+          showFilters={showFilters}
+          hasActiveFilters={hasActiveFilters}
+          activeTab={activeTab}
+          pendingMatchCount={pendingMatches.length}
+          approvedMatchCount={approvedMatches.length}
+          onUpdateFilters={updateFilters}
+          onToggleFilters={() => setShowFilters(!showFilters)}
+          onClearFilters={clearFilters}
+        />
 
         {/* Matching Result Banner */}
         {matchingResult && (
@@ -834,14 +564,23 @@ function ReconcileViewContent() {
 
         {/* Tabs */}
         <div className="flex border-b border-border" role="tablist" aria-label="Reconciliation tabs">
-          {(['pending', 'matched', 'suspense'] as Tab[]).map((tab) => {
-            const tabLabel = tab === 'suspense' ? 'needs review' : tab
+          {(['pending', 'review', 'matched', 'suspense'] as Tab[]).map((tab) => {
+            // Tab labels and descriptions
+            const tabConfig: Record<Tab, { label: string; description: string }> = {
+              pending: { label: 'Ready', description: 'High confidence, ready to approve' },
+              review: { label: 'Review', description: 'Medium confidence, needs careful review' },
+              matched: { label: 'Matched', description: 'Approved matches' },
+              suspense: { label: 'Suspense', description: 'Unmatched items' },
+            }
+            const { label: tabLabel } = tabConfig[tab]
             const count =
               tab === 'pending'
                 ? pendingMatches.length
-                : tab === 'matched'
-                  ? approvedMatches.length
-                  : suspenseItems.length
+                : tab === 'review'
+                  ? reviewMatches.length
+                  : tab === 'matched'
+                    ? approvedMatches.length
+                    : suspenseItems.length
             return (
               <button
                 key={tab}
@@ -885,7 +624,7 @@ function ReconcileViewContent() {
           aria-labelledby={`tab-${activeTab}`}
         >
           {/* Loading Skeleton */}
-          {isLoading && (
+          {(isLoading || dataIsLoading) && (
             <>
               {Array.from({ length: 5 }).map((_, i) => (
                 <SkeletonMatchRow key={i} />
@@ -893,9 +632,15 @@ function ReconcileViewContent() {
             </>
           )}
 
-          {/* Pending Matches */}
-          {!isLoading && activeTab === 'pending' && (
+          {/* Pending Matches (High Confidence - Ready to Approve) */}
+          {!(isLoading || dataIsLoading) && activeTab === 'pending' && (
             <>
+              {pendingMatches.length > 0 && (
+                <div className="px-4 py-2 bg-success/5 border-b border-success/20 text-xs text-success flex items-center gap-2">
+                  <IconCheckCircle size={12} />
+                  <span>High confidence matches - quick approve recommended</span>
+                </div>
+              )}
               {pendingMatches.map((match) => (
                 <MatchRow
                   key={match.id}
@@ -907,8 +652,29 @@ function ReconcileViewContent() {
             </>
           )}
 
+          {/* Review Matches (Medium/Low Confidence - Needs Careful Review) */}
+          {!(isLoading || dataIsLoading) && activeTab === 'review' && (
+            <>
+              {reviewMatches.length > 0 && (
+                <div className="px-4 py-2 bg-warning/10 border-b border-warning/20 text-xs text-warning flex items-center gap-2">
+                  <IconWarningCircle size={12} />
+                  <span>Medium confidence - please verify these matches carefully</span>
+                </div>
+              )}
+              {reviewMatches.map((match) => (
+                <MatchRow
+                  key={match.id}
+                  match={match}
+                  selected={selectedMatch?.id === match.id}
+                  onClick={() => setSelectedMatch(match)}
+                  showConfidenceWarning
+                />
+              ))}
+            </>
+          )}
+
           {/* Approved Matches */}
-          {!isLoading && activeTab === 'matched' && (
+          {!(isLoading || dataIsLoading) && activeTab === 'matched' && (
             <>
               {approvedMatches.map((match) => (
                 <MatchRow
@@ -923,7 +689,7 @@ function ReconcileViewContent() {
           )}
 
           {/* Suspense Items */}
-          {!isLoading && activeTab === 'suspense' && (
+          {!(isLoading || dataIsLoading) && activeTab === 'suspense' && (
             <>
               {suspenseItems.map((item) => (
                 <SuspenseRow key={item.id} item={item} onFindMatch={handleFindMatch} />
@@ -932,8 +698,9 @@ function ReconcileViewContent() {
           )}
 
           {/* Empty States */}
-          {!isLoading &&
+          {!(isLoading || dataIsLoading) &&
             ((activeTab === 'pending' && pendingMatches.length === 0) ||
+              (activeTab === 'review' && reviewMatches.length === 0) ||
               (activeTab === 'matched' && approvedMatches.length === 0) ||
               (activeTab === 'suspense' && suspenseItems.length === 0)) && (
               <TabEmptyState {...getTabEmptyState(activeTab)} />
@@ -943,8 +710,8 @@ function ReconcileViewContent() {
         {/* AI Reconciliation Assistant - Centered within this section */}
         <ReconcileAssistant
           className="assistant-container--in-reconcile"
-          sessionId={activeSession?.id}
-          companyName={activeSession?.name}
+          sessionId={sessionId as string}
+          companyName={sessionName}
           matches={matches}
           pendingMatches={pendingMatches}
           suspenseItems={suspenseItems}
@@ -955,180 +722,19 @@ function ReconcileViewContent() {
 
       {/* Detail Panel - Fixed on desktop (lg+), Overlay on tablet/mobile */}
       {/* Desktop: Side panel */}
-      <div className="hidden lg:flex w-96 flex-col bg-background border-l border-border">
-        {selectedMatch ? (
-          <>
-            {/* Panel Header */}
-            <div className="panel-header">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <MatchLayerBadge layer={selectedMatch.matchLayer as MatchLayer} size="md" />
-                  <span className="text-sm font-medium">Match Detail</span>
-                </div>
-                {selectedMatch.approved && (
-                  <span className="flex items-center gap-1 text-xs text-success">
-                    <IconCheckCircle size={12} />
-                    Approved
-                  </span>
-                )}
-              </div>
-
-              {/* Confidence Gauge - Medium Size */}
-              <div className="flex justify-center py-2">
-                <ConfidenceGauge
-                  value={confidenceToPercent(selectedMatch.confidence)}
-                  size="md"
-                  animate={true}
-                  showLabel={true}
-                />
-              </div>
-            </div>
-
-            {/* Panel Content */}
-            <div className="flex-1 p-4 space-y-4 overflow-auto">
-              {/* Full-width Confidence Bar */}
-              <ConfidenceBar value={confidenceToPercent(selectedMatch.confidence)} animate={true} showValue={true} />
-
-              {/* Cash Transaction Card */}
-              <TransactionCard
-                label="Cash Transaction"
-                icon={<IconBank size={16} />}
-                tx={selectedMatch.cashTransaction}
-                type="cash"
-              />
-
-              {/* Arrow Connector */}
-              <div className="arrow-connector">
-                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center z-10">
-                  <IconArrowDown size={16} className="text-muted-foreground" />
-                </div>
-              </div>
-
-              {/* Accrual Transaction Card */}
-              <TransactionCard
-                label="Accrual Record"
-                icon={<IconFileText size={16} />}
-                tx={selectedMatch.accrualTransaction}
-                type="accrual"
-              />
-            </div>
-
-            {/* Action Buttons with Keyboard Hints */}
-            {!selectedMatch.approved && (
-              <div className="action-button-container">
-                <ButtonDanger size="md" className="flex-1 relative" onClick={() => handleReject(selectedMatch.id)}>
-                  <IconX size={16} className="mr-2" />
-                  Reject
-                  <span className="absolute -top-2 -right-1 px-1.5 py-0.5 text-[10px] bg-background border border-border text-muted-foreground font-mono">R</span>
-                </ButtonDanger>
-                <ButtonPrimary size="md" className="flex-1 relative" onClick={() => handleApprove(selectedMatch.id)}>
-                  <IconCheck size={16} className="mr-2" />
-                  Approve
-                  <span className="absolute -top-2 -right-1 px-1.5 py-0.5 text-[10px] bg-background border border-border text-muted-foreground font-mono">A</span>
-                </ButtonPrimary>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-            <div className="w-16 h-16 mb-4 bg-secondary flex items-center justify-center">
-              <IconFileText size={24} className="text-muted-foreground/50" />
-            </div>
-            <p className="text-sm text-muted-foreground">Select a match to view details</p>
-          </div>
-        )}
-      </div>
+      <MatchDetailPanel
+        selectedMatch={selectedMatch}
+        onApprove={handleApprove}
+        onReject={handleReject}
+      />
 
       {/* Mobile/Tablet: Slide-over panel overlay */}
-      {selectedMatch && (
-        <div className="lg:hidden fixed inset-0 z-40">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setSelectedMatch(null)}
-          />
-          {/* Panel */}
-          <div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-background border-l border-border flex flex-col animate-in slide-in-from-right duration-200">
-            {/* Close button for mobile */}
-            <button
-              onClick={() => setSelectedMatch(null)}
-              className="absolute top-4 right-4 z-10 p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-              aria-label="Close details"
-            >
-              <IconX size={20} />
-            </button>
-
-            {/* Panel Header */}
-            <div className="panel-header">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <MatchLayerBadge layer={selectedMatch.matchLayer as MatchLayer} size="md" />
-                  <span className="text-sm font-medium">Match Detail</span>
-                </div>
-                {selectedMatch.approved && (
-                  <span className="flex items-center gap-1 text-xs text-success">
-                    <IconCheckCircle size={12} />
-                    Approved
-                  </span>
-                )}
-              </div>
-
-              {/* Confidence Gauge - Medium Size */}
-              <div className="flex justify-center py-2">
-                <ConfidenceGauge
-                  value={confidenceToPercent(selectedMatch.confidence)}
-                  size="md"
-                  animate={true}
-                  showLabel={true}
-                />
-              </div>
-            </div>
-
-            {/* Panel Content */}
-            <div className="flex-1 p-4 space-y-4 overflow-auto">
-              {/* Full-width Confidence Bar */}
-              <ConfidenceBar value={confidenceToPercent(selectedMatch.confidence)} animate={true} showValue={true} />
-
-              {/* Cash Transaction Card */}
-              <TransactionCard
-                label="Cash Transaction"
-                icon={<IconBank size={16} />}
-                tx={selectedMatch.cashTransaction}
-                type="cash"
-              />
-
-              {/* Arrow Connector */}
-              <div className="arrow-connector">
-                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center z-10">
-                  <IconArrowDown size={16} className="text-muted-foreground" />
-                </div>
-              </div>
-
-              {/* Accrual Transaction Card */}
-              <TransactionCard
-                label="Accrual Record"
-                icon={<IconFileText size={16} />}
-                tx={selectedMatch.accrualTransaction}
-                type="accrual"
-              />
-            </div>
-
-            {/* Action Buttons */}
-            {!selectedMatch.approved && (
-              <div className="action-button-container">
-                <ButtonDanger size="md" className="flex-1" onClick={() => handleReject(selectedMatch.id)}>
-                  <IconX size={16} className="mr-2" />
-                  Reject
-                </ButtonDanger>
-                <ButtonPrimary size="md" className="flex-1" onClick={() => handleApprove(selectedMatch.id)}>
-                  <IconCheck size={16} className="mr-2" />
-                  Approve
-                </ButtonPrimary>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <MobileMatchDetailPanel
+        selectedMatch={selectedMatch}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onClose={() => setSelectedMatch(null)}
+      />
 
       {/* Manual Match Modal */}
       {manualMatchItem && (
@@ -1159,6 +765,7 @@ interface MatchRowProps {
   selected: boolean
   onClick: () => void
   approved?: boolean
+  showConfidenceWarning?: boolean
 }
 
 /**
@@ -1169,10 +776,27 @@ interface MatchRowProps {
  *
  * Memoized to prevent unnecessary re-renders when parent state changes.
  */
-const MatchRow = React.memo(function MatchRow({ match, selected, onClick, approved = false }: MatchRowProps) {
+const MatchRow = React.memo(function MatchRow({
+  match,
+  selected,
+  onClick,
+  approved = false,
+  showConfidenceWarning = false,
+}: MatchRowProps) {
   const confidencePercent = confidenceToPercent(match.confidence)
   const confidenceColor =
     match.confidence === 'high' ? 'bg-emerald-500' : match.confidence === 'medium' ? 'bg-amber-500' : 'bg-red-500'
+
+  // Determine warning message based on match reason/layer
+  const getConfidenceWarning = () => {
+    if (match.matchLayer === 5) return 'AI suggested match - verify manually'
+    if (match.matchLayer === 4) return 'Fuzzy name match - verify counterparty'
+    if (match.confidence === 'medium') return 'Medium confidence - review amounts'
+    if (match.confidence === 'low') return 'Low confidence - careful review needed'
+    return null
+  }
+
+  const warningMessage = showConfidenceWarning ? getConfidenceWarning() : null
 
   return (
     <button
@@ -1182,7 +806,8 @@ const MatchRow = React.memo(function MatchRow({ match, selected, onClick, approv
         'w-full px-4 py-3 border-b border-border text-left transition-all duration-150',
         'hover:bg-secondary/50',
         selected && 'row-selected',
-        approved && !selected && 'row-approved'
+        approved && !selected && 'row-approved',
+        showConfidenceWarning && !selected && 'bg-warning/5'
       )}
     >
       <div className="flex items-center gap-3">
@@ -1203,6 +828,11 @@ const MatchRow = React.memo(function MatchRow({ match, selected, onClick, approv
           ${Math.abs(match.cashTransaction.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </div>
 
+        {/* Warning Icon for medium confidence */}
+        {showConfidenceWarning && (
+          <IconWarningCircle size={16} className="text-warning flex-shrink-0" aria-label="Needs review" />
+        )}
+
         {/* Approved Icon */}
         {approved && (
           <IconCheckCircle size={16} className="text-success flex-shrink-0" aria-label="Approved" />
@@ -1210,7 +840,13 @@ const MatchRow = React.memo(function MatchRow({ match, selected, onClick, approv
       </div>
 
       <div className="flex items-center justify-between mt-2 pl-14">
-        <div className="text-xs text-muted-foreground">{match.cashTransaction.date}</div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{match.cashTransaction.date}</span>
+          {/* Warning message */}
+          {warningMessage && (
+            <span className="text-xs text-warning/80 italic">{warningMessage}</span>
+          )}
+        </div>
 
         {/* Wider Confidence Bar */}
         <div className="flex items-center gap-2">
@@ -1277,67 +913,6 @@ const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }: Suspe
     </div>
   )
 })
-
-// =============================================================================
-// TRANSACTION CARD COMPONENT
-// =============================================================================
-
-/**
- * Props for the TransactionCard component.
- */
-interface TransactionCardProps {
-  label: string
-  icon: React.ReactNode
-  tx: Transaction
-  type: 'cash' | 'accrual'
-}
-
-/**
- * Transaction detail card in the match detail panel.
- *
- * Shows full transaction details including amount, description, date,
- * and category. Uses colored left border (green for cash, blue for accrual).
- */
-function TransactionCard({ label, icon, tx, type }: TransactionCardProps) {
-  const borderAccent = type === 'cash' ? 'border-l-emerald-500' : 'border-l-blue-500'
-
-  return (
-    <div className={cn('card-transaction border-l-2', borderAccent)}>
-      {/* Card Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-muted-foreground">{icon}</span>
-        <span className="text-label">{label}</span>
-      </div>
-
-      {/* Card Content */}
-      <div className="space-y-2.5">
-        <div className="flex justify-between items-start">
-          <span className="text-xs text-muted-foreground">Amount</span>
-          <span className="text-amount">
-            {tx.amount < 0 ? '-' : ''}${Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        <div className="flex justify-between items-start">
-          <span className="text-xs text-muted-foreground">Description</span>
-          <TruncatedText text={tx.description} maxWidth="180px" className="text-sm text-right" />
-        </div>
-
-        <div className="flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">Date</span>
-          <span className="text-sm">{tx.date}</span>
-        </div>
-
-        {tx.category && (
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Category</span>
-            <span className="text-sm">{tx.category}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 // =============================================================================
 // SKELETON MATCH ROW
