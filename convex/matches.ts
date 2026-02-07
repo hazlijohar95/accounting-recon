@@ -1,10 +1,11 @@
-import { v } from "convex/values";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { requireSessionAccess, requireMatchAccess, verifyQuerySessionAccess, verifyQueryResourceAccess } from "./lib/auth";
 import { ValidationErrors, BusinessErrors } from "./lib/errors";
 import { enrichedMatchValidator, matchIdValidator, matchCountsValidator, accrualDocValidator } from "./lib/validators";
 import { matchCountsByStatus, matchCountsByConfidence } from "./lib/aggregates";
+import { logAuditEvent } from "./lib/auditLogger";
 
 // ============ HELPERS ============
 
@@ -48,6 +49,44 @@ async function verifyAccrualDocCompany(
 
 // ============ QUERIES ============
 
+// Check if any match for a company has been reviewed
+export const hasReviewedMatchForCompany = query({
+  args: {
+    companyId: v.id("companies"),
+    workosUserId: v.optional(v.string()),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const { allowed } = await verifyQueryResourceAccess(ctx, args.companyId, args.workosUserId);
+    if (!allowed) return false;
+
+    const sessions = await ctx.db
+      .query("reconciliationSessions")
+      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+      .collect();
+
+    for (const session of sessions) {
+      const approved = await ctx.db
+        .query("matchedPairs")
+        .withIndex("by_status", (q) =>
+          q.eq("sessionId", session._id).eq("status", "approved")
+        )
+        .first();
+      if (approved) return true;
+
+      const rejected = await ctx.db
+        .query("matchedPairs")
+        .withIndex("by_status", (q) =>
+          q.eq("sessionId", session._id).eq("status", "rejected")
+        )
+        .first();
+      if (rejected) return true;
+    }
+
+    return false;
+  },
+});
+
 // Get all matches for a session
 export const listBySession = query({
   args: {
@@ -55,11 +94,12 @@ export const listBySession = query({
     status: v.optional(
       v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))
     ),
+    workosUserId: v.optional(v.string()),
   },
   returns: v.array(enrichedMatchValidator),
   handler: async (ctx, args) => {
-    // SECURITY: Verify session access
-    const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId);
+    // SECURITY: Verify session access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId, args.workosUserId);
     if (!allowed) return [];
 
     let matches;
@@ -124,28 +164,25 @@ export const listBySession = query({
 
 // Get a single match by ID
 export const get = query({
-  args: { id: v.id("matchedPairs") },
+  args: {
+    id: v.id("matchedPairs"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.union(enrichedMatchValidator, v.null()),
   handler: async (ctx, args) => {
     const match = await ctx.db.get(args.id);
     if (!match) return null;
 
-    // SECURITY: Verify session access
-    const { allowed } = await verifyQuerySessionAccess(ctx, match.sessionId);
+    // SECURITY: Verify session access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQuerySessionAccess(ctx, match.sessionId, args.workosUserId);
     if (!allowed) return null;
 
-    const cashTxn = await ctx.db.get(match.cashTransactionId);
-
-    // Support both old and new schema
-    let accrualTxn = null;
-    let accrualDoc = null;
-
-    if (match.accrualDocumentId) {
-      accrualDoc = await ctx.db.get(match.accrualDocumentId);
-    }
-    if (match.accrualTransactionId) {
-      accrualTxn = await ctx.db.get(match.accrualTransactionId);
-    }
+    // Parallelize independent lookups
+    const [cashTxn, accrualDoc, accrualTxn] = await Promise.all([
+      ctx.db.get(match.cashTransactionId),
+      match.accrualDocumentId ? ctx.db.get(match.accrualDocumentId) : null,
+      match.accrualTransactionId ? ctx.db.get(match.accrualTransactionId) : null,
+    ]);
 
     return {
       ...match,
@@ -172,11 +209,14 @@ const matchCountsReturnValidator = v.union(
 
 // Get match counts by status for a session
 export const getCounts = query({
-  args: { sessionId: v.id("reconciliationSessions") },
+  args: {
+    sessionId: v.id("reconciliationSessions"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: matchCountsReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Verify session access
-    const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId);
+    // SECURITY: Verify session access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId, args.workosUserId);
     if (!allowed) return null;
 
     // O(log n) counts using aggregates instead of O(n) collect + filter
@@ -216,10 +256,11 @@ export const getCandidatesForManualMatch = query({
     searchQuery: v.optional(v.string()),
     amountTolerance: v.optional(v.number()), // decimal, e.g., 0.15 for 15%
     limit: v.optional(v.number()), // Max candidates to return (default: 50, max: 100)
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // SECURITY: Verify session access
-    const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId);
+    // SECURITY: Verify session access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId, args.workosUserId);
     if (!allowed) return [];
 
     // Get the cash transaction to compare amounts
@@ -318,14 +359,16 @@ export const create = mutation({
       v.literal(3),
       v.literal(4),
       v.literal(5),
-      v.literal(6)
+      v.literal(6),
+      v.literal(7)  // Partial match
     ),
     matchReason: v.optional(v.string()),
+    workosUserId: v.optional(v.string()),
   },
   returns: matchIdValidator,
   handler: async (ctx, args) => {
     // Verify session ownership
-    const { company } = await requireSessionAccess(ctx, args.sessionId);
+    const { company } = await requireSessionAccess(ctx, args.sessionId, args.workosUserId);
     const sessionCompanyId = company._id;
 
     // Validate that at least one accrual reference is provided
@@ -446,11 +489,12 @@ export const approve = mutation({
     id: v.id("matchedPairs"),
     // Keep for backwards compatibility, but prefer auth context
     reviewerId: v.optional(v.id("users")),
+    workosUserId: v.optional(v.string()),
   },
   returns: matchIdValidator,
   handler: async (ctx, args) => {
     // Verify match ownership
-    const { user } = await requireMatchAccess(ctx, args.id);
+    const { user, match, company } = await requireMatchAccess(ctx, args.id, args.workosUserId);
 
     // Get old doc for aggregate update
     const oldDoc = await ctx.db.get(args.id);
@@ -470,6 +514,21 @@ export const approve = mutation({
       }
     }
 
+    // Log audit event
+    await logAuditEvent(ctx, {
+      companyId: company._id,
+      userId: user._id,
+      action: "match_approve",
+      resourceType: "match",
+      resourceId: args.id,
+      metadata: {
+        matchLayer: match.matchLayer,
+        confidenceScore: match.confidenceScore,
+        cashTransactionId: match.cashTransactionId,
+        accrualDocumentId: match.accrualDocumentId,
+      },
+    });
+
     return args.id;
   },
 });
@@ -480,11 +539,12 @@ export const reject = mutation({
     id: v.id("matchedPairs"),
     // Keep for backwards compatibility, but prefer auth context
     reviewerId: v.optional(v.id("users")),
+    workosUserId: v.optional(v.string()),
   },
   returns: matchIdValidator,
   handler: async (ctx, args) => {
     // Verify match ownership
-    const { user, match } = await requireMatchAccess(ctx, args.id);
+    const { user, match, company } = await requireMatchAccess(ctx, args.id, args.workosUserId);
 
     // VALIDATION: Verify all referenced entities exist before making changes
     // This prevents partial updates if references are stale
@@ -551,6 +611,21 @@ export const reject = mutation({
       });
     }
 
+    // Log audit event
+    await logAuditEvent(ctx, {
+      companyId: company._id,
+      userId: user._id,
+      action: "match_reject",
+      resourceType: "match",
+      resourceId: args.id,
+      metadata: {
+        matchLayer: match.matchLayer,
+        confidenceScore: match.confidenceScore,
+        cashTransactionId: match.cashTransactionId,
+        accrualDocumentId: match.accrualDocumentId,
+      },
+    });
+
     return args.id;
   },
 });
@@ -561,11 +636,12 @@ export const approveHighConfidence = mutation({
     sessionId: v.id("reconciliationSessions"),
     // Keep for backwards compatibility, but prefer auth context
     reviewerId: v.optional(v.id("users")),
+    workosUserId: v.optional(v.string()),
   },
   returns: v.number(),
   handler: async (ctx, args) => {
     // Verify session ownership
-    const { user } = await requireSessionAccess(ctx, args.sessionId);
+    const { user, company } = await requireSessionAccess(ctx, args.sessionId, args.workosUserId);
 
     const matches = await ctx.db
       .query("matchedPairs")
@@ -587,8 +663,21 @@ export const approveHighConfidence = mutation({
       });
     }
 
+    // Log bulk audit event
+    if (matches.length > 0) {
+      await logAuditEvent(ctx, {
+        companyId: company._id,
+        userId: user._id,
+        action: "match_bulk_approve",
+        resourceType: "match",
+        resourceId: args.sessionId,
+        metadata: {
+          matchCount: matches.length,
+          matchIds: matches.map(m => m._id),
+        },
+      });
+    }
+
     return matches.length;
   },
 });
-
-

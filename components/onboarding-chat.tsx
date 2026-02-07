@@ -115,8 +115,7 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
   const createCompany = useMutation(api.companies.create)
 
   // Onboarding progress persistence hooks
-  const userId = user?.id?.toString()
-  const savedProgress = useOnboardingProgress(userId)
+  const savedProgress = useOnboardingProgress(Boolean(isAuthenticated))
   const saveProgress = useSaveOnboardingProgress()
   const deleteProgress = useDeleteOnboardingProgress()
 
@@ -125,13 +124,14 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
   // Load saved progress when opening onboarding
   React.useEffect(() => {
     if (showOnboarding && savedProgress && !savedProgress.isCompleted && !hasLoadedProgress) {
-      setStep(savedProgress.currentStep)
+      const safeStep = Math.min(Math.max(savedProgress.currentStep, 0), questions.length - 1)
+      setStep(safeStep)
       setOnboardingData(savedProgress.data as Record<string, string>)
       setHasLoadedProgress(true)
 
       const restoredMessages: Message[] = []
       // Restore messages for COMPLETED steps only (not current step)
-      for (let i = 0; i < savedProgress.currentStep && i < questions.length; i++) {
+      for (let i = 0; i < safeStep && i < questions.length; i++) {
         const q = questions[i]
         q.messages.forEach((msg, msgIdx) => {
           // Use unique ID: step index + message index + random suffix
@@ -145,8 +145,8 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       setMessages(restoredMessages)
 
       // Current step messages go to queue (will be displayed with typing animation)
-      if (savedProgress.currentStep < questions.length) {
-        setMessageQueue(questions[savedProgress.currentStep].messages)
+      if (safeStep < questions.length) {
+        setMessageQueue(questions[safeStep].messages)
       }
     }
   }, [showOnboarding, savedProgress, hasLoadedProgress, setOnboardingData])
@@ -287,8 +287,8 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       setSelectedCompanyId(companyId)
       setCompletedInSession(true) // Prevent reset effect from firing
 
-      if (userId) {
-        deleteProgress(userId).catch((err) =>
+      if (isAuthenticated) {
+        deleteProgress().catch((err) =>
           console.error('[Onboarding] Failed to delete onboarding progress:', err)
         )
       }
@@ -307,9 +307,10 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
     } finally {
       setIsCreating(false)
     }
-  }, [isAuthenticated, user, createCompany, setSelectedCompanyId, onComplete, userId, deleteProgress])
+  }, [isAuthenticated, user, createCompany, setSelectedCompanyId, onComplete, deleteProgress])
 
   const advance = React.useCallback((value?: string) => {
+    if (!currentQ) return
     const newData = value ? { ...onboardingData, [currentQ.field]: value } : onboardingData
 
     if (value) {
@@ -328,9 +329,8 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       }, ANIMATION_TIMINGS.standard) // 300ms
     }
 
-    if (userId) {
+    if (isAuthenticated) {
       saveProgress({
-        userId,
         currentStep: nextStep,
         data: {
           companyName: newData.companyName,
@@ -347,15 +347,16 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
     if (nextStep === questions.length - 1) {
       handleCreateCompany(newData)
     }
-  }, [currentQ?.field, step, onboardingData, setOnboardingData, findNextStep, handleCreateCompany, userId, saveProgress])
+  }, [currentQ, step, onboardingData, setOnboardingData, findNextStep, handleCreateCompany, isAuthenticated, saveProgress])
 
   const handleSubmit = React.useCallback(() => {
+    if (!currentQ) return
     if (currentQ.inputType === 'none') {
       advance()
     } else if (currentQ.inputType === 'text' && input.trim()) {
       advance(input.trim())
     }
-  }, [currentQ?.inputType, input, advance])
+  }, [currentQ, input, advance])
 
   const handleClose = React.useCallback(() => {
     setShowOnboarding(false)

@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { requireAuth, getOptionalAuth } from "./lib/auth";
-import { AuthErrors, ResourceErrors } from "./lib/errors";
 import { userDocValidator, userIdValidator } from "./lib/validators";
 
 // ============ QUERIES ============
@@ -91,33 +90,17 @@ export const create = mutation({
 // Update user profile - users can only update their own profile
 export const update = mutation({
   args: {
-    id: v.id("users"),
     name: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
   },
   returns: userIdValidator,
   handler: async (ctx, args) => {
-    const { id, ...updates } = args;
-
-    // Get authenticated user
-    const authUser = await getOptionalAuth(ctx);
-
-    // Verify user is updating their own profile
-    if (authUser && authUser._id !== id) {
-      return AuthErrors.unauthorized("You can only update your own profile");
-    }
-
-    // If no authenticated user, allow update for demo mode
-    // but verify the user exists
-    const targetUser = await ctx.db.get(id);
-    if (!targetUser) {
-      return ResourceErrors.notFound("User", id);
-    }
+    const user = await requireAuth(ctx);
 
     const filteredUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([_, v]) => v !== undefined)
+      Object.entries(args).filter(([_, v]) => v !== undefined)
     );
-    await ctx.db.patch(id, filteredUpdates);
-    return id;
+    await ctx.db.patch(user._id, filteredUpdates);
+    return user._id;
   },
 });

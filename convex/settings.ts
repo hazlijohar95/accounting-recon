@@ -554,7 +554,7 @@ export const deleteAccount = mutation({
     // Delete onboarding progress
     const onboardingProgress = await ctx.db
       .query("onboardingProgress")
-      .withIndex("by_user", (q) => q.eq("userId", user._id.toString()))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
     for (const p of onboardingProgress) {
       await ctx.db.delete(p._id);

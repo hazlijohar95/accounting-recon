@@ -75,6 +75,9 @@ export function OnboardingChatAI({ onComplete }: OnboardingChatAIProps) {
           primaryBank: args.primaryBank,
           fiscalYearEnd: args.fiscalYearEnd,
           currency: 'MYR',
+          userEmail: user.email,
+          userName: user.name,
+          workosUserId: user.workosId ?? user.id,
           // ownerId is derived from auth context on backend
         })
         setSelectedCompanyId(companyId)

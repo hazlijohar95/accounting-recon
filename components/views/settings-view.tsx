@@ -15,6 +15,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '@/components/auth-provider'
+import { useWorkosUserId } from '@/lib/convex-hooks/shared'
 import { useSelectedCompanyId, useSetSelectedCompanyId, useIsDemo } from '@/lib/store'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -183,7 +184,7 @@ function ProfileSection({ user, isDemo }: ProfileSectionProps) {
 
     setIsSaving(true)
     try {
-      await updateUser({ id: user.id as any, name })
+      await updateUser({ name })
       toast.success('Profile updated')
     } catch (error) {
       toast.error('Failed to update profile')
@@ -296,6 +297,18 @@ function CompanySection({ company, isDemo }: CompanySectionProps) {
   })
   const [isSaving, setIsSaving] = useState(false)
   const updateCompany = useMutation(api.companies.update)
+  const workosUserId = useWorkosUserId()
+
+  useEffect(() => {
+    if (!company) return
+    setFormData({
+      name: company.name || '',
+      currency: company.currency || 'MYR',
+      fiscalYearEnd: company.fiscalYearEnd || 'December',
+      industryCategory: company.industryCategory || '',
+      taxNumber: company.taxNumber || '',
+    })
+  }, [company])
 
   const handleSave = async () => {
     if (!company || isDemo) return
@@ -309,6 +322,7 @@ function CompanySection({ company, isDemo }: CompanySectionProps) {
         fiscalYearEnd: formData.fiscalYearEnd,
         industryCategory: formData.industryCategory,
         taxNumber: formData.taxNumber || undefined,
+        workosUserId,
       })
       toast.success('Company settings updated')
     } catch (error) {

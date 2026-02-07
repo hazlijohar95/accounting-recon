@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/components/auth-provider'
+import { useSelectedCompanyId } from '@/lib/store'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 
@@ -55,15 +56,22 @@ const defaultState: OnboardingState = {
 
 export function useOnboardingState(): OnboardingState & OnboardingActions {
   const { user, isAuthenticated } = useAuth()
+  const selectedCompanyId = useSelectedCompanyId()
   const [state, setState] = useState<OnboardingState>(defaultState)
   const [isInitialized, setIsInitialized] = useState(false)
+
+  const storageSuffix = `${user?.id ?? 'anon'}:${selectedCompanyId ?? 'none'}`
+  const onboardingStorageKey = `${ONBOARDING_STORAGE_KEY}:${storageSuffix}`
+  const tourSeenKey = `${TOUR_SEEN_KEY}:${storageSuffix}`
 
   // Load state from localStorage on mount
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const stored = localStorage.getItem(ONBOARDING_STORAGE_KEY)
-    const tourSeen = localStorage.getItem(TOUR_SEEN_KEY) === 'true'
+    setIsInitialized(false)
+
+    const stored = localStorage.getItem(onboardingStorageKey)
+    const tourSeen = localStorage.getItem(tourSeenKey) === 'true'
 
     if (stored) {
       try {
@@ -88,21 +96,21 @@ export function useOnboardingState(): OnboardingState & OnboardingActions {
     }
 
     setIsInitialized(true)
-  }, [])
+  }, [onboardingStorageKey, tourSeenKey])
 
   // Save state to localStorage on change
   useEffect(() => {
     if (!isInitialized || typeof window === 'undefined') return
 
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify({
+    localStorage.setItem(onboardingStorageKey, JSON.stringify({
       checklistVisible: state.checklistVisible,
       completedItems: state.completedItems,
     }))
 
     if (state.tourSeen) {
-      localStorage.setItem(TOUR_SEEN_KEY, 'true')
+      localStorage.setItem(tourSeenKey, 'true')
     }
-  }, [state, isInitialized])
+  }, [state, isInitialized, onboardingStorageKey, tourSeenKey])
 
   // Auto-start tour for new users
   useEffect(() => {
@@ -167,11 +175,11 @@ export function useOnboardingState(): OnboardingState & OnboardingActions {
 
   const resetOnboarding = useCallback(() => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(ONBOARDING_STORAGE_KEY)
-      localStorage.removeItem(TOUR_SEEN_KEY)
+      localStorage.removeItem(onboardingStorageKey)
+      localStorage.removeItem(tourSeenKey)
     }
     setState(defaultState)
-  }, [])
+  }, [onboardingStorageKey, tourSeenKey])
 
   return {
     ...state,

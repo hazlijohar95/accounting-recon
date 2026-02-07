@@ -54,6 +54,18 @@ const mockGenerateAccountingExport = vi.fn()
 const mockGeneratePDFExport = vi.fn()
 const mockAddToast = vi.fn()
 
+// Mock next/navigation
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+  }),
+  useSearchParams: () => ({
+    get: vi.fn().mockReturnValue(null),
+  }),
+}))
+
 // Mock store before importing component
 vi.mock('@/lib/store', () => ({
   useAppStore: () => ({
@@ -61,10 +73,35 @@ vi.mock('@/lib/store', () => ({
     isDemo: false,
     selectedCompanyId: 'company-1',
   }),
-  useMatchesSafe: () => mockMatches,
   useCashTransactionsSafe: () => mockCashTransactions,
   useAccrualTransactionsSafe: () => mockAccrualTransactions,
-  useActiveSessionSafe: () => mockActiveSession,
+}))
+
+// Mock brand exports to avoid Three.js side effects
+vi.mock('@/components/brand', () => ({
+  SkeletonTable: () => <div data-testid="skeleton-table" />,
+  ButtonPrimary: ({ children, loading, icon, ...props }: { children: React.ReactNode; loading?: boolean; icon?: React.ReactNode }) => (
+    <button {...props}>{children}</button>
+  ),
+  ButtonSecondary: ({ children, loading, icon, ...props }: { children: React.ReactNode; loading?: boolean; icon?: React.ReactNode }) => (
+    <button {...props}>{children}</button>
+  ),
+  StatCard: ({ label, value }: { label: string; value?: React.ReactNode }) => (
+    <div>
+      <span>{label}</span>
+      {value ? <span>{value}</span> : null}
+    </div>
+  ),
+  ChartSection: ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div>
+      <span>{title}</span>
+      {children}
+    </div>
+  ),
+  IconMatched: () => <span data-testid="icon-matched" />,
+  IconSuspense: () => <span data-testid="icon-suspense" />,
+  MatchLayerBadge: ({ layer }: { layer: number }) => <span>{layer}</span>,
+  BrandedEmptyState: ({ title }: { title: string }) => <div>{title}</div>,
 }))
 
 // Mock convex hooks
@@ -113,7 +150,55 @@ vi.mock('@/convex/_generated/api', () => ({
         getPDFJobStatus: 'getPDFJobStatus',
       },
     },
+    sessions: {
+      listByCompany: 'listByCompany',
+    },
   },
+}))
+
+// Mock auth provider
+vi.mock('@/components/auth-provider', () => {
+  const mockAuth = {
+    user: { id: 'user-1', email: 'test@example.com', name: 'Test User' },
+    isLoading: false,
+    isAuthenticated: true,
+    signOut: vi.fn(),
+    workosUserId: 'wos_user_1',
+  }
+  return {
+    useAuth: () => mockAuth,
+    useOptionalAuth: () => mockAuth,
+    AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+  }
+})
+
+// Mock onboarding state
+vi.mock('@/components/onboarding', () => ({
+  useOnboardingState: () => ({
+    isOnboarding: false,
+    currentStep: 0,
+    totalSteps: 5,
+    progress: 100,
+    isComplete: true,
+  }),
+  OnboardingTour: () => null,
+  OnboardingChecklist: () => null,
+}))
+
+// Mock useReconcileData hook
+vi.mock('@/lib/use-reconcile-data', () => ({
+  useReconcileData: () => ({
+    matches: mockMatches,
+    pendingMatches: mockMatches.filter(m => !m.approved),
+    approvedMatches: mockMatches.filter(m => m.approved),
+    rejectedMatches: [],
+    suspenseTransactions: [],
+    sessionId: 'session-1',
+    sessionName: 'Q1 2025 Reconciliation',
+    isLoading: false,
+    isDemo: false,
+    counts: { pending: 1, approved: 1, rejected: 0, suspense: 0 },
+  }),
 }))
 
 // Import after mocks
@@ -433,7 +518,7 @@ describe('ReportsView', () => {
 
       // Should show activity-related content (based on mock data)
       await waitFor(() => {
-        expect(screen.getByText(/recent/i)).toBeInTheDocument()
+        expect(screen.getByText('Transaction matched')).toBeInTheDocument()
       })
     })
   })

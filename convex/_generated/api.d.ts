@@ -43,6 +43,7 @@ export declare const api: {
         sessionId?: Id<"reconciliationSessions">;
         sourceDocumentId?: Id<"documents">;
         taxAmount?: number;
+        workosUserId?: string;
       },
       Id<"accrualDocuments">
     >;
@@ -70,13 +71,46 @@ export declare const api: {
           sourceDocumentId?: Id<"documents">;
           taxAmount?: number;
         }>;
+        workosUserId?: string;
       },
       Array<string>
     >;
     get: FunctionReference<
       "query",
       "public",
-      { id: Id<"accrualDocuments"> },
+      { id: Id<"accrualDocuments">; workosUserId?: string },
+      {
+        _creationTime: number;
+        _id: Id<"accrualDocuments">;
+        amount: number;
+        companyId: Id<"companies">;
+        counterparty?: string;
+        createdAt: number;
+        description?: string;
+        docDate: string;
+        docNumber?: string;
+        docType:
+          | "sales_invoice"
+          | "purchase_invoice"
+          | "pos_report"
+          | "settlement"
+          | "receipt";
+        dueDate?: string;
+        extractedText?: string;
+        lineItems?: string;
+        matchCount?: number;
+        matchId?: Id<"matchedPairs">;
+        matchedTotal?: number;
+        sessionId?: Id<"reconciliationSessions">;
+        sourceDocumentId?: Id<"documents">;
+        status: "pending" | "matched" | "partial" | "suspense";
+        taxAmount?: number;
+      } | null
+    >;
+    getBySourceDocument: FunctionReference<
+      "query",
+      "public",
+      { sourceDocumentId: Id<"documents">; workosUserId?: string },
       {
         _creationTime: number;
         _id: Id<"accrualDocuments">;
@@ -108,7 +142,7 @@ export declare const api: {
     getCounts: FunctionReference<
       "query",
       "public",
-      { companyId: Id<"companies"> },
+      { companyId: Id<"companies">; workosUserId?: string },
       {
         matched: number;
         partial: number;
@@ -123,6 +157,7 @@ export declare const api: {
       {
         companyId: Id<"companies">;
         status?: "pending" | "matched" | "partial" | "suspense";
+        workosUserId?: string;
       },
       Array<{
         _creationTime: number;
@@ -158,6 +193,7 @@ export declare const api: {
       {
         sessionId: Id<"reconciliationSessions">;
         status?: "pending" | "matched" | "partial" | "suspense";
+        workosUserId?: string;
       },
       Array<{
         _creationTime: number;
@@ -190,19 +226,23 @@ export declare const api: {
     markMatched: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"accrualDocuments">; matchId: Id<"matchedPairs"> },
+      {
+        id: Id<"accrualDocuments">;
+        matchId: Id<"matchedPairs">;
+        workosUserId?: string;
+      },
       null
     >;
     remove: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"accrualDocuments"> },
+      { id: Id<"accrualDocuments">; workosUserId?: string },
       null
     >;
     resetToPending: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"accrualDocuments"> },
+      { id: Id<"accrualDocuments">; workosUserId?: string },
       null
     >;
     update: FunctionReference<
@@ -220,6 +260,7 @@ export declare const api: {
         matchId?: Id<"matchedPairs">;
         status?: "pending" | "matched" | "partial" | "suspense";
         taxAmount?: number;
+        workosUserId?: string;
       },
       Id<"accrualDocuments">
     >;
@@ -324,13 +365,14 @@ export declare const api: {
         limit?: number;
         periodEnd?: string;
         periodStart?: string;
+        workosUserId?: string;
       },
       Array<{ amount: number; category: string; percentage: number }>
     >;
     getMonthlyCashFlow: FunctionReference<
       "query",
       "public",
-      { companyId: Id<"companies">; months?: number },
+      { companyId: Id<"companies">; months?: number; workosUserId?: string },
       Array<{
         inflow: number;
         month: string;
@@ -342,7 +384,7 @@ export declare const api: {
     getRecentActivity: FunctionReference<
       "query",
       "public",
-      { companyId: Id<"companies">; limit?: number },
+      { companyId: Id<"companies">; limit?: number; workosUserId?: string },
       Array<{
         amount: number;
         date: string;
@@ -356,7 +398,7 @@ export declare const api: {
     getReconciliationStats: FunctionReference<
       "query",
       "public",
-      { companyId: Id<"companies"> },
+      { companyId: Id<"companies">; workosUserId?: string },
       {
         matchRate: number;
         matched: number;
@@ -368,7 +410,7 @@ export declare const api: {
     getTopExpenses: FunctionReference<
       "query",
       "public",
-      { companyId: Id<"companies">; limit?: number },
+      { companyId: Id<"companies">; limit?: number; workosUserId?: string },
       Array<{
         amount: number;
         category: string;
@@ -464,11 +506,19 @@ export declare const api: {
       Id<"categories">
     >;
   };
+  cloudinaryExtraction: {
+    triggerCloudinaryExtraction: FunctionReference<
+      "action",
+      "public",
+      { documentId: Id<"documents">; force?: boolean; workosUserId?: string },
+      { jobId: string; message?: string; success: boolean }
+    >;
+  };
   companies: {
     completeOnboarding: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"companies"> },
+      { id: Id<"companies">; workosUserId?: string },
       Id<"companies">
     >;
     create: FunctionReference<
@@ -504,39 +554,6 @@ export declare const api: {
       "query",
       "public",
       { id: Id<"companies">; workosUserId?: string },
-      {
-        _creationTime: number;
-        _id: Id<"companies">;
-        bankAccounts?: Array<{
-          accountNumber: string;
-          accountType: string;
-          bank: string;
-          isPrimary: boolean;
-        }>;
-        bankName?: string;
-        code?: string;
-        createdAt: number;
-        currency: string;
-        fiscalYearEnd?: string;
-        industry?: string;
-        industryCategory?: string;
-        isDeleted: boolean;
-        name: string;
-        onboardingCompleted?: boolean;
-        ownerId: Id<"users">;
-        primaryAccountNumber?: string;
-        primaryBank?: string;
-        registrationNumber?: string;
-        taxNumber?: string;
-        taxRegistered?: boolean;
-        tradingAs?: string;
-        updatedAt: number;
-      } | null
-    >;
-    getByCode: FunctionReference<
-      "query",
-      "public",
-      { code: string },
       {
         _creationTime: number;
         _id: Id<"companies">;
@@ -602,7 +619,7 @@ export declare const api: {
     remove: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"companies"> },
+      { id: Id<"companies">; workosUserId?: string },
       null
     >;
     update: FunctionReference<
@@ -629,6 +646,7 @@ export declare const api: {
         taxNumber?: string;
         taxRegistered?: boolean;
         tradingAs?: string;
+        workosUserId?: string;
       },
       Id<"companies">
     >;
@@ -645,22 +663,26 @@ export declare const api: {
         fileSize: number;
         fileType: string;
         storageId: Id<"_storage">;
+        workosUserId?: string;
       },
       Id<"documents">
     >;
     generateUploadUrl: FunctionReference<
       "mutation",
       "public",
-      { companyId: Id<"companies"> },
+      { companyId: Id<"companies">; workosUserId?: string },
       string
     >;
     get: FunctionReference<
       "query",
       "public",
-      { id: Id<"documents"> },
+      { id: Id<"documents">; workosUserId?: string },
       {
         _creationTime: number;
         _id: Id<"documents">;
+        aiBasisType?: "cash" | "accrual";
+        aiClassification?: string;
+        aiClassificationConfidence?: number;
         bankType?: string;
         companyId: Id<"companies">;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
@@ -669,6 +691,20 @@ export declare const api: {
         extractedTransactionCount?: number;
         extractionConfidence?: number;
         extractionJobId?: string;
+        extractionPhase?:
+          | "uploading"
+          | "converting"
+          | "extracting"
+          | "processing"
+          | "complete"
+          | "failed";
+        extractionProgress?: {
+          currentPage: number;
+          pagesCompleted?: number;
+          phaseMessage?: string;
+          streamedTransactionCount?: number;
+          totalPages: number;
+        };
         extractionStatus: "pending" | "processing" | "completed" | "failed";
         fileName: string;
         fileSize: number;
@@ -677,6 +713,7 @@ export declare const api: {
         periodStart?: string;
         processedAt?: number;
         storageId?: Id<"_storage">;
+        uploadAnalysisId?: Id<"uploadAnalyses">;
         uploadedAt: number;
       } | null
     >;
@@ -686,10 +723,14 @@ export declare const api: {
       {
         companyId: Id<"companies">;
         documentType?: "bank_statement" | "invoice" | "receipt" | "other";
+        workosUserId?: string;
       },
       Array<{
         _creationTime: number;
         _id: Id<"documents">;
+        aiBasisType?: "cash" | "accrual";
+        aiClassification?: string;
+        aiClassificationConfidence?: number;
         bankType?: string;
         companyId: Id<"companies">;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
@@ -698,6 +739,20 @@ export declare const api: {
         extractedTransactionCount?: number;
         extractionConfidence?: number;
         extractionJobId?: string;
+        extractionPhase?:
+          | "uploading"
+          | "converting"
+          | "extracting"
+          | "processing"
+          | "complete"
+          | "failed";
+        extractionProgress?: {
+          currentPage: number;
+          pagesCompleted?: number;
+          phaseMessage?: string;
+          streamedTransactionCount?: number;
+          totalPages: number;
+        };
         extractionStatus: "pending" | "processing" | "completed" | "failed";
         fileName: string;
         fileSize: number;
@@ -706,14 +761,21 @@ export declare const api: {
         periodStart?: string;
         processedAt?: number;
         storageId?: Id<"_storage">;
+        uploadAnalysisId?: Id<"uploadAnalyses">;
         uploadedAt: number;
       }>
     >;
     remove: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"documents"> },
+      { id: Id<"documents">; workosUserId?: string },
       null
+    >;
+    resetExtraction: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"documents">; workosUserId?: string },
+      boolean
     >;
     updateExtractionStatus: FunctionReference<
       "mutation",
@@ -722,6 +784,7 @@ export declare const api: {
         extractedText?: string;
         extractionStatus: "pending" | "processing" | "completed" | "failed";
         id: Id<"documents">;
+        workosUserId?: string;
       },
       Id<"documents">
     >;
@@ -914,8 +977,172 @@ export declare const api: {
     triggerExtraction: FunctionReference<
       "action",
       "public",
+      { documentId: Id<"documents">; force?: boolean; workosUserId?: string },
+      { jobId: string; message?: string; success: boolean }
+    >;
+  };
+  extractionQueue: {
+    bulkRetryDLQ: FunctionReference<
+      "mutation",
+      "public",
+      { queueId: Id<"extractionQueue"> },
+      number
+    >;
+    bulkRetryItems: FunctionReference<
+      "mutation",
+      "public",
+      { itemIds: Array<Id<"extractionQueueItems">> },
+      number
+    >;
+    cancelQueue: FunctionReference<
+      "mutation",
+      "public",
+      { queueId: Id<"extractionQueue"> },
+      boolean
+    >;
+    createQueue: FunctionReference<
+      "mutation",
+      "public",
+      {
+        batchName?: string;
+        companyId: Id<"companies">;
+        documentIds: Array<Id<"documents">>;
+        priority?: number;
+      },
+      Id<"extractionQueue">
+    >;
+    deleteDLQItem: FunctionReference<
+      "mutation",
+      "public",
+      { itemId: Id<"extractionQueueItems"> },
+      boolean
+    >;
+    getActiveQueues: FunctionReference<
+      "query",
+      "public",
+      { companyId: Id<"companies"> },
+      Array<{
+        _id: Id<"extractionQueue">;
+        batchName?: string;
+        completedCount: number;
+        createdAt: number;
+        currentPosition: number;
+        estimatedSecondsRemaining?: number;
+        failedCount: number;
+        priority: number;
+        startedAt?: number;
+        status: string;
+        totalDocuments: number;
+      }>
+    >;
+    getDocumentQueuePosition: FunctionReference<
+      "query",
+      "public",
       { documentId: Id<"documents"> },
-      { jobId: string; success: boolean }
+      {
+        estimatedWaitSeconds: number | null;
+        position: number;
+        queueId: Id<"extractionQueue">;
+        status: string;
+        totalInQueue: number;
+      } | null
+    >;
+    getFailedItems: FunctionReference<
+      "query",
+      "public",
+      { companyId: Id<"companies"> },
+      Array<{
+        _id: Id<"extractionQueueItems">;
+        createdAt: number;
+        documentId: Id<"documents">;
+        documentName: string;
+        failedAt: number;
+        lastError?: string;
+        maxRetries: number;
+        priority: number;
+        queueId: Id<"extractionQueue">;
+        queueName?: string;
+        retryCount: number;
+      }>
+    >;
+    getQueueItems: FunctionReference<
+      "query",
+      "public",
+      { queueId: Id<"extractionQueue"> },
+      Array<{
+        _id: Id<"extractionQueueItems">;
+        documentId: Id<"documents">;
+        errorMessage?: string;
+        position: number;
+        processingTimeMs?: number;
+        status: string;
+      }>
+    >;
+    getQueueStats: FunctionReference<
+      "query",
+      "public",
+      { companyId: Id<"companies"> },
+      {
+        completed: number;
+        estimatedSecondsRemaining: number | null;
+        failed: number;
+        processing: number;
+        totalQueued: number;
+      }
+    >;
+    pauseQueue: FunctionReference<
+      "mutation",
+      "public",
+      { queueId: Id<"extractionQueue"> },
+      boolean
+    >;
+    processNextQueueItem: FunctionReference<
+      "action",
+      "public",
+      { queueId: Id<"extractionQueue"> },
+      { documentId?: Id<"documents">; hasMore: boolean; processed: boolean }
+    >;
+    resumeQueue: FunctionReference<
+      "mutation",
+      "public",
+      { queueId: Id<"extractionQueue"> },
+      boolean
+    >;
+    retryFailedItem: FunctionReference<
+      "mutation",
+      "public",
+      { itemId: Id<"extractionQueueItems"> },
+      boolean
+    >;
+    startQueueProcessing: FunctionReference<
+      "action",
+      "public",
+      { queueId: Id<"extractionQueue"> },
+      boolean
+    >;
+  };
+  geminiExtraction: {
+    extractWithGemini: FunctionReference<
+      "action",
+      "public",
+      {
+        documentId: Id<"documents">;
+        skipSessionCreation?: boolean;
+        workosUserId?: string;
+      },
+      {
+        errorMessage?: string;
+        modelUsed?: string;
+        sessionId?: Id<"reconciliationSessions">;
+        success: boolean;
+        transactionCount: number;
+      }
+    >;
+    reExtractDocument: FunctionReference<
+      "action",
+      "public",
+      { companyId: Id<"companies">; documentId: Id<"documents"> },
+      { errorMessage?: string; success: boolean; transactionCount: number }
     >;
   };
   import: {
@@ -963,17 +1190,229 @@ export declare const api: {
       }
     >;
   };
+  lib: {
+    auditLogger: {
+      getAuditHistoryForResource: FunctionReference<
+        "query",
+        "public",
+        {
+          limit?: number;
+          resourceId: string;
+          resourceType:
+            | "document"
+            | "transaction"
+            | "accrualDocument"
+            | "match"
+            | "session"
+            | "company"
+            | "queue"
+            | "suspense"
+            | "export";
+        },
+        Array<{
+          _id: Id<"auditLog">;
+          action:
+            | "document_upload"
+            | "document_delete"
+            | "extraction_start"
+            | "extraction_complete"
+            | "extraction_fail"
+            | "extraction_retry"
+            | "match_create"
+            | "match_approve"
+            | "match_reject"
+            | "match_manual"
+            | "match_bulk_approve"
+            | "match_bulk_reject"
+            | "session_create"
+            | "session_start"
+            | "session_complete"
+            | "export_generate"
+            | "export_download"
+            | "settings_change"
+            | "company_update"
+            | "queue_create"
+            | "queue_pause"
+            | "queue_resume"
+            | "queue_cancel"
+            | "transaction_edit"
+            | "transaction_delete"
+            | "suspense_query"
+            | "suspense_resolve";
+          metadata?: any;
+          timestamp: number;
+          userId: Id<"users">;
+        }>
+      >;
+      getCompanyAuditTrail: FunctionReference<
+        "query",
+        "public",
+        {
+          companyId: Id<"companies">;
+          filters?: {
+            action?:
+              | "document_upload"
+              | "document_delete"
+              | "extraction_start"
+              | "extraction_complete"
+              | "extraction_fail"
+              | "extraction_retry"
+              | "match_create"
+              | "match_approve"
+              | "match_reject"
+              | "match_manual"
+              | "match_bulk_approve"
+              | "match_bulk_reject"
+              | "session_create"
+              | "session_start"
+              | "session_complete"
+              | "export_generate"
+              | "export_download"
+              | "settings_change"
+              | "company_update"
+              | "queue_create"
+              | "queue_pause"
+              | "queue_resume"
+              | "queue_cancel"
+              | "transaction_edit"
+              | "transaction_delete"
+              | "suspense_query"
+              | "suspense_resolve";
+            endTime?: number;
+            resourceType?:
+              | "document"
+              | "transaction"
+              | "accrualDocument"
+              | "match"
+              | "session"
+              | "company"
+              | "queue"
+              | "suspense"
+              | "export";
+            startTime?: number;
+            userId?: Id<"users">;
+          };
+          pagination?: { cursor?: string; limit?: number };
+        },
+        {
+          events: Array<{
+            _id: Id<"auditLog">;
+            action:
+              | "document_upload"
+              | "document_delete"
+              | "extraction_start"
+              | "extraction_complete"
+              | "extraction_fail"
+              | "extraction_retry"
+              | "match_create"
+              | "match_approve"
+              | "match_reject"
+              | "match_manual"
+              | "match_bulk_approve"
+              | "match_bulk_reject"
+              | "session_create"
+              | "session_start"
+              | "session_complete"
+              | "export_generate"
+              | "export_download"
+              | "settings_change"
+              | "company_update"
+              | "queue_create"
+              | "queue_pause"
+              | "queue_resume"
+              | "queue_cancel"
+              | "transaction_edit"
+              | "transaction_delete"
+              | "suspense_query"
+              | "suspense_resolve";
+            metadata?: any;
+            resourceId?: string;
+            resourceType:
+              | "document"
+              | "transaction"
+              | "accrualDocument"
+              | "match"
+              | "session"
+              | "company"
+              | "queue"
+              | "suspense"
+              | "export";
+            timestamp: number;
+            userId: Id<"users">;
+          }>;
+          nextCursor: string | null;
+        }
+      >;
+      getUserAuditActivity: FunctionReference<
+        "query",
+        "public",
+        { limit?: number; userId: Id<"users"> },
+        Array<{
+          _id: Id<"auditLog">;
+          action:
+            | "document_upload"
+            | "document_delete"
+            | "extraction_start"
+            | "extraction_complete"
+            | "extraction_fail"
+            | "extraction_retry"
+            | "match_create"
+            | "match_approve"
+            | "match_reject"
+            | "match_manual"
+            | "match_bulk_approve"
+            | "match_bulk_reject"
+            | "session_create"
+            | "session_start"
+            | "session_complete"
+            | "export_generate"
+            | "export_download"
+            | "settings_change"
+            | "company_update"
+            | "queue_create"
+            | "queue_pause"
+            | "queue_resume"
+            | "queue_cancel"
+            | "transaction_edit"
+            | "transaction_delete"
+            | "suspense_query"
+            | "suspense_resolve";
+          companyId: Id<"companies">;
+          resourceId?: string;
+          resourceType:
+            | "document"
+            | "transaction"
+            | "accrualDocument"
+            | "match"
+            | "session"
+            | "company"
+            | "queue"
+            | "suspense"
+            | "export";
+          timestamp: number;
+        }>
+      >;
+    };
+  };
   matches: {
     approve: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"matchedPairs">; reviewerId?: Id<"users"> },
+      {
+        id: Id<"matchedPairs">;
+        reviewerId?: Id<"users">;
+        workosUserId?: string;
+      },
       Id<"matchedPairs">
     >;
     approveHighConfidence: FunctionReference<
       "mutation",
       "public",
-      { reviewerId?: Id<"users">; sessionId: Id<"reconciliationSessions"> },
+      {
+        reviewerId?: Id<"users">;
+        sessionId: Id<"reconciliationSessions">;
+        workosUserId?: string;
+      },
       number
     >;
     create: FunctionReference<
@@ -985,16 +1424,17 @@ export declare const api: {
         cashTransactionId: Id<"transactions">;
         confidence: "high" | "medium" | "low";
         confidenceScore: number;
-        matchLayer: 1 | 2 | 3 | 4 | 5 | 6;
+        matchLayer: 1 | 2 | 3 | 4 | 5 | 6 | 7;
         matchReason?: string;
         sessionId: Id<"reconciliationSessions">;
+        workosUserId?: string;
       },
       Id<"matchedPairs">
     >;
     get: FunctionReference<
       "query",
       "public",
-      { id: Id<"matchedPairs"> },
+      { id: Id<"matchedPairs">; workosUserId?: string },
       {
         _creationTime: number;
         _id: Id<"matchedPairs">;
@@ -1064,9 +1504,10 @@ export declare const api: {
         confidenceScore: number;
         createdAt: number;
         isPartialMatch?: boolean;
-        matchLayer: 1 | 2 | 3 | 4 | 5 | 6;
+        matchLayer: 1 | 2 | 3 | 4 | 5 | 6 | 7;
         matchReason?: string;
         matchedAmount?: number;
+        partialMatchGroupId?: string;
         reviewedAt?: number;
         reviewedBy?: Id<"users">;
         sessionId: Id<"reconciliationSessions">;
@@ -1082,13 +1523,14 @@ export declare const api: {
         limit?: number;
         searchQuery?: string;
         sessionId: Id<"reconciliationSessions">;
+        workosUserId?: string;
       },
       any
     >;
     getCounts: FunctionReference<
       "query",
       "public",
-      { sessionId: Id<"reconciliationSessions"> },
+      { sessionId: Id<"reconciliationSessions">; workosUserId?: string },
       {
         approved: number;
         highConfidence: number;
@@ -1099,12 +1541,19 @@ export declare const api: {
         total: number;
       } | null
     >;
+    hasReviewedMatchForCompany: FunctionReference<
+      "query",
+      "public",
+      { companyId: Id<"companies">; workosUserId?: string },
+      boolean
+    >;
     listBySession: FunctionReference<
       "query",
       "public",
       {
         sessionId: Id<"reconciliationSessions">;
         status?: "pending" | "approved" | "rejected";
+        workosUserId?: string;
       },
       Array<{
         _creationTime: number;
@@ -1175,9 +1624,10 @@ export declare const api: {
         confidenceScore: number;
         createdAt: number;
         isPartialMatch?: boolean;
-        matchLayer: 1 | 2 | 3 | 4 | 5 | 6;
+        matchLayer: 1 | 2 | 3 | 4 | 5 | 6 | 7;
         matchReason?: string;
         matchedAmount?: number;
+        partialMatchGroupId?: string;
         reviewedAt?: number;
         reviewedBy?: Id<"users">;
         sessionId: Id<"reconciliationSessions">;
@@ -1187,7 +1637,11 @@ export declare const api: {
     reject: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"matchedPairs">; reviewerId?: Id<"users"> },
+      {
+        id: Id<"matchedPairs">;
+        reviewerId?: Id<"users">;
+        workosUserId?: string;
+      },
       Id<"matchedPairs">
     >;
   };
@@ -1412,20 +1866,87 @@ export declare const api: {
       >;
     };
   };
+  nativePdfExtraction: {
+    completeExtraction: FunctionReference<
+      "mutation",
+      "public",
+      {
+        documentId: Id<"documents">;
+        totalTransactions: number;
+        workosUserId?: string;
+      },
+      null
+    >;
+    extractPageWithBedrock: FunctionReference<
+      "action",
+      "public",
+      {
+        documentId: Id<"documents">;
+        documentType: string;
+        pageNumber: number;
+        pageStorageId: Id<"_storage">;
+        totalPages: number;
+        workosUserId?: string;
+      },
+      { errorMessage?: string; success: boolean; transactionCount: number }
+    >;
+    failExtraction: FunctionReference<
+      "mutation",
+      "public",
+      {
+        documentId: Id<"documents">;
+        errorMessage: string;
+        workosUserId?: string;
+      },
+      null
+    >;
+    finalizeExtraction: FunctionReference<
+      "action",
+      "public",
+      { documentId: Id<"documents">; totalTransactions: number },
+      { sessionId?: Id<"reconciliationSessions"> }
+    >;
+    storePageImage: FunctionReference<
+      "mutation",
+      "public",
+      {
+        documentId: Id<"documents">;
+        pageNumber: number;
+        storageId: Id<"_storage">;
+        totalPages: number;
+        workosUserId?: string;
+      },
+      Id<"_storage">
+    >;
+    updateExtractionPhase: FunctionReference<
+      "mutation",
+      "public",
+      {
+        documentId: Id<"documents">;
+        phase:
+          | "uploading"
+          | "converting"
+          | "extracting"
+          | "processing"
+          | "complete"
+          | "failed";
+        progress?: {
+          currentPage: number;
+          pagesCompleted?: number;
+          phaseMessage?: string;
+          streamedTransactionCount?: number;
+          totalPages: number;
+        };
+        workosUserId?: string;
+      },
+      null
+    >;
+  };
   onboarding: {
-    deleteProgress: FunctionReference<
-      "mutation",
-      "public",
-      { userId: string },
-      any
-    >;
-    getProgress: FunctionReference<"query", "public", { userId: string }, any>;
-    markCompleted: FunctionReference<
-      "mutation",
-      "public",
-      { userId: string },
-      any
-    >;
+    cleanupLegacyProgress: FunctionReference<"mutation", "public", {}, any>;
+    deleteProgress: FunctionReference<"mutation", "public", {}, any>;
+    getProgress: FunctionReference<"query", "public", {}, any>;
+    markCompleted: FunctionReference<"mutation", "public", {}, any>;
     saveProgress: FunctionReference<
       "mutation",
       "public",
@@ -1440,7 +1961,39 @@ export declare const api: {
           taxRegistered?: string;
         };
         isCompleted?: boolean;
-        userId: string;
+      },
+      any
+    >;
+  };
+  reconciliationChat: {
+    addMessage: FunctionReference<
+      "mutation",
+      "public",
+      {
+        content: string;
+        metadata?: {
+          stepCount?: number;
+          toolCalls?: Array<{ toolCallId: string; toolName: string }>;
+        };
+        role: "user" | "assistant";
+        sessionId: Id<"reconciliationSessions">;
+        workosUserId?: string;
+      },
+      any
+    >;
+    clearHistory: FunctionReference<
+      "mutation",
+      "public",
+      { sessionId: Id<"reconciliationSessions">; workosUserId?: string },
+      any
+    >;
+    getMessages: FunctionReference<
+      "query",
+      "public",
+      {
+        limit?: number;
+        sessionId: Id<"reconciliationSessions">;
+        workosUserId?: string;
       },
       any
     >;
@@ -1455,13 +2008,14 @@ export declare const api: {
         name: string;
         periodEnd?: string;
         periodStart?: string;
+        workosUserId?: string;
       },
       Id<"reconciliationSessions">
     >;
     get: FunctionReference<
       "query",
       "public",
-      { id: Id<"reconciliationSessions"> },
+      { id: Id<"reconciliationSessions">; workosUserId?: string },
       {
         _creationTime: number;
         _id: Id<"reconciliationSessions">;
@@ -1483,7 +2037,7 @@ export declare const api: {
     getWithStats: FunctionReference<
       "query",
       "public",
-      { id: Id<"reconciliationSessions"> },
+      { id: Id<"reconciliationSessions">; workosUserId?: string },
       {
         _creationTime: number;
         _id: Id<"reconciliationSessions">;
@@ -1497,6 +2051,7 @@ export declare const api: {
         periodStart?: string;
         progress: number;
         stats: {
+          accrualDocuments: number;
           accrualTransactions: number;
           approvedMatches: number;
           cashTransactions: number;
@@ -1520,6 +2075,7 @@ export declare const api: {
       {
         companyId: Id<"companies">;
         status?: "draft" | "processing" | "review" | "completed";
+        workosUserId?: string;
       },
       Array<{
         _creationTime: number;
@@ -1548,8 +2104,22 @@ export declare const api: {
     remove: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"reconciliationSessions"> },
+      { id: Id<"reconciliationSessions">; workosUserId?: string },
       null
+    >;
+    resyncDocuments: FunctionReference<
+      "mutation",
+      "public",
+      {
+        companyId: Id<"companies">;
+        sessionId?: Id<"reconciliationSessions">;
+        workosUserId?: string;
+      },
+      {
+        linkedAccrual: number;
+        linkedCash: number;
+        sessionId: Id<"reconciliationSessions">;
+      }
     >;
     runMatching: FunctionReference<
       "action",
@@ -1565,6 +2135,7 @@ export declare const api: {
         matchedCount?: number;
         progress: number;
         suspenseCount?: number;
+        workosUserId?: string;
       },
       Id<"reconciliationSessions">
     >;
@@ -1574,6 +2145,7 @@ export declare const api: {
       {
         id: Id<"reconciliationSessions">;
         status: "draft" | "processing" | "review" | "completed";
+        workosUserId?: string;
       },
       Id<"reconciliationSessions">
     >;
@@ -1609,6 +2181,7 @@ export declare const api: {
         sourceType: "cash" | "accrual";
         suggestedAction: string;
         transactionDate: string;
+        workosUserId?: string;
       },
       Id<"suspenseItems">
     >;
@@ -1627,13 +2200,14 @@ export declare const api: {
           suggestedAction: string;
           transactionDate: string;
         }>;
+        workosUserId?: string;
       },
       Array<string>
     >;
     get: FunctionReference<
       "query",
       "public",
-      { id: Id<"suspenseItems"> },
+      { id: Id<"suspenseItems">; workosUserId?: string },
       {
         _creationTime: number;
         _id: Id<"suspenseItems">;
@@ -1656,7 +2230,7 @@ export declare const api: {
     getCounts: FunctionReference<
       "query",
       "public",
-      { sessionId: Id<"reconciliationSessions"> },
+      { sessionId: Id<"reconciliationSessions">; workosUserId?: string },
       {
         open: number;
         queried: number;
@@ -1668,7 +2242,11 @@ export declare const api: {
     listByCompany: FunctionReference<
       "query",
       "public",
-      { companyId: Id<"companies">; status?: "open" | "queried" | "resolved" },
+      {
+        companyId: Id<"companies">;
+        status?: "open" | "queried" | "resolved";
+        workosUserId?: string;
+      },
       Array<{
         _creationTime: number;
         _id: Id<"suspenseItems">;
@@ -1694,6 +2272,7 @@ export declare const api: {
       {
         sessionId: Id<"reconciliationSessions">;
         status?: "open" | "queried" | "resolved";
+        workosUserId?: string;
       },
       Array<{
         _creationTime: number;
@@ -1714,22 +2293,16 @@ export declare const api: {
         transactionDate: string;
       }>
     >;
-    markQueried: FunctionReference<
-      "mutation",
-      "public",
-      { id: Id<"suspenseItems"> },
-      Id<"suspenseItems">
-    >;
     remove: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"suspenseItems"> },
+      { id: Id<"suspenseItems">; workosUserId?: string },
       null
     >;
     reopen: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"suspenseItems"> },
+      { id: Id<"suspenseItems">; workosUserId?: string },
       Id<"suspenseItems">
     >;
     resolve: FunctionReference<
@@ -1739,11 +2312,38 @@ export declare const api: {
         id: Id<"suspenseItems">;
         resolutionNotes: string;
         resolvedBy?: Id<"users">;
+        workosUserId?: string;
       },
       Id<"suspenseItems">
     >;
   };
   transactions: {
+    bulkDelete: FunctionReference<
+      "mutation",
+      "public",
+      { ids: Array<Id<"transactions">>; workosUserId?: string },
+      { deleted: number; failed: number }
+    >;
+    bulkUpdateCategory: FunctionReference<
+      "mutation",
+      "public",
+      {
+        category: string;
+        ids: Array<Id<"transactions">>;
+        workosUserId?: string;
+      },
+      { failed: number; updated: number }
+    >;
+    bulkUpdateStatus: FunctionReference<
+      "mutation",
+      "public",
+      {
+        ids: Array<Id<"transactions">>;
+        status: "pending" | "matched" | "suspense";
+        workosUserId?: string;
+      },
+      { failed: number; updated: number }
+    >;
     create: FunctionReference<
       "mutation",
       "public",
@@ -1757,6 +2357,7 @@ export declare const api: {
         sessionId?: Id<"reconciliationSessions">;
         sourceDocumentId?: Id<"documents">;
         type: "cash" | "accrual";
+        workosUserId?: string;
       },
       Id<"transactions">
     >;
@@ -1774,13 +2375,14 @@ export declare const api: {
           sessionId?: Id<"reconciliationSessions">;
           type: "cash" | "accrual";
         }>;
+        workosUserId?: string;
       },
       Array<string>
     >;
     get: FunctionReference<
       "query",
       "public",
-      { id: Id<"transactions"> },
+      { id: Id<"transactions">; workosUserId?: string },
       {
         _creationTime: number;
         _id: Id<"transactions">;
@@ -1806,6 +2408,7 @@ export declare const api: {
         limit?: number;
         status?: "pending" | "matched" | "suspense";
         type?: "cash" | "accrual";
+        workosUserId?: string;
       },
       Array<{
         _creationTime: number;
@@ -1827,7 +2430,11 @@ export declare const api: {
     listBySession: FunctionReference<
       "query",
       "public",
-      { sessionId: Id<"reconciliationSessions">; type?: "cash" | "accrual" },
+      {
+        sessionId: Id<"reconciliationSessions">;
+        type?: "cash" | "accrual";
+        workosUserId?: string;
+      },
       Array<{
         _creationTime: number;
         _id: Id<"transactions">;
@@ -1848,8 +2455,22 @@ export declare const api: {
     remove: FunctionReference<
       "mutation",
       "public",
-      { id: Id<"transactions"> },
+      { id: Id<"transactions">; workosUserId?: string },
       null
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        amount?: number;
+        category?: string;
+        date?: string;
+        description?: string;
+        id: Id<"transactions">;
+        reference?: string;
+        workosUserId?: string;
+      },
+      Id<"transactions">
     >;
     updateStatus: FunctionReference<
       "mutation",
@@ -1858,8 +2479,89 @@ export declare const api: {
         id: Id<"transactions">;
         matchId?: Id<"matchedPairs">;
         status: "pending" | "matched" | "suspense";
+        workosUserId?: string;
       },
       Id<"transactions">
+    >;
+  };
+  uploadAnalysis: {
+    addDocuments: FunctionReference<
+      "mutation",
+      "public",
+      {
+        analysisId: Id<"uploadAnalyses">;
+        documentIds: Array<Id<"documents">>;
+        workosUserId?: string;
+      },
+      any
+    >;
+    approveAndProceed: FunctionReference<
+      "action",
+      "public",
+      { analysisId: Id<"uploadAnalyses">; workosUserId?: string },
+      any
+    >;
+    checkReady: FunctionReference<
+      "query",
+      "public",
+      { id: Id<"uploadAnalyses">; workosUserId?: string },
+      any
+    >;
+    createBatch: FunctionReference<
+      "mutation",
+      "public",
+      {
+        companyId: Id<"companies">;
+        documentIds: Array<Id<"documents">>;
+        workosUserId?: string;
+      },
+      any
+    >;
+    dismiss: FunctionReference<
+      "mutation",
+      "public",
+      { analysisId: Id<"uploadAnalyses">; workosUserId?: string },
+      any
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { id: Id<"uploadAnalyses">; workosUserId?: string },
+      any
+    >;
+    getLatestForCompany: FunctionReference<
+      "query",
+      "public",
+      { companyId: Id<"companies">; workosUserId?: string },
+      any
+    >;
+    markApproved: FunctionReference<
+      "mutation",
+      "public",
+      {
+        analysisId: Id<"uploadAnalyses">;
+        sessionId: Id<"reconciliationSessions">;
+        workosUserId?: string;
+      },
+      any
+    >;
+    reclassifyDocument: FunctionReference<
+      "mutation",
+      "public",
+      {
+        analysisId: Id<"uploadAnalyses">;
+        basisType: "cash" | "accrual";
+        classification: string;
+        documentId: Id<"documents">;
+        workosUserId?: string;
+      },
+      any
+    >;
+    runAnalysis: FunctionReference<
+      "action",
+      "public",
+      { analysisId: Id<"uploadAnalyses"> },
+      any
     >;
   };
   users: {
@@ -1928,8 +2630,86 @@ export declare const api: {
     update: FunctionReference<
       "mutation",
       "public",
-      { avatarUrl?: string; id: Id<"users">; name?: string },
+      { avatarUrl?: string; name?: string },
       Id<"users">
+    >;
+  };
+  worksheetCharts: {
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        chartType: "bar" | "line" | "pie" | "area" | "scatter";
+        dataRange: string;
+        labelColumn?: number;
+        options?: {
+          animate: boolean;
+          colors?: Array<string>;
+          height?: number;
+          orientation?: "horizontal" | "vertical";
+          showDots?: boolean;
+          showGrid?: boolean;
+          showLabels: boolean;
+          showLegend: boolean;
+        };
+        title: string;
+        valueColumns: Array<number>;
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { id: Id<"worksheetCharts">; workosUserId: string },
+      any
+    >;
+    listByWorksheet: FunctionReference<
+      "query",
+      "public",
+      { workosUserId: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"worksheetCharts">; workosUserId: string },
+      any
+    >;
+    reorder: FunctionReference<
+      "mutation",
+      "public",
+      {
+        chartIds: Array<Id<"worksheetCharts">>;
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        chartType?: "bar" | "line" | "pie" | "area" | "scatter";
+        dataRange?: string;
+        id: Id<"worksheetCharts">;
+        labelColumn?: number;
+        options?: {
+          animate: boolean;
+          colors?: Array<string>;
+          height?: number;
+          orientation?: "horizontal" | "vertical";
+          showDots?: boolean;
+          showGrid?: boolean;
+          showLabels: boolean;
+          showLegend: boolean;
+        };
+        title?: string;
+        valueColumns?: Array<number>;
+        workosUserId: string;
+      },
+      any
     >;
   };
   worksheetChat: {
@@ -1964,6 +2744,336 @@ export declare const api: {
       "query",
       "public",
       { limit?: number; workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+  };
+  worksheetColumns: {
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnType: "text" | "number" | "formula";
+        dataSource?: string;
+        formula?: string;
+        inputColumnId?: Id<"worksheetColumns">;
+        name: string;
+        validation?: {
+          allowedValues?: Array<string>;
+          errorMessage?: string;
+          max?: number;
+          min?: number;
+          pattern?: string;
+          required?: boolean;
+          type: "list" | "number" | "date" | "text";
+        };
+        width?: number;
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { id: Id<"worksheetColumns">; workosUserId: string },
+      any
+    >;
+    listByWorksheet: FunctionReference<
+      "query",
+      "public",
+      {
+        includeDeleted?: boolean;
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"worksheetColumns">; workosUserId: string },
+      any
+    >;
+    reorder: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnIds: Array<Id<"worksheetColumns">>;
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnType?: "text" | "number" | "formula";
+        dataSource?: string;
+        formula?: string;
+        id: Id<"worksheetColumns">;
+        inputColumnId?: Id<"worksheetColumns">;
+        name?: string;
+        width?: number;
+        workosUserId: string;
+      },
+      any
+    >;
+    updateValidation: FunctionReference<
+      "mutation",
+      "public",
+      {
+        id: Id<"worksheetColumns">;
+        validation?: {
+          allowedValues?: Array<string>;
+          errorMessage?: string;
+          max?: number;
+          min?: number;
+          pattern?: string;
+          required?: boolean;
+          type: "list" | "number" | "date" | "text";
+        };
+        workosUserId: string;
+      },
+      any
+    >;
+  };
+  worksheetConditionalFormats: {
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        conditions: Array<{
+          formatting: {
+            backgroundColor?: string;
+            bold?: boolean;
+            italic?: boolean;
+            strikethrough?: boolean;
+            textColor?: string;
+            underline?: boolean;
+          };
+          operator:
+            | "gt"
+            | "gte"
+            | "lt"
+            | "lte"
+            | "eq"
+            | "neq"
+            | "contains"
+            | "startsWith"
+            | "endsWith"
+            | "between";
+          value: any;
+          value2?: any;
+        }>;
+        enabled?: boolean;
+        name: string;
+        priority?: number;
+        range: {
+          columnIndex?: number;
+          endCell?: string;
+          rowIndex?: number;
+          startCell?: string;
+        };
+        ruleType:
+          | "threshold"
+          | "between"
+          | "equals"
+          | "contains"
+          | "confidenceBand"
+          | "statusColor"
+          | "matchLayer";
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    createPreset: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnIndex: number;
+        name?: string;
+        presetType: "confidenceBand" | "statusColor" | "matchLayer";
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { id: Id<"worksheetConditionalFormats">; workosUserId: string },
+      any
+    >;
+    listByWorksheet: FunctionReference<
+      "query",
+      "public",
+      {
+        enabledOnly?: boolean;
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"worksheetConditionalFormats">; workosUserId: string },
+      any
+    >;
+    reorder: FunctionReference<
+      "mutation",
+      "public",
+      {
+        ruleIds: Array<Id<"worksheetConditionalFormats">>;
+        workosUserId: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    toggle: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"worksheetConditionalFormats">; workosUserId: string },
+      any
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        conditions?: Array<{
+          formatting: {
+            backgroundColor?: string;
+            bold?: boolean;
+            italic?: boolean;
+            strikethrough?: boolean;
+            textColor?: string;
+            underline?: boolean;
+          };
+          operator:
+            | "gt"
+            | "gte"
+            | "lt"
+            | "lte"
+            | "eq"
+            | "neq"
+            | "contains"
+            | "startsWith"
+            | "endsWith"
+            | "between";
+          value: any;
+          value2?: any;
+        }>;
+        enabled?: boolean;
+        id: Id<"worksheetConditionalFormats">;
+        name?: string;
+        priority?: number;
+        range?: {
+          columnIndex?: number;
+          endCell?: string;
+          rowIndex?: number;
+          startCell?: string;
+        };
+        ruleType?:
+          | "threshold"
+          | "between"
+          | "equals"
+          | "contains"
+          | "confidenceBand"
+          | "statusColor"
+          | "matchLayer";
+        workosUserId: string;
+      },
+      any
+    >;
+  };
+  worksheetDataSources: {
+    addLinkedColumns: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnIndices: Array<number>;
+        id: Id<"worksheetDataSources">;
+        workosUserId?: string;
+      },
+      any
+    >;
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        linkedColumns: Array<number>;
+        readonly?: boolean;
+        refreshInterval?: number;
+        sourceConfig: any;
+        sourceType: "manual" | "reconciliation" | "csv_import";
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    getByWorksheet: FunctionReference<
+      "query",
+      "public",
+      { workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+    isColumnLinked: FunctionReference<
+      "query",
+      "public",
+      {
+        columnIndex: number;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    listByWorkspace: FunctionReference<
+      "query",
+      "public",
+      { workosUserId?: string; workspaceId: Id<"workspaces"> },
+      any
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"worksheetDataSources">; workosUserId?: string },
+      any
+    >;
+    removeByWorksheet: FunctionReference<
+      "mutation",
+      "public",
+      { workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+    removeLinkedColumns: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnIndices: Array<number>;
+        id: Id<"worksheetDataSources">;
+        workosUserId?: string;
+      },
+      any
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        id: Id<"worksheetDataSources">;
+        linkedColumns?: Array<number>;
+        readonly?: boolean;
+        refreshInterval?: number;
+        sourceConfig?: any;
+        workosUserId?: string;
+      },
+      any
+    >;
+    updateRefreshTimestamp: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"worksheetDataSources">; workosUserId?: string },
       any
     >;
   };
@@ -2002,10 +3112,62 @@ export declare const api: {
       },
       any
     >;
+    createColumns: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columns: Array<{
+          columnType: "text" | "number" | "formula";
+          dataSource?: string;
+          formula?: string;
+          name: string;
+          order: number;
+          width?: number;
+        }>;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    createRows: FunctionReference<
+      "mutation",
+      "public",
+      {
+        rows: Array<{ cells: Record<string, any>; rowNumber: number }>;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    createTemplateFromWorksheet: FunctionReference<
+      "mutation",
+      "public",
+      {
+        category?: "reconciliation" | "accounting" | "custom";
+        description?: string;
+        includeSampleData?: boolean;
+        name: string;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
     createWorksheet: FunctionReference<
       "mutation",
       "public",
       { name: string; workosUserId?: string; workspaceId: Id<"workspaces"> },
+      any
+    >;
+    createWorksheetFromTemplate: FunctionReference<
+      "mutation",
+      "public",
+      {
+        includeSampleData?: boolean;
+        name?: string;
+        templateId: Id<"sheetTemplates">;
+        workosUserId?: string;
+        workspaceId: Id<"workspaces">;
+      },
       any
     >;
     createWorkspace: FunctionReference<
@@ -2049,6 +3211,12 @@ export declare const api: {
       },
       any
     >;
+    deleteTemplate: FunctionReference<
+      "mutation",
+      "public",
+      { templateId: Id<"sheetTemplates">; workosUserId?: string },
+      any
+    >;
     deleteWorksheet: FunctionReference<
       "mutation",
       "public",
@@ -2059,6 +3227,17 @@ export declare const api: {
       "mutation",
       "public",
       { workosUserId?: string; workspaceId: Id<"workspaces"> },
+      any
+    >;
+    duplicateWorksheet: FunctionReference<
+      "mutation",
+      "public",
+      {
+        includeData?: boolean;
+        newName?: string;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
       any
     >;
     emptyTrash: FunctionReference<
@@ -2077,6 +3256,12 @@ export declare const api: {
       "query",
       "public",
       { workosUserId?: string; worksheetId: Id<"worksheets"> },
+      any
+    >;
+    getTemplate: FunctionReference<
+      "query",
+      "public",
+      { templateId: Id<"sheetTemplates"> },
       any
     >;
     getWorksheetData: FunctionReference<
@@ -2101,10 +3286,32 @@ export declare const api: {
       { workosUserId?: string; workspaceId: Id<"workspaces"> },
       any
     >;
+    listTemplates: FunctionReference<
+      "query",
+      "public",
+      {
+        category?: "blank" | "reconciliation" | "accounting" | "custom";
+        companyId?: Id<"companies">;
+        workosUserId?: string;
+      },
+      any
+    >;
     listWorkspaces: FunctionReference<
       "query",
       "public",
       { companyId: Id<"companies">; workosUserId?: string },
+      any
+    >;
+    renameColumn: FunctionReference<
+      "mutation",
+      "public",
+      { columnId: Id<"worksheetColumns">; name: string; workosUserId?: string },
+      any
+    >;
+    renameWorksheet: FunctionReference<
+      "mutation",
+      "public",
+      { name: string; workosUserId?: string; worksheetId: Id<"worksheets"> },
       any
     >;
     reorderColumns: FunctionReference<
@@ -2114,6 +3321,16 @@ export declare const api: {
         columnIds: Array<Id<"worksheetColumns">>;
         workosUserId?: string;
         worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    reorderWorksheets: FunctionReference<
+      "mutation",
+      "public",
+      {
+        workosUserId?: string;
+        worksheetIds: Array<Id<"worksheets">>;
+        workspaceId: Id<"workspaces">;
       },
       any
     >;
@@ -2159,6 +3376,30 @@ export declare const api: {
       },
       any
     >;
+    updateColumnExtended: FunctionReference<
+      "mutation",
+      "public",
+      {
+        columnId: Id<"worksheetColumns">;
+        columnType?:
+          | "text"
+          | "number"
+          | "date"
+          | "dropdown"
+          | "checkbox"
+          | "currency"
+          | "percentage"
+          | "formula";
+        dropdownOptions?: Array<string>;
+        excelFormula?: string;
+        format?: string;
+        hidden?: boolean;
+        name?: string;
+        width?: number;
+        workosUserId?: string;
+      },
+      any
+    >;
     updateColumnWidth: FunctionReference<
       "mutation",
       "public",
@@ -2166,6 +3407,29 @@ export declare const api: {
         columnId: Id<"worksheetColumns">;
         width: number;
         workosUserId?: string;
+      },
+      any
+    >;
+    updateRows: FunctionReference<
+      "mutation",
+      "public",
+      {
+        rows: Array<{ cells: Record<string, any>; rowNumber: number }>;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
+      },
+      any
+    >;
+    updateWorksheet: FunctionReference<
+      "mutation",
+      "public",
+      {
+        frozenColumns?: number;
+        frozenRows?: number;
+        name?: string;
+        order?: number;
+        workosUserId?: string;
+        worksheetId: Id<"worksheets">;
       },
       any
     >;
@@ -2257,6 +3521,129 @@ export declare const internal: {
       { count: number; message: string }
     >;
   };
+  cloudinaryExtraction: {
+    getDocument: FunctionReference<
+      "query",
+      "internal",
+      { documentId: Id<"documents"> },
+      {
+        _id: Id<"documents">;
+        companyId: Id<"companies">;
+        documentType: "bank_statement" | "invoice" | "receipt" | "other";
+        extractionJobId?: string;
+        extractionStatus: "pending" | "processing" | "completed" | "failed";
+        fileName: string;
+        fileType: string;
+        storageId?: Id<"_storage">;
+      } | null
+    >;
+    handleExtractionResults: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        companyId: Id<"companies">;
+        documentId: Id<"documents">;
+        documentType: string;
+        jobId: string;
+        result: {
+          bankName?: string;
+          confidence: number;
+          errorMessage?: string;
+          extractedText: string;
+          invoiceData?: {
+            amount: number;
+            counterparty?: string;
+            description?: string;
+            docDate: string;
+            docNumber?: string;
+            docType: string;
+            dueDate?: string;
+            lineItems?: string;
+            taxAmount?: number;
+          };
+          periodEnd?: string;
+          periodStart?: string;
+          success: boolean;
+          transactions?: Array<{
+            amount: number;
+            date: string;
+            description: string;
+            reference?: string;
+          }>;
+        };
+      },
+      null
+    >;
+    startExtraction: FunctionReference<
+      "mutation",
+      "internal",
+      { documentId: Id<"documents">; jobId: string },
+      null
+    >;
+    streamPageTransactions: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        companyId: Id<"companies">;
+        documentId: Id<"documents">;
+        pageNumber: number;
+        pagesCompleted: number;
+        totalPages: number;
+        transactions: Array<{
+          amount: number;
+          boundingBox?: {
+            amount?: { height: number; width: number; x: number; y: number };
+            date?: { height: number; width: number; x: number; y: number };
+            description?: {
+              height: number;
+              width: number;
+              x: number;
+              y: number;
+            };
+            reference?: { height: number; width: number; x: number; y: number };
+          };
+          confidence?: {
+            amount?: number;
+            date?: number;
+            description?: number;
+            reference?: number;
+          };
+          date: string;
+          description: string;
+          reference?: string;
+        }>;
+      },
+      { insertedCount: number; totalStreamed: number }
+    >;
+    updateDocumentJobId: FunctionReference<
+      "mutation",
+      "internal",
+      { documentId: Id<"documents">; jobId: string },
+      null
+    >;
+    updateDocumentStatus: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        documentId: Id<"documents">;
+        errorMessage?: string;
+        status: "pending" | "processing" | "completed" | "failed";
+      },
+      null
+    >;
+    updateExtractionProgress: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        currentPage: number;
+        documentId: Id<"documents">;
+        pagesCompleted?: number;
+        streamedTransactionCount?: number;
+        totalPages: number;
+      },
+      null
+    >;
+  };
   documents: {
     getPendingExtraction: FunctionReference<
       "query",
@@ -2265,6 +3652,9 @@ export declare const internal: {
       Array<{
         _creationTime: number;
         _id: Id<"documents">;
+        aiBasisType?: "cash" | "accrual";
+        aiClassification?: string;
+        aiClassificationConfidence?: number;
         bankType?: string;
         companyId: Id<"companies">;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
@@ -2273,6 +3663,20 @@ export declare const internal: {
         extractedTransactionCount?: number;
         extractionConfidence?: number;
         extractionJobId?: string;
+        extractionPhase?:
+          | "uploading"
+          | "converting"
+          | "extracting"
+          | "processing"
+          | "complete"
+          | "failed";
+        extractionProgress?: {
+          currentPage: number;
+          pagesCompleted?: number;
+          phaseMessage?: string;
+          streamedTransactionCount?: number;
+          totalPages: number;
+        };
         extractionStatus: "pending" | "processing" | "completed" | "failed";
         fileName: string;
         fileSize: number;
@@ -2281,6 +3685,7 @@ export declare const internal: {
         periodStart?: string;
         processedAt?: number;
         storageId?: Id<"_storage">;
+        uploadAnalysisId?: Id<"uploadAnalyses">;
         uploadedAt: number;
       }>
     >;
@@ -2353,6 +3758,9 @@ export declare const internal: {
       {
         _creationTime: number;
         _id: Id<"documents">;
+        aiBasisType?: "cash" | "accrual";
+        aiClassification?: string;
+        aiClassificationConfidence?: number;
         bankType?: string;
         companyId: Id<"companies">;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
@@ -2361,6 +3769,20 @@ export declare const internal: {
         extractedTransactionCount?: number;
         extractionConfidence?: number;
         extractionJobId?: string;
+        extractionPhase?:
+          | "uploading"
+          | "converting"
+          | "extracting"
+          | "processing"
+          | "complete"
+          | "failed";
+        extractionProgress?: {
+          currentPage: number;
+          pagesCompleted?: number;
+          phaseMessage?: string;
+          streamedTransactionCount?: number;
+          totalPages: number;
+        };
         extractionStatus: "pending" | "processing" | "completed" | "failed";
         fileName: string;
         fileSize: number;
@@ -2369,6 +3791,7 @@ export declare const internal: {
         periodStart?: string;
         processedAt?: number;
         storageId?: Id<"_storage">;
+        uploadAnalysisId?: Id<"uploadAnalyses">;
         uploadedAt: number;
       } | null
     >;
@@ -2424,6 +3847,146 @@ export declare const internal: {
       null
     >;
   };
+  extractionQueue: {
+    claimNextQueueItem: FunctionReference<
+      "mutation",
+      "internal",
+      { queueId: Id<"extractionQueue"> },
+      {
+        _id: Id<"extractionQueueItems">;
+        documentId: Id<"documents">;
+        position: number;
+      } | null
+    >;
+    completeQueue: FunctionReference<
+      "mutation",
+      "internal",
+      { queueId: Id<"extractionQueue">; status: "completed" | "failed" },
+      null
+    >;
+    getNextPendingQueue: FunctionReference<
+      "query",
+      "internal",
+      {},
+      {
+        _id: Id<"extractionQueue">;
+        companyId: Id<"companies">;
+        userId: Id<"users">;
+      } | null
+    >;
+    getNextQueueItem: FunctionReference<
+      "query",
+      "internal",
+      { queueId: Id<"extractionQueue"> },
+      {
+        _id: Id<"extractionQueueItems">;
+        documentId: Id<"documents">;
+        position: number;
+      } | null
+    >;
+    getRetryableItems: FunctionReference<
+      "query",
+      "internal",
+      {},
+      Array<{
+        _id: Id<"extractionQueueItems">;
+        documentId: Id<"documents">;
+        queueId: Id<"extractionQueue">;
+      }>
+    >;
+    scheduleRetry: FunctionReference<
+      "mutation",
+      "internal",
+      { errorMessage: string; itemId: Id<"extractionQueueItems"> },
+      { isDLQ: boolean; nextRetryAt?: number; scheduled: boolean }
+    >;
+    startQueue: FunctionReference<
+      "mutation",
+      "internal",
+      { queueId: Id<"extractionQueue"> },
+      null
+    >;
+    updateQueueItemStatus: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        errorMessage?: string;
+        itemId: Id<"extractionQueueItems">;
+        processingTimeMs?: number;
+        status: "pending" | "processing" | "completed" | "failed" | "skipped";
+      },
+      null
+    >;
+    updateQueueProgress: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        avgProcessingTimeMs?: number;
+        completedCount: number;
+        currentPosition: number;
+        failedCount: number;
+        queueId: Id<"extractionQueue">;
+      },
+      null
+    >;
+  };
+  geminiExtraction: {
+    clearDocumentExtractions: FunctionReference<
+      "mutation",
+      "internal",
+      { companyId: Id<"companies">; documentId: Id<"documents"> },
+      null
+    >;
+    getCompanyOwner: FunctionReference<
+      "query",
+      "internal",
+      { companyId: Id<"companies"> },
+      Id<"users"> | null
+    >;
+    getDocumentStorageInfo: FunctionReference<
+      "query",
+      "internal",
+      { documentId: Id<"documents"> },
+      { fileType: string; storageId: Id<"_storage"> } | null
+    >;
+    setExtractedCount: FunctionReference<
+      "mutation",
+      "internal",
+      { count: number; documentId: Id<"documents"> },
+      null
+    >;
+    storeExtractedText: FunctionReference<
+      "mutation",
+      "internal",
+      { documentId: Id<"documents">; extractedText: string },
+      null
+    >;
+    updateDocumentType: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        documentId: Id<"documents">;
+        documentType: "bank_statement" | "invoice" | "receipt" | "other";
+      },
+      null
+    >;
+    updateGeminiPhase: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        documentId: Id<"documents">;
+        errorMessage?: string;
+        phase:
+          | "uploading"
+          | "extracting"
+          | "processing"
+          | "complete"
+          | "failed";
+        phaseMessage?: string;
+      },
+      null
+    >;
+  };
   import: {
     getCompany: FunctionReference<
       "query",
@@ -2438,6 +4001,61 @@ export declare const internal: {
       any
     >;
   };
+  lib: {
+    auditLogger: {
+      logAudit: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          action:
+            | "document_upload"
+            | "document_delete"
+            | "extraction_start"
+            | "extraction_complete"
+            | "extraction_fail"
+            | "extraction_retry"
+            | "match_create"
+            | "match_approve"
+            | "match_reject"
+            | "match_manual"
+            | "match_bulk_approve"
+            | "match_bulk_reject"
+            | "session_create"
+            | "session_start"
+            | "session_complete"
+            | "export_generate"
+            | "export_download"
+            | "settings_change"
+            | "company_update"
+            | "queue_create"
+            | "queue_pause"
+            | "queue_resume"
+            | "queue_cancel"
+            | "transaction_edit"
+            | "transaction_delete"
+            | "suspense_query"
+            | "suspense_resolve";
+          companyId: Id<"companies">;
+          ipAddress?: string;
+          metadata?: any;
+          resourceId?: string;
+          resourceType:
+            | "document"
+            | "transaction"
+            | "accrualDocument"
+            | "match"
+            | "session"
+            | "company"
+            | "queue"
+            | "suspense"
+            | "export";
+          userAgent?: string;
+          userId: Id<"users">;
+        },
+        Id<"auditLog">
+      >;
+    };
+  };
   matching: {
     engine: {
       createMatchedPair: FunctionReference<
@@ -2447,11 +4065,25 @@ export declare const internal: {
           accrualDocumentId: Id<"accrualDocuments">;
           cashTransactionId: Id<"transactions">;
           confidenceScore: number;
-          matchLayer: 1 | 2 | 3 | 4 | 5;
+          matchLayer: 1 | 2 | 3 | 4 | 5 | 7;
           matchReason: string;
           sessionId: Id<"reconciliationSessions">;
         },
         Id<"matchedPairs">
+      >;
+      createPartialMatches: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          accrualDocumentIds: Array<Id<"accrualDocuments">>;
+          cashTransactionId: Id<"transactions">;
+          confidenceScore: number;
+          matchReason: string;
+          matchedAmounts: Array<number>;
+          sessionId: Id<"reconciliationSessions">;
+          totalMatchedAmount: number;
+        },
+        Array<Id<"matchedPairs">>
       >;
       createSuspenseItem: FunctionReference<
         "mutation",
@@ -2572,6 +4204,12 @@ export declare const internal: {
           status: "pending" | "matched" | "suspense";
           type: "cash" | "accrual";
         }>
+      >;
+      resetSuspenseForRerun: FunctionReference<
+        "mutation",
+        "internal",
+        { sessionId: Id<"reconciliationSessions"> },
+        number
       >;
       updateSessionStats: FunctionReference<
         "mutation",
@@ -2594,7 +4232,7 @@ export declare const internal: {
           accrualDocumentId: Id<"accrualDocuments">;
           cashTransactionId: Id<"transactions">;
           confidenceScore: number;
-          matchLayer: 1 | 2 | 3 | 4 | 5;
+          matchLayer: 1 | 2 | 3 | 4 | 5 | 7;
           matchReason: string;
           sessionId: Id<"reconciliationSessions">;
         },
@@ -2733,6 +4371,205 @@ export declare const internal: {
         null
       >;
     };
+  };
+  nativePdfExtraction: {
+    getDocumentInfo: FunctionReference<
+      "query",
+      "internal",
+      { documentId: Id<"documents"> },
+      { companyId: Id<"companies">; documentType: string } | null
+    >;
+    insertAccrualDocument: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        companyId: Id<"companies">;
+        documentId: Id<"documents">;
+        invoiceData: {
+          amount: number;
+          counterparty?: string;
+          description?: string;
+          docDate: string;
+          docNumber?: string;
+          docType: string;
+          dueDate?: string;
+          lineItems?: string;
+          taxAmount?: number;
+        };
+      },
+      null
+    >;
+    streamPageTransactions: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        companyId: Id<"companies">;
+        documentId: Id<"documents">;
+        pageNumber: number;
+        totalPages: number;
+        transactions: Array<{
+          amount: number;
+          date: string;
+          description: string;
+          reference?: string;
+        }>;
+      },
+      { insertedCount: number; totalStreamed: number }
+    >;
+    updateDocumentMetadata: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        bankName?: string;
+        confidence?: number;
+        documentId: Id<"documents">;
+        periodEnd?: string;
+        periodStart?: string;
+      },
+      null
+    >;
+    updateDocumentTypeInternal: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        documentId: Id<"documents">;
+        documentType: "bank_statement" | "invoice" | "receipt" | "other";
+      },
+      null
+    >;
+    updatePhaseInternal: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        documentId: Id<"documents">;
+        errorMessage?: string;
+        phase:
+          | "uploading"
+          | "converting"
+          | "extracting"
+          | "processing"
+          | "complete"
+          | "failed";
+        progress?: {
+          currentPage: number;
+          pagesCompleted?: number;
+          phaseMessage?: string;
+          streamedTransactionCount?: number;
+          totalPages: number;
+        };
+      },
+      null
+    >;
+  };
+  reconciliationChat: {
+    deleteExpired: FunctionReference<"mutation", "internal", {}, any>;
+  };
+  sessions: {
+    autoCreateAndLink: FunctionReference<
+      "mutation",
+      "internal",
+      { companyId: Id<"companies">; sessionName?: string; userId: Id<"users"> },
+      Id<"reconciliationSessions">
+    >;
+    getSessionCounts: FunctionReference<
+      "query",
+      "internal",
+      { sessionId: Id<"reconciliationSessions"> },
+      {
+        accrualCount: number;
+        cashCount: number;
+        status: "draft" | "processing" | "review" | "completed";
+      }
+    >;
+    updateStatusInternal: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        id: Id<"reconciliationSessions">;
+        status: "draft" | "processing" | "review" | "completed";
+      },
+      null
+    >;
+  };
+  uploadAnalysis: {
+    getCompanyForAnalysis: FunctionReference<
+      "query",
+      "internal",
+      { companyId: Id<"companies"> },
+      any
+    >;
+    getDocumentsForAnalysis: FunctionReference<
+      "query",
+      "internal",
+      { documentIds: Array<Id<"documents">> },
+      any
+    >;
+    getInternal: FunctionReference<
+      "query",
+      "internal",
+      { analysisId: Id<"uploadAnalyses"> },
+      any
+    >;
+    linkSession: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        analysisId: Id<"uploadAnalyses">;
+        sessionId: Id<"reconciliationSessions">;
+      },
+      any
+    >;
+    setStatus: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        analysisId: Id<"uploadAnalyses">;
+        status: "pending" | "analyzing" | "ready" | "approved" | "dismissed";
+      },
+      any
+    >;
+    storeResults: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        analysisId: Id<"uploadAnalyses">;
+        detectedCompany: {
+          accountNumber?: string;
+          bankName?: string;
+          matchDetails?: string;
+          matchStatus: "match" | "partial_match" | "mismatch" | "unknown";
+          name: string;
+          registrationNumber?: string;
+        };
+        documentClassifications: Array<{
+          aiClassification: string;
+          basisType: "cash" | "accrual";
+          confidence: number;
+          documentId: Id<"documents">;
+          errorMessage?: string;
+          extractionStatus: string;
+          fileName: string;
+          pageCount?: number;
+          reason?: string;
+          transactionCount?: number;
+          userOverride?: {
+            basisType: "cash" | "accrual";
+            classification: string;
+          };
+        }>;
+      },
+      any
+    >;
+    updateDocumentClassification: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        aiBasisType: "cash" | "accrual";
+        documentId: Id<"documents">;
+        documentType: "bank_statement" | "invoice" | "receipt" | "other";
+      },
+      any
+    >;
   };
   workspaces: {
     updateCellStatus: FunctionReference<

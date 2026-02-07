@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAuth, isProductionMode } from "./lib/auth";
 
 /**
  * Onboarding Progress Mutations
@@ -9,11 +10,12 @@ import { mutation, query } from "./_generated/server";
 
 // Get existing onboarding progress for a user
 export const getProgress = query({
-  args: { userId: v.string() },
+  args: {},
   handler: async (ctx, args) => {
+    const user = await requireAuth(ctx);
     return await ctx.db
       .query("onboardingProgress")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
   },
 });
@@ -21,7 +23,6 @@ export const getProgress = query({
 // Save or update onboarding progress
 export const saveProgress = mutation({
   args: {
-    userId: v.string(),
     currentStep: v.number(),
     data: v.object({
       companyName: v.optional(v.string()),
@@ -34,9 +35,10 @@ export const saveProgress = mutation({
     isCompleted: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const user = await requireAuth(ctx);
     const existing = await ctx.db
       .query("onboardingProgress")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
     const now = Date.now();
@@ -53,7 +55,7 @@ export const saveProgress = mutation({
     } else {
       // Create new progress record
       return await ctx.db.insert("onboardingProgress", {
-        userId: args.userId,
+        userId: user._id,
         currentStep: args.currentStep,
         data: args.data,
         isCompleted: args.isCompleted ?? false,
@@ -66,11 +68,12 @@ export const saveProgress = mutation({
 
 // Mark onboarding as completed
 export const markCompleted = mutation({
-  args: { userId: v.string() },
+  args: {},
   handler: async (ctx, args) => {
+    const user = await requireAuth(ctx);
     const existing = await ctx.db
       .query("onboardingProgress")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
     if (existing) {
@@ -84,15 +87,38 @@ export const markCompleted = mutation({
 
 // Delete onboarding progress (cleanup after successful onboarding)
 export const deleteProgress = mutation({
-  args: { userId: v.string() },
+  args: {},
   handler: async (ctx, args) => {
+    const user = await requireAuth(ctx);
     const existing = await ctx.db
       .query("onboardingProgress")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
     if (existing) {
       await ctx.db.delete(existing._id);
     }
+  },
+});
+
+// Dev-only cleanup for legacy onboarding progress rows with string userId
+export const cleanupLegacyProgress = mutation({
+  args: {},
+  handler: async (ctx) => {
+    if (isProductionMode()) {
+      throw new Error("cleanupLegacyProgress is not allowed in production");
+    }
+
+    const allRows = await ctx.db.query("onboardingProgress").collect();
+    let deleted = 0;
+
+    for (const row of allRows) {
+      if (typeof row.userId === "string") {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+    }
+
+    return { deleted };
   },
 });

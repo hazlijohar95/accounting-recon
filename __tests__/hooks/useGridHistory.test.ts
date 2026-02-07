@@ -298,7 +298,7 @@ describe('useGridHistory', () => {
   })
 
   describe('keyboard shortcuts', () => {
-    it('triggers undo on Cmd+Z', () => {
+    it('triggers undo on Cmd+Z', async () => {
       const { result } = renderHook(() => useGridHistory())
       const undoFn = vi.fn().mockResolvedValue(undefined)
 
@@ -311,7 +311,7 @@ describe('useGridHistory', () => {
         })
       })
 
-      act(() => {
+      await act(async () => {
         result.current.handleKeyDown({
           metaKey: true,
           ctrlKey: false,
@@ -321,10 +321,12 @@ describe('useGridHistory', () => {
         } as unknown as KeyboardEvent)
       })
 
-      expect(undoFn).toHaveBeenCalled()
+      await waitFor(() => {
+        expect(undoFn).toHaveBeenCalled()
+      })
     })
 
-    it('triggers undo on Ctrl+Z', () => {
+    it('triggers undo on Ctrl+Z', async () => {
       const { result } = renderHook(() => useGridHistory())
       const undoFn = vi.fn().mockResolvedValue(undefined)
 
@@ -337,7 +339,7 @@ describe('useGridHistory', () => {
         })
       })
 
-      act(() => {
+      await act(async () => {
         result.current.handleKeyDown({
           metaKey: false,
           ctrlKey: true,
@@ -347,7 +349,9 @@ describe('useGridHistory', () => {
         } as unknown as KeyboardEvent)
       })
 
-      expect(undoFn).toHaveBeenCalled()
+      await waitFor(() => {
+        expect(undoFn).toHaveBeenCalled()
+      })
     })
 
     it('triggers redo on Cmd+Shift+Z', async () => {
@@ -367,7 +371,7 @@ describe('useGridHistory', () => {
         await result.current.undo()
       })
 
-      act(() => {
+      await act(async () => {
         result.current.handleKeyDown({
           metaKey: true,
           ctrlKey: false,
@@ -377,7 +381,9 @@ describe('useGridHistory', () => {
         } as unknown as KeyboardEvent)
       })
 
-      expect(redoFn).toHaveBeenCalled()
+      await waitFor(() => {
+        expect(redoFn).toHaveBeenCalled()
+      })
     })
 
     it('triggers redo on Ctrl+Y', async () => {
@@ -397,7 +403,7 @@ describe('useGridHistory', () => {
         await result.current.undo()
       })
 
-      act(() => {
+      await act(async () => {
         result.current.handleKeyDown({
           metaKey: false,
           ctrlKey: true,
@@ -407,7 +413,9 @@ describe('useGridHistory', () => {
         } as unknown as KeyboardEvent)
       })
 
-      expect(redoFn).toHaveBeenCalled()
+      await waitFor(() => {
+        expect(redoFn).toHaveBeenCalled()
+      })
     })
   })
 

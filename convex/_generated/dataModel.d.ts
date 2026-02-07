@@ -137,6 +137,82 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  auditLog: {
+    document: {
+      action:
+        | "document_upload"
+        | "document_delete"
+        | "extraction_start"
+        | "extraction_complete"
+        | "extraction_fail"
+        | "extraction_retry"
+        | "match_create"
+        | "match_approve"
+        | "match_reject"
+        | "match_manual"
+        | "match_bulk_approve"
+        | "match_bulk_reject"
+        | "session_create"
+        | "session_start"
+        | "session_complete"
+        | "export_generate"
+        | "export_download"
+        | "settings_change"
+        | "company_update"
+        | "queue_create"
+        | "queue_pause"
+        | "queue_resume"
+        | "queue_cancel"
+        | "transaction_edit"
+        | "transaction_delete"
+        | "suspense_query"
+        | "suspense_resolve";
+      companyId: Id<"companies">;
+      ipAddress?: string;
+      metadata?: any;
+      resourceId?: string;
+      resourceType:
+        | "document"
+        | "transaction"
+        | "accrualDocument"
+        | "match"
+        | "session"
+        | "company"
+        | "queue"
+        | "suspense"
+        | "export";
+      timestamp: number;
+      userAgent?: string;
+      userId: Id<"users">;
+      _id: Id<"auditLog">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "action"
+      | "companyId"
+      | "ipAddress"
+      | "metadata"
+      | "resourceId"
+      | "resourceType"
+      | "timestamp"
+      | "userAgent"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_action: ["action", "_creationTime"];
+      by_company: ["companyId", "_creationTime"];
+      by_company_action: ["companyId", "action", "_creationTime"];
+      by_company_time: ["companyId", "timestamp", "_creationTime"];
+      by_resource: ["resourceType", "resourceId", "_creationTime"];
+      by_user: ["userId", "_creationTime"];
+      by_user_time: ["userId", "timestamp", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   categories: {
     document: {
       accountCode?: string;
@@ -307,6 +383,9 @@ export type DataModel = {
   };
   documents: {
     document: {
+      aiBasisType?: "cash" | "accrual";
+      aiClassification?: string;
+      aiClassificationConfidence?: number;
       bankType?: string;
       companyId: Id<"companies">;
       documentType: "bank_statement" | "invoice" | "receipt" | "other";
@@ -315,6 +394,20 @@ export type DataModel = {
       extractedTransactionCount?: number;
       extractionConfidence?: number;
       extractionJobId?: string;
+      extractionPhase?:
+        | "uploading"
+        | "converting"
+        | "extracting"
+        | "processing"
+        | "complete"
+        | "failed";
+      extractionProgress?: {
+        currentPage: number;
+        pagesCompleted?: number;
+        phaseMessage?: string;
+        streamedTransactionCount?: number;
+        totalPages: number;
+      };
       extractionStatus: "pending" | "processing" | "completed" | "failed";
       fileName: string;
       fileSize: number;
@@ -323,6 +416,7 @@ export type DataModel = {
       periodStart?: string;
       processedAt?: number;
       storageId?: Id<"_storage">;
+      uploadAnalysisId?: Id<"uploadAnalyses">;
       uploadedAt: number;
       _id: Id<"documents">;
       _creationTime: number;
@@ -330,6 +424,9 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "aiBasisType"
+      | "aiClassification"
+      | "aiClassificationConfidence"
       | "bankType"
       | "companyId"
       | "documentType"
@@ -338,6 +435,13 @@ export type DataModel = {
       | "extractedTransactionCount"
       | "extractionConfidence"
       | "extractionJobId"
+      | "extractionPhase"
+      | "extractionProgress"
+      | "extractionProgress.currentPage"
+      | "extractionProgress.pagesCompleted"
+      | "extractionProgress.phaseMessage"
+      | "extractionProgress.streamedTransactionCount"
+      | "extractionProgress.totalPages"
       | "extractionStatus"
       | "fileName"
       | "fileSize"
@@ -346,6 +450,7 @@ export type DataModel = {
       | "periodStart"
       | "processedAt"
       | "storageId"
+      | "uploadAnalysisId"
       | "uploadedAt";
     indexes: {
       by_id: ["_id"];
@@ -408,6 +513,110 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  extractionQueue: {
+    document: {
+      avgProcessingTimeMs?: number;
+      batchName?: string;
+      companyId: Id<"companies">;
+      completedAt?: number;
+      completedCount: number;
+      createdAt: number;
+      currentPosition: number;
+      estimatedSecondsRemaining?: number;
+      failedCount: number;
+      isPaused?: boolean;
+      pausedAt?: number;
+      priority: number;
+      startedAt?: number;
+      status: "pending" | "processing" | "completed" | "failed" | "cancelled";
+      totalDocuments: number;
+      userId: Id<"users">;
+      _id: Id<"extractionQueue">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "avgProcessingTimeMs"
+      | "batchName"
+      | "companyId"
+      | "completedAt"
+      | "completedCount"
+      | "createdAt"
+      | "currentPosition"
+      | "estimatedSecondsRemaining"
+      | "failedCount"
+      | "isPaused"
+      | "pausedAt"
+      | "priority"
+      | "startedAt"
+      | "status"
+      | "totalDocuments"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_company: ["companyId", "_creationTime"];
+      by_priority_created: ["priority", "createdAt", "_creationTime"];
+      by_status: ["status", "_creationTime"];
+      by_status_priority_created: [
+        "status",
+        "priority",
+        "createdAt",
+        "_creationTime",
+      ];
+      by_user: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  extractionQueueItems: {
+    document: {
+      completedAt?: number;
+      documentId: Id<"documents">;
+      errorMessage?: string;
+      isDLQ?: boolean;
+      lastError?: string;
+      maxRetries?: number;
+      nextRetryAt?: number;
+      position: number;
+      processingTimeMs?: number;
+      queueId: Id<"extractionQueue">;
+      retryCount?: number;
+      startedAt?: number;
+      status: "pending" | "processing" | "completed" | "failed" | "skipped";
+      _id: Id<"extractionQueueItems">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "completedAt"
+      | "documentId"
+      | "errorMessage"
+      | "isDLQ"
+      | "lastError"
+      | "maxRetries"
+      | "nextRetryAt"
+      | "position"
+      | "processingTimeMs"
+      | "queueId"
+      | "retryCount"
+      | "startedAt"
+      | "status";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_dlq: ["isDLQ", "_creationTime"];
+      by_document: ["documentId", "_creationTime"];
+      by_next_retry: ["nextRetryAt", "_creationTime"];
+      by_queue: ["queueId", "_creationTime"];
+      by_queue_position: ["queueId", "position", "_creationTime"];
+      by_queue_status: ["queueId", "status", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   matchedPairs: {
     document: {
       accrualDocumentId?: Id<"accrualDocuments">;
@@ -417,9 +626,10 @@ export type DataModel = {
       confidenceScore: number;
       createdAt: number;
       isPartialMatch?: boolean;
-      matchLayer: 1 | 2 | 3 | 4 | 5 | 6;
+      matchLayer: 1 | 2 | 3 | 4 | 5 | 6 | 7;
       matchReason?: string;
       matchedAmount?: number;
+      partialMatchGroupId?: string;
       reviewedAt?: number;
       reviewedBy?: Id<"users">;
       sessionId: Id<"reconciliationSessions">;
@@ -440,6 +650,7 @@ export type DataModel = {
       | "matchedAmount"
       | "matchLayer"
       | "matchReason"
+      | "partialMatchGroupId"
       | "reviewedAt"
       | "reviewedBy"
       | "sessionId"
@@ -450,7 +661,9 @@ export type DataModel = {
       by_accrual_doc: ["accrualDocumentId", "_creationTime"];
       by_accrual_txn: ["accrualTransactionId", "_creationTime"];
       by_cash_txn: ["cashTransactionId", "_creationTime"];
+      by_partial_group: ["partialMatchGroupId", "_creationTime"];
       by_session: ["sessionId", "_creationTime"];
+      by_session_confidence: ["sessionId", "confidence", "_creationTime"];
       by_session_layer: ["sessionId", "matchLayer", "_creationTime"];
       by_status: ["sessionId", "status", "_creationTime"];
     };
@@ -471,7 +684,7 @@ export type DataModel = {
       };
       isCompleted: boolean;
       updatedAt: number;
-      userId: string;
+      userId: Id<"users">;
       _id: Id<"onboardingProgress">;
       _creationTime: number;
     };
@@ -562,6 +775,45 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  reconciliationChatMessages: {
+    document: {
+      companyId: Id<"companies">;
+      content: string;
+      createdAt: number;
+      expiresAt: number;
+      metadata?: {
+        stepCount?: number;
+        toolCalls?: Array<{ toolCallId: string; toolName: string }>;
+      };
+      role: "user" | "assistant";
+      sessionId: Id<"reconciliationSessions">;
+      userId: Id<"users">;
+      _id: Id<"reconciliationChatMessages">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "companyId"
+      | "content"
+      | "createdAt"
+      | "expiresAt"
+      | "metadata"
+      | "metadata.stepCount"
+      | "metadata.toolCalls"
+      | "role"
+      | "sessionId"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_expires: ["expiresAt", "_creationTime"];
+      by_session: ["sessionId", "_creationTime"];
+      by_session_time: ["sessionId", "createdAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   reconciliationSessions: {
     document: {
       companyId: Id<"companies">;
@@ -601,6 +853,53 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_company: ["companyId", "_creationTime"];
       by_status: ["companyId", "status", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  sheetTemplates: {
+    document: {
+      category: "blank" | "reconciliation" | "accounting" | "custom";
+      columns: Array<{
+        columnType: string;
+        dropdownOptions?: Array<string>;
+        format?: string;
+        name: string;
+        validation?: any;
+        width?: number;
+      }>;
+      companyId?: Id<"companies">;
+      createdAt: number;
+      createdBy?: Id<"users">;
+      description?: string;
+      isBuiltIn: boolean;
+      name: string;
+      sampleData?: Array<Record<string, any>>;
+      thumbnailUrl?: string;
+      updatedAt: number;
+      _id: Id<"sheetTemplates">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "category"
+      | "columns"
+      | "companyId"
+      | "createdAt"
+      | "createdBy"
+      | "description"
+      | "isBuiltIn"
+      | "name"
+      | "sampleData"
+      | "thumbnailUrl"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_built_in: ["isBuiltIn", "_creationTime"];
+      by_category: ["category", "_creationTime"];
+      by_company: ["companyId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -655,11 +954,27 @@ export type DataModel = {
   transactions: {
     document: {
       amount: number;
+      boundingBoxes?: {
+        amount?: { height: number; width: number; x: number; y: number };
+        date?: { height: number; width: number; x: number; y: number };
+        description?: { height: number; width: number; x: number; y: number };
+        pageNumber: number;
+        reference?: { height: number; width: number; x: number; y: number };
+      };
       category?: string;
       companyId: Id<"companies">;
       createdAt: number;
       date: string;
       description: string;
+      editedAt?: number;
+      editedBy?: Id<"users">;
+      editedFields?: Array<string>;
+      fieldConfidence?: {
+        amount?: number;
+        date?: number;
+        description?: number;
+        reference?: number;
+      };
       matchId?: Id<"matchedPairs">;
       reference?: string;
       sessionId?: Id<"reconciliationSessions">;
@@ -673,11 +988,41 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "amount"
+      | "boundingBoxes"
+      | "boundingBoxes.amount"
+      | "boundingBoxes.amount.height"
+      | "boundingBoxes.amount.width"
+      | "boundingBoxes.amount.x"
+      | "boundingBoxes.amount.y"
+      | "boundingBoxes.date"
+      | "boundingBoxes.date.height"
+      | "boundingBoxes.date.width"
+      | "boundingBoxes.date.x"
+      | "boundingBoxes.date.y"
+      | "boundingBoxes.description"
+      | "boundingBoxes.description.height"
+      | "boundingBoxes.description.width"
+      | "boundingBoxes.description.x"
+      | "boundingBoxes.description.y"
+      | "boundingBoxes.pageNumber"
+      | "boundingBoxes.reference"
+      | "boundingBoxes.reference.height"
+      | "boundingBoxes.reference.width"
+      | "boundingBoxes.reference.x"
+      | "boundingBoxes.reference.y"
       | "category"
       | "companyId"
       | "createdAt"
       | "date"
       | "description"
+      | "editedAt"
+      | "editedBy"
+      | "editedFields"
+      | "fieldConfidence"
+      | "fieldConfidence.amount"
+      | "fieldConfidence.date"
+      | "fieldConfidence.description"
+      | "fieldConfidence.reference"
       | "matchId"
       | "reference"
       | "sessionId"
@@ -694,8 +1039,89 @@ export type DataModel = {
       by_session_date: ["sessionId", "date", "_creationTime"];
       by_session_type: ["sessionId", "type", "_creationTime"];
       by_session_type_status: ["sessionId", "type", "status", "_creationTime"];
+      by_source_document: ["sourceDocumentId", "_creationTime"];
       by_status: ["companyId", "status", "_creationTime"];
       by_type: ["companyId", "type", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  uploadAnalyses: {
+    document: {
+      companyId: Id<"companies">;
+      createdAt: number;
+      detectedCompany?: {
+        accountNumber?: string;
+        bankName?: string;
+        matchDetails?: string;
+        matchStatus: "match" | "partial_match" | "mismatch" | "unknown";
+        name: string;
+        registrationNumber?: string;
+      };
+      documentClassifications: Array<{
+        aiClassification: string;
+        basisType: "cash" | "accrual";
+        confidence: number;
+        documentId: Id<"documents">;
+        errorMessage?: string;
+        extractionStatus: string;
+        fileName: string;
+        pageCount?: number;
+        reason?: string;
+        transactionCount?: number;
+        userOverride?: {
+          basisType: "cash" | "accrual";
+          classification: string;
+        };
+      }>;
+      documentIds: Array<Id<"documents">>;
+      sessionId?: Id<"reconciliationSessions">;
+      stats?: {
+        accrualDocuments: number;
+        accrualItems: number;
+        cashDocuments: number;
+        cashTransactions: number;
+        failedDocuments: number;
+        totalDocuments: number;
+        totalPages: number;
+      };
+      status: "pending" | "analyzing" | "ready" | "approved" | "dismissed";
+      updatedAt: number;
+      userId: Id<"users">;
+      _id: Id<"uploadAnalyses">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "companyId"
+      | "createdAt"
+      | "detectedCompany"
+      | "detectedCompany.accountNumber"
+      | "detectedCompany.bankName"
+      | "detectedCompany.matchDetails"
+      | "detectedCompany.matchStatus"
+      | "detectedCompany.name"
+      | "detectedCompany.registrationNumber"
+      | "documentClassifications"
+      | "documentIds"
+      | "sessionId"
+      | "stats"
+      | "stats.accrualDocuments"
+      | "stats.accrualItems"
+      | "stats.cashDocuments"
+      | "stats.cashTransactions"
+      | "stats.failedDocuments"
+      | "stats.totalDocuments"
+      | "stats.totalPages"
+      | "status"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_company: ["companyId", "_creationTime"];
+      by_company_status: ["companyId", "status", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -779,15 +1205,90 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  worksheetCharts: {
+    document: {
+      chartType: "bar" | "line" | "pie" | "area" | "scatter";
+      createdAt: number;
+      dataRange: string;
+      labelColumn?: number;
+      options: {
+        animate: boolean;
+        colors?: Array<string>;
+        height?: number;
+        orientation?: "horizontal" | "vertical";
+        showDots?: boolean;
+        showGrid?: boolean;
+        showLabels: boolean;
+        showLegend: boolean;
+      };
+      position: number;
+      title: string;
+      updatedAt: number;
+      valueColumns: Array<number>;
+      worksheetId: Id<"worksheets">;
+      _id: Id<"worksheetCharts">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "chartType"
+      | "createdAt"
+      | "dataRange"
+      | "labelColumn"
+      | "options"
+      | "options.animate"
+      | "options.colors"
+      | "options.height"
+      | "options.orientation"
+      | "options.showDots"
+      | "options.showGrid"
+      | "options.showLabels"
+      | "options.showLegend"
+      | "position"
+      | "title"
+      | "updatedAt"
+      | "valueColumns"
+      | "worksheetId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_worksheet: ["worksheetId", "_creationTime"];
+      by_worksheet_position: ["worksheetId", "position", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   worksheetColumns: {
     document: {
-      columnType: "text" | "number" | "formula";
+      columnType:
+        | "text"
+        | "number"
+        | "date"
+        | "dropdown"
+        | "checkbox"
+        | "currency"
+        | "percentage"
+        | "formula";
       dataSource?: string;
       deletedAt?: number;
+      dropdownOptions?: Array<string>;
+      excelFormula?: string;
+      format?: string;
       formula?: string;
+      hidden?: boolean;
       inputColumnId?: Id<"worksheetColumns">;
       name: string;
       order: number;
+      validation?: {
+        allowedValues?: Array<string>;
+        errorMessage?: string;
+        max?: number;
+        min?: number;
+        pattern?: string;
+        required?: boolean;
+        type: "list" | "number" | "date" | "text";
+      };
       width?: number;
       worksheetId: Id<"worksheets">;
       _id: Id<"worksheetColumns">;
@@ -799,10 +1300,22 @@ export type DataModel = {
       | "columnType"
       | "dataSource"
       | "deletedAt"
+      | "dropdownOptions"
+      | "excelFormula"
+      | "format"
       | "formula"
+      | "hidden"
       | "inputColumnId"
       | "name"
       | "order"
+      | "validation"
+      | "validation.allowedValues"
+      | "validation.errorMessage"
+      | "validation.max"
+      | "validation.min"
+      | "validation.pattern"
+      | "validation.required"
+      | "validation.type"
       | "width"
       | "worksheetId";
     indexes: {
@@ -812,6 +1325,136 @@ export type DataModel = {
       by_worksheet: ["worksheetId", "_creationTime"];
       by_worksheet_active: ["worksheetId", "deletedAt", "_creationTime"];
       by_worksheet_order: ["worksheetId", "order", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  worksheetConditionalFormats: {
+    document: {
+      conditions: Array<{
+        formatting: {
+          backgroundColor?: string;
+          bold?: boolean;
+          italic?: boolean;
+          strikethrough?: boolean;
+          textColor?: string;
+          underline?: boolean;
+        };
+        operator:
+          | "gt"
+          | "gte"
+          | "lt"
+          | "lte"
+          | "eq"
+          | "neq"
+          | "contains"
+          | "startsWith"
+          | "endsWith"
+          | "between";
+        value: any;
+        value2?: any;
+      }>;
+      createdAt: number;
+      enabled: boolean;
+      name: string;
+      priority: number;
+      range: {
+        columnIndex?: number;
+        endCell?: string;
+        rowIndex?: number;
+        startCell?: string;
+      };
+      ruleType:
+        | "threshold"
+        | "between"
+        | "equals"
+        | "contains"
+        | "confidenceBand"
+        | "statusColor"
+        | "matchLayer";
+      updatedAt: number;
+      worksheetId: Id<"worksheets">;
+      _id: Id<"worksheetConditionalFormats">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "conditions"
+      | "createdAt"
+      | "enabled"
+      | "name"
+      | "priority"
+      | "range"
+      | "range.columnIndex"
+      | "range.endCell"
+      | "range.rowIndex"
+      | "range.startCell"
+      | "ruleType"
+      | "updatedAt"
+      | "worksheetId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_worksheet: ["worksheetId", "_creationTime"];
+      by_worksheet_enabled: ["worksheetId", "enabled", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  worksheetDataSources: {
+    document: {
+      createdAt: number;
+      lastRefreshedAt?: number;
+      linkedColumns: Array<number>;
+      readonly: boolean;
+      refreshInterval?: number;
+      sourceConfig:
+        | {}
+        | {
+            includeMatches?: boolean;
+            includeSuspense?: boolean;
+            matchStatusFilter?: "pending" | "approved" | "rejected";
+            sessionId: Id<"reconciliationSessions">;
+            suspenseStatusFilter?: "open" | "queried" | "resolved";
+          }
+        | {
+            columnMapping: Record<string, number>;
+            fileName: string;
+            importedAt: number;
+          };
+      sourceType: "manual" | "reconciliation" | "csv_import";
+      updatedAt: number;
+      worksheetId: Id<"worksheets">;
+      _id: Id<"worksheetDataSources">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "lastRefreshedAt"
+      | "linkedColumns"
+      | "readonly"
+      | "refreshInterval"
+      | "sourceConfig"
+      | "sourceConfig.columnMapping"
+      | `sourceConfig.columnMapping.${string}`
+      | "sourceConfig.fileName"
+      | "sourceConfig.importedAt"
+      | "sourceConfig.includeMatches"
+      | "sourceConfig.includeSuspense"
+      | "sourceConfig.matchStatusFilter"
+      | "sourceConfig.sessionId"
+      | "sourceConfig.suspenseStatusFilter"
+      | "sourceType"
+      | "updatedAt"
+      | "worksheetId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_source_type: ["sourceType", "_creationTime"];
+      by_worksheet: ["worksheetId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -894,7 +1537,11 @@ export type DataModel = {
     document: {
       createdAt: number;
       deletedAt?: number;
+      frozenColumns?: number;
+      frozenRows?: number;
       name: string;
+      order?: number;
+      templateId?: Id<"sheetTemplates">;
       updatedAt: number;
       workspaceId: Id<"workspaces">;
       _id: Id<"worksheets">;
@@ -905,7 +1552,11 @@ export type DataModel = {
       | "_id"
       | "createdAt"
       | "deletedAt"
+      | "frozenColumns"
+      | "frozenRows"
       | "name"
+      | "order"
+      | "templateId"
       | "updatedAt"
       | "workspaceId";
     indexes: {
@@ -913,6 +1564,7 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
       by_workspace_active: ["workspaceId", "deletedAt", "_creationTime"];
+      by_workspace_order: ["workspaceId", "order", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

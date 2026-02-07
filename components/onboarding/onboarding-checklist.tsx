@@ -5,10 +5,15 @@
  *
  * A collapsible checklist that guides new users through the
  * essential steps to get started with Reconciled.
+ *
+ * Progress is tracked by checking ACTUAL data in the system,
+ * not by manual calls to completeItem().
  */
 
-import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import { Id } from '@/convex/_generated/dataModel'
 import {
   IconCheckCircle,
   IconCaretDown,
@@ -25,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { useOnboardingState } from './use-onboarding-state'
 import { useAuth } from '@/components/auth-provider'
 import { useSelectedCompanyId, useCompanies } from '@/lib/store'
+import { useWorkosUserId } from '@/lib/convex-hooks/shared'
 
 interface ChecklistItem {
   id: string
@@ -49,12 +55,32 @@ export function OnboardingChecklist() {
     checklistVisible,
     toggleChecklist,
     completedItems,
-    completeItem,
     tourSeen,
     startTour,
   } = useOnboardingState()
 
-  // Define checklist items with completion checks
+  // Query REAL data to check progress (not localStorage)
+  const workosUserId = useWorkosUserId()
+
+  // Documents uploaded for this company
+  const documents = useQuery(
+    api.documents.listByCompany,
+    selectedCompanyId ? { companyId: selectedCompanyId as Id<'companies'>, workosUserId } : 'skip'
+  )
+
+  // Sessions (reconciliation runs) for this company
+  const sessions = useQuery(
+    api.sessions.listByCompany,
+    selectedCompanyId ? { companyId: selectedCompanyId as Id<'companies'>, workosUserId } : 'skip'
+  )
+
+  // Check for reviewed matches (approved or rejected status) across sessions
+  const hasReviewedMatch = useQuery(
+    api.matches.hasReviewedMatchForCompany,
+    selectedCompanyId ? { companyId: selectedCompanyId as Id<'companies'>, workosUserId } : 'skip'
+  )
+
+  // Define checklist items with completion checks using REAL data
   const checklistItems: ChecklistItem[] = [
     {
       id: 'company',
@@ -70,7 +96,8 @@ export function OnboardingChecklist() {
       description: 'Upload bank statements or invoices',
       icon: <IconUpload size={16} />,
       href: '/upload',
-      checkComplete: () => completedItems.includes('upload'),
+      // Check if any documents exist for this company
+      checkComplete: () => (documents?.length ?? 0) > 0,
     },
     {
       id: 'match',
@@ -78,7 +105,8 @@ export function OnboardingChecklist() {
       description: 'Let AI match your transactions',
       icon: <IconPlay size={16} />,
       href: '/reconcile',
-      checkComplete: () => completedItems.includes('match'),
+      // Check if any reconciliation sessions have been created
+      checkComplete: () => (sessions?.length ?? 0) > 0,
     },
     {
       id: 'review',
@@ -86,7 +114,8 @@ export function OnboardingChecklist() {
       description: 'Approve or reject a suggested match',
       icon: <IconFileText size={16} />,
       href: '/reconcile',
-      checkComplete: () => completedItems.includes('review'),
+      // Check if any match has been reviewed (approved/rejected)
+      checkComplete: () => hasReviewedMatch ?? false,
     },
     {
       id: 'export',
@@ -94,6 +123,7 @@ export function OnboardingChecklist() {
       description: 'Download your reconciliation report',
       icon: <IconDownload size={16} />,
       href: '/reports',
+      // Keep localStorage for export since it's a client-side action
       checkComplete: () => completedItems.includes('export'),
     },
   ]
