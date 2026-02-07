@@ -1,5 +1,9 @@
 # Backend - Python (FastAPI)
 
+> **Note:** OCR extraction is being supplemented by native Bedrock Vision extraction
+> (`convex/nativePdfExtraction.ts`) and Gemini extraction (`convex/geminiExtraction.ts`).
+> The Python ML service remains the primary path for Mistral OCR and PDF report generation.
+
 ## Project Structure
 ```
 ml/
@@ -103,88 +107,6 @@ BANK_PARSERS = {
     "public_bank": parse_public_bank,
     # ...
 }
-```
-
-## LLM Matching Service
-
-### AWS Bedrock Integration
-```python
-# In services/matching.py
-import boto3
-
-bedrock = boto3.client("bedrock-runtime", region_name="ap-southeast-1")
-
-async def llm_semantic_match(
-    bank_items: list[Transaction],
-    accrual_items: list[AccrualDoc]
-) -> list[Match]:
-    prompt = MATCHING_PROMPT.format(
-        bank_items=json.dumps(bank_items),
-        accrual_items=json.dumps(accrual_items)
-    )
-
-    response = bedrock.invoke_model(
-        modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
-        body=json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": prompt}]
-        })
-    )
-
-    return parse_llm_response(response)
-```
-
-### Matching Prompt
-```python
-MATCHING_PROMPT = """You are an accounting reconciliation expert.
-Match bank transactions to invoices/receipts based on:
-- Amount similarity (exact or close)
-- Date proximity (within 30 days)
-- Name/description semantic similarity
-- Reference number patterns
-
-Bank Transactions:
-{bank_items}
-
-Accrual Documents:
-{accrual_items}
-
-Return JSON array of matches:
-[{{"bank_id": "...", "accrual_id": "...", "confidence": 0.85, "reason": "..."}}]
-"""
-```
-
-## Categorization Service
-
-### Keyword-Based + LLM Fallback
-```python
-# In services/categorization.py
-
-KEYWORDS = {
-    "rent": ["landlord", "rental", "lease", "tenancy"],
-    "utilities": ["tnb", "air selangor", "iwk", "tm", "unifi"],
-    "salary": ["wages", "salary", "payroll", "gaji"],
-    # ... 300+ keywords
-}
-
-async def categorize(transactions: list[Transaction]) -> list[CategorizedTransaction]:
-    results = []
-    uncategorized = []
-
-    for txn in transactions:
-        category = match_keywords(txn.description)
-        if category:
-            results.append(CategorizedTransaction(txn=txn, category=category, confidence=0.95))
-        else:
-            uncategorized.append(txn)
-
-    # LLM fallback for uncategorized
-    if uncategorized:
-        llm_results = await llm_categorize(uncategorized)
-        results.extend(llm_results)
-
-    return results
 ```
 
 ## PDF Report Generation

@@ -95,18 +95,6 @@ npx convex env set WORKOS_API_KEY sk_...
 npx convex env set AWS_ACCESS_KEY_ID AKIA...
 ```
 
-### Rust API
-```rust
-// Use dotenvy
-use dotenvy::dotenv;
-
-fn main() {
-    dotenv().ok();
-    let aws_key = std::env::var("AWS_ACCESS_KEY_ID")
-        .expect("AWS_ACCESS_KEY_ID required");
-}
-```
-
 ### Python ML Service
 ```python
 # Use pydantic-settings
@@ -123,81 +111,71 @@ class Settings(BaseSettings):
 
 ## File Upload Security
 
-### Validation
-```rust
-const MAX_FILE_SIZE: usize = 50 * 1024 * 1024; // 50MB
-const ALLOWED_TYPES: &[&str] = &[
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-];
+### Convex File Storage
+Files are uploaded to Convex's built-in `_storage` system, which handles:
+- Secure blob storage with access control
+- Storage IDs linked to document records
+- No direct URL exposure (accessed via Convex queries)
 
-pub fn validate_upload(file: &UploadedFile) -> Result<(), ValidationError> {
-    if file.size > MAX_FILE_SIZE {
-        return Err(ValidationError::FileTooLarge);
-    }
-
-    if !ALLOWED_TYPES.contains(&file.content_type.as_str()) {
-        return Err(ValidationError::InvalidFileType);
-    }
-
-    // Check magic bytes to prevent type spoofing
-    if !verify_magic_bytes(&file.data, &file.content_type) {
-        return Err(ValidationError::TypeMismatch);
-    }
-
-    Ok(())
-}
+### Upload Rate Limiting
+```typescript
+// convex/schema.ts - uploadRateLimits table
+// Limits uploads per company per minute to prevent abuse
+uploadRateLimits: defineTable({
+  companyId: v.id("companies"),
+  timestamps: v.array(v.number()),
+  updatedAt: v.number(),
+}).index("by_company", ["companyId"])
 ```
 
-### S3 Storage
-```rust
-// Use presigned URLs with short expiry
-let presigned = s3_client
-    .get_object()
-    .bucket("reconciled-documents")
-    .key(&file_path)
-    .presigned(PresigningConfig::expires_in(Duration::from_secs(300))?)
-    .await?;
+### File Type Validation
+Document type is validated on upload via Convex validators:
+```typescript
+documentType: v.union(
+  v.literal("bank_statement"),
+  v.literal("invoice"),
+  v.literal("receipt"),
+  v.literal("other")
+)
 ```
 
 ## API Security
 
+### CSRF Protection (`lib/csrf.ts`)
+Next.js API routes use double-submit cookie pattern + origin validation:
+```typescript
+// Defense layers:
+// 1. Origin/Referer header validation (primary)
+// 2. Double-submit cookie pattern (x-csrf-token header must match cookie)
+const { valid, error } = validateCSRF(request);
+```
+
+Allowed origins: `https://reconciled.dev`, `https://www.reconciled.dev` (+ `localhost:3000` in dev).
+
 ### Rate Limiting
-```rust
-// Using tower-governor
-let governor_config = GovernorConfigBuilder::default()
-    .per_second(10)
-    .burst_size(30)
-    .finish()
-    .unwrap();
+Three levels of rate limiting:
 
-let app = Router::new()
-    .layer(GovernorLayer { config: governor_config });
-```
-
-### CORS
-```rust
-let cors = CorsLayer::new()
-    .allow_origin(["https://reconciled.dev".parse().unwrap()])
-    .allow_methods([Method::GET, Method::POST])
-    .allow_headers([CONTENT_TYPE, AUTHORIZATION]);
-```
+1. **Convex `rateLimits` table** -- per-user limits on destructive actions (delete account, export data)
+2. **Convex `uploadRateLimits` table** -- per-company upload limits
+3. **Next.js API routes** -- per-user rate limits on AI chat and matching endpoints
+4. **Python ML** -- `slowapi` per-IP rate limits on `/extract` (30/min) and `/generate-pdf` (10/min)
 
 ### Input Validation
-```rust
-#[derive(Deserialize, Validate)]
-pub struct ReconciliationRequest {
-    #[validate(length(min = 1))]
-    company_id: String,
-
-    #[validate(custom = "validate_date")]
-    period_start: String,
-
-    #[validate(custom = "validate_date")]
-    period_end: String,
+Convex functions use `v.` validators for all arguments:
+```typescript
+args: {
+  companyId: v.id("companies"),    // Type-safe Convex ID
+  name: v.string(),                // String validation
+  amount: v.number(),              // Number validation
+  status: v.union(                 // Enum validation
+    v.literal("pending"),
+    v.literal("matched"),
+    v.literal("suspense")
+  ),
 }
 ```
+
+AI inputs are sanitized via `lib/ai/sanitize.ts` to prevent prompt injection.
 
 ## Audit Trail
 

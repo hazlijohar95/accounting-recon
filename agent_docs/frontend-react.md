@@ -6,51 +6,75 @@ app/                         # Next.js App Router
 ├── (app)/                   # Authenticated app routes (grouped)
 │   ├── dashboard/           # Dashboard page
 │   ├── upload/              # Document upload page
-│   ├── reconcile/           # Reconciliation workspace
-│   └── reports/             # Reports page
+│   ├── reconcile/           # Reconciliation workspace (was: reconciliation)
+│   ├── reports/             # Reports page
+│   ├── settings/            # User/company settings
+│   ├── spreadsheet/         # Agentic spreadsheet workspace
+│   └── dlq/                 # Dead letter queue (failed extractions)
+├── api/                     # Next.js API routes
+│   ├── chat/                # AI chat endpoints (assistant, worksheet, onboard)
+│   ├── matching/stream/     # Matching SSE endpoint
+│   ├── auth/                # WorkOS auth (login, callback, logout)
+│   ├── import/csv/          # CSV import
+│   └── search/              # Search endpoint
+├── docs/                    # Fumadocs documentation pages
 ├── design/                  # Design system showcase
-│   └── _components/         # Design page sections
 ├── layout.tsx               # Root layout with providers
 └── page.tsx                 # Landing page
 
 components/
-├── brand/                   # Branded UI components
-│   ├── stat-card.tsx        # Animated stat cards
-│   ├── confidence-gauge.tsx # Circular confidence indicator
-│   ├── match-layer-badge.tsx # Match layer indicators
-│   ├── loading-spinner.tsx  # Geometric loading animation
-│   ├── logo-animated.tsx    # Animated logo mark
-│   ├── logo-mark.tsx        # Static logo
-│   └── ...                  # 20+ brand components
+├── brand/                   # Branded UI components (20+ components)
 ├── views/                   # Page view components
 │   ├── dashboard-view.tsx   # Main dashboard
-│   ├── reconcile-view.tsx   # Reconciliation workspace
-│   ├── upload-view.tsx      # Upload interface
-│   └── reports-view.tsx     # Reports interface
+│   ├── reconcile-view/      # Reconciliation workspace (modularized)
+│   ├── upload-view/         # Upload interface (modularized)
+│   ├── reports-view.tsx     # Reports interface
+│   ├── spreadsheet-view.tsx # Spreadsheet workspace
+│   └── dlq-view.tsx         # Dead letter queue view
 ├── ai/                      # AI-related components
-│   ├── assistant-panel.tsx  # AI chat assistant
-│   └── matching-reasoning.tsx # AI matching explanation
-├── ui/                      # Base UI components
-│   ├── toast.tsx            # Toast notifications
-│   └── error-boundary.tsx   # Error handling
+│   ├── reconcile-assistant.tsx  # AI chat assistant
+│   ├── reconcile-agent/     # Agentic reconciliation components
+│   └── index.ts             # Re-exports
+├── spreadsheet/             # Spreadsheet components
+├── unified-sheet/           # Unified sheet panel components
+├── feedback/                # User feedback components
+├── ui/                      # Base UI components (toast, button, select, etc.)
 ├── app-sidebar.tsx          # Main navigation sidebar
-├── auth-provider.tsx        # WorkOS authentication
-└── convex-provider.tsx      # Convex real-time provider
+├── company-selector.tsx     # Company selection dropdown
+└── transactions-table.tsx   # Transactions data table
 
 hooks/
 ├── useCopyToClipboard.ts    # Clipboard with auto-reset
 ├── useIsMobile.ts           # Responsive detection
 ├── useReducedMotion.ts      # Accessibility preference
+├── useFileUploadState.ts    # File upload state management
+├── useGeminiExtraction.ts   # Gemini extraction hook
+├── usePdfExtraction.ts      # PDF extraction hook
+├── useUploadAnalysis.ts     # Upload analysis hook
+├── use-generic-spreadsheet.ts # Spreadsheet data hook
 └── index.ts                 # Re-exports
 
 lib/
-├── store.ts                 # Zustand global state
+├── store.ts                 # Zustand global state (main)
+├── store/                   # Additional store slices
 ├── convex-hooks.ts          # Custom Convex integration hooks
-├── utils.ts                 # cn() and utilities
-└── matching-utils.ts        # Matching algorithm helpers
+├── convex-hooks/            # Additional Convex hook modules
+├── ai/                      # AI providers, prompts, sanitization
+├── constants/               # App constants
+├── cn.ts                    # Tailwind class merge utility
+├── csrf.ts                  # CSRF protection
+├── error-monitor.ts         # Client-side error monitoring
+├── data-provider.tsx        # Data provider context
+├── use-reconcile-data.ts    # Reconciliation data hook
+├── filter-persistence.ts    # Filter state persistence
+├── pdf-renderer.ts          # PDF rendering utilities
+├── fileUtils.ts             # File handling utilities
+└── uploadHandlers.ts        # Upload handler functions
 
 convex/                      # Convex backend
-├── schema.ts                # Database schema
+├── schema.ts                # Database schema (30+ tables)
+├── matching/                # Matching engine (5 layers)
+├── lib/                     # Auth, validators, errors, logging
 ├── _generated/              # Generated types
 └── ...                      # Queries, mutations, actions
 ```
@@ -157,46 +181,13 @@ function CreateCompany() {
 }
 ```
 
-## Rust API Client
+## API Integration
 
-### Upload Pattern
-```tsx
-// In lib/api.ts
-export async function uploadDocument(file: File, companyId: string) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("companyId", companyId);
+The frontend communicates with:
+- **Convex** directly via `useQuery`/`useMutation` (real-time, type-safe)
+- **Next.js API routes** via `fetch` for AI streaming (`/api/chat/assistant`, `/api/matching/stream`)
 
-  const response = await fetch(`${API_URL}/api/v1/documents/upload`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) throw new ApiError(await response.json());
-  return response.json();
-}
-```
-
-### Hook Pattern
-```tsx
-// In hooks/useUpload.ts
-export function useUpload(companyId: string) {
-  const [status, setStatus] = useState<UploadStatus>("idle");
-
-  const upload = async (files: File[]) => {
-    setStatus("uploading");
-    try {
-      await Promise.all(files.map(f => uploadDocument(f, companyId)));
-      setStatus("success");
-    } catch (error) {
-      setStatus("error");
-      throw error;
-    }
-  };
-
-  return { upload, status };
-}
-```
+See `agent_docs/api-routes.md` for details on the Next.js API layer.
 
 ## Component Patterns
 
@@ -216,20 +207,6 @@ function Dashboard() {
 <ErrorBoundary fallback={<ErrorFallback />}>
   <ReconciliationView />
 </ErrorBoundary>
-```
-
-### Form Handling
-```tsx
-// Use react-hook-form
-import { useForm } from "react-hook-form";
-
-function OnboardingWizard() {
-  const { register, handleSubmit, formState } = useForm<CompanyData>();
-
-  const onSubmit = handleSubmit(async (data) => {
-    await createCompany(data);
-  });
-}
 ```
 
 ## Key Brand Components
@@ -287,17 +264,25 @@ const { companies, setSelectedCompanyId } = useCompanyState()
 ```json
 {
   "dependencies": {
-    "next": "^15.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "convex": "^1.9.0",
+    "next": "16.1.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "convex": "^1.31.7",
+    "ai": "^6.0.62",
+    "@ai-sdk/amazon-bedrock": "^4.0.41",
+    "@ai-sdk/react": "^3.0.64",
     "zustand": "^4.5.0",
-    "lucide-react": "^0.303.0",
-    "@workos-inc/authkit-nextjs": "^0.7.0"
+    "lucide-react": "^0.563.0",
+    "@workos-inc/authkit-nextjs": "^2.13.0",
+    "pdfjs-dist": "^5.4.624",
+    "recharts": "^3.7.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
-    "tailwindcss": "^4.0.0"
+    "tailwindcss": "^4.1.18",
+    "vitest": "^4.0.18",
+    "@playwright/test": "^1.40.0"
   }
 }
 ```

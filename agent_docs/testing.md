@@ -4,221 +4,196 @@
 
 | Layer | Tool | Focus |
 |-------|------|-------|
-| Rust API | `cargo test` | Unit tests, integration tests |
-| Python ML | `pytest` | Unit tests, mock LLM responses |
-| Frontend | `vitest` | Component tests, hooks |
-| E2E | Playwright | Critical user flows |
+| Convex Backend | `vitest` + `convex-test` | Matching engine, extraction, mutations |
+| Frontend | `vitest` + `@testing-library/react` | Component tests, hooks |
+| Python ML | `pytest` | OCR parsers, PDF generation, API endpoints |
+| E2E | `playwright` | Critical user flows |
 
-## Rust Testing
+## Configuration
 
-### Unit Tests
-```rust
-// In src/services/matching.rs
-#[cfg(test)]
-mod tests {
-    use super::*;
+Test config is in `vitest.config.ts`:
 
-    #[test]
-    fn test_exact_match() {
-        let bank = Transaction {
-            date: "2025-01-15",
-            amount: 1234.00,
-            description: "Payment ABC",
-        };
-        let accrual = AccrualDoc {
-            doc_date: "2025-01-14",
-            amount: 1234.00,
-            counterparty: "ABC Supplier",
-        };
+```typescript
+// Test file locations
+include: [
+  '__tests__/**/*.{test,spec}.{ts,tsx}',
+  'convex/**/__tests__/**/*.{test,spec}.{ts,tsx}',
+  'lib/**/*.{test,spec}.{ts,tsx}',
+  'hooks/**/*.{test,spec}.{ts,tsx}',
+]
 
-        let result = layer_exact(&[bank], &[accrual]);
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].confidence, 100);
-    }
-
-    #[test]
-    fn test_exact_match_amount_tolerance() {
-        // ±0.01 tolerance
-        let bank = Transaction { amount: 1234.00, .. };
-        let accrual = AccrualDoc { amount: 1234.01, .. };
-
-        let result = layer_exact(&[bank], &[accrual]);
-        assert_eq!(result.len(), 1);
-    }
-
-    #[test]
-    fn test_window_match_date_range() {
-        // ±7 days
-        let bank = Transaction { date: "2025-01-20", .. };
-        let accrual = AccrualDoc { doc_date: "2025-01-14", .. };
-
-        let result = layer_window(&[bank], &[accrual]);
-        assert_eq!(result.len(), 1);
-        assert!(result[0].confidence >= 88);
-    }
+// Coverage thresholds (Phase 3)
+thresholds: {
+  statements: 80,
+  branches: 75,
+  functions: 80,
+  lines: 80,
 }
 ```
 
-### Integration Tests
-```rust
-// tests/api_tests.rs
-#[tokio::test]
-async fn test_document_upload() {
-    let app = create_test_app().await;
+## Convex Backend Testing
 
-    let file = create_test_pdf();
-    let response = app
-        .post("/api/v1/documents/upload")
-        .multipart(file)
-        .send()
-        .await;
+### Matching Engine Tests
+```typescript
+// convex/matching/__tests__/layers.test.ts
+describe("Layer 1: Exact Match", () => {
+  it("matches transactions with same amount and close dates", () => {
+    // Test exact matching logic
+  });
+});
 
-    assert_eq!(response.status(), StatusCode::OK);
-}
+// convex/matching/__tests__/partial.test.ts
+describe("Layer 7: Partial Match", () => {
+  it("matches one cash transaction to multiple accrual documents", () => {
+    // Test partial matching combinations
+  });
+});
 ```
 
-## Python Testing
+Test files are co-located with source in `convex/__tests__/` and `convex/matching/__tests__/`.
 
-### Unit Tests
-```python
-# tests/test_matching.py
-import pytest
-from services.matching import llm_semantic_match
-
-@pytest.mark.asyncio
-async def test_semantic_match_returns_results():
-    bank_items = [
-        {"id": "1", "amount": 1000, "description": "Payment to supplier"}
-    ]
-    accrual_items = [
-        {"id": "a", "amount": 1000, "counterparty": "ABC Supplier"}
-    ]
-
-    matches = await llm_semantic_match(bank_items, accrual_items)
-
-    assert len(matches) >= 1
-    assert matches[0]["confidence"] > 0.5
-
-@pytest.fixture
-def mock_bedrock(mocker):
-    return mocker.patch("services.matching.bedrock.invoke_model")
-
-async def test_llm_fallback_on_error(mock_bedrock):
-    mock_bedrock.side_effect = Exception("Bedrock unavailable")
-
-    result = await llm_semantic_match([], [])
-    assert result == []  # Graceful fallback
-```
-
-### OCR Tests
-```python
-# tests/test_ocr.py
-def test_maybank_parser():
-    raw_text = """
-    15/01/2025 PAYMENT TO ABC SDN BHD 1,234.00 50,000.00
-    16/01/2025 SALARY TRANSFER 5,000.00 45,000.00
-    """
-
-    transactions = parse_maybank(raw_text)
-
-    assert len(transactions) == 2
-    assert transactions[0].amount == -1234.00
-    assert transactions[0].description == "PAYMENT TO ABC SDN BHD"
+### Convex Function Tests
+```typescript
+// convex/__tests__/companies.test.ts
+// Uses convex-test for isolated function testing
 ```
 
 ## Frontend Testing
 
 ### Component Tests
 ```tsx
-// src/components/__tests__/CompanyCard.test.tsx
+// __tests__/components/brand/match-layer-badge.test.tsx
 import { render, screen } from "@testing-library/react";
-import { CompanyCard } from "../CompanyCard";
+import { MatchLayerBadge } from "@/components/brand/match-layer-badge";
 
-describe("CompanyCard", () => {
-  const company = {
-    id: "1",
-    name: "Test Company",
-    matchRate: 85,
-    status: "active",
-  };
-
-  it("displays company name", () => {
-    render(<CompanyCard company={company} />);
-    expect(screen.getByText("Test Company")).toBeInTheDocument();
-  });
-
-  it("shows match rate progress", () => {
-    render(<CompanyCard company={company} />);
-    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "85");
+describe("MatchLayerBadge", () => {
+  it("displays correct layer name", () => {
+    render(<MatchLayerBadge layer={1} />);
+    expect(screen.getByText(/exact/i)).toBeInTheDocument();
   });
 });
 ```
 
-### Hook Tests
-```tsx
-// src/hooks/__tests__/useUpload.test.tsx
-import { renderHook, act } from "@testing-library/react";
-import { useUpload } from "../useUpload";
+### Test Directory Structure
+```
+__tests__/
+├── setup.ts                    # Global test setup (jsdom, mocks)
+├── __mocks__/                  # Module mocks (authkit, next/cache)
+├── components/
+│   ├── ai/                     # AI component tests
+│   ├── brand/                  # Brand component tests
+│   ├── spreadsheet/            # Spreadsheet component tests
+│   └── views/                  # View component tests
+├── views/
+│   ├── reports-view.test.tsx   # Reports view tests
+│   └── upload-view.test.tsx    # Upload view tests
+├── api/                        # API route tests
+├── integration/                # Integration tests
+│   └── multi-tenant.test.tsx   # Multi-tenant isolation tests
+└── utils/                      # Utility function tests
 
-describe("useUpload", () => {
-  it("tracks upload status", async () => {
-    const { result } = renderHook(() => useUpload("company-1"));
+convex/
+├── __tests__/                  # Convex function tests
+└── matching/__tests__/         # Matching engine tests
 
-    expect(result.current.status).toBe("idle");
-
-    const file = new File(["test"], "test.pdf", { type: "application/pdf" });
-    await act(async () => {
-      await result.current.upload([file]);
-    });
-
-    expect(result.current.status).toBe("success");
-  });
-});
+hooks/__tests__/                # Hook tests
+lib/__tests__/                  # Library utility tests
 ```
 
-## E2E Testing
-
-### Critical Flows
+### Path Aliases in Tests
+Tests use `@/` alias resolved via vitest config:
 ```typescript
-// e2e/reconciliation.spec.ts
+resolve: {
+  alias: {
+    '@': path.resolve(__dirname, './'),
+  },
+}
+```
+
+### Mock Setup
+```typescript
+// __tests__/setup.ts
+// Mocks for:
+// - @workos-inc/authkit-nextjs (auth provider)
+// - next/cache (caching functions)
+// - Convex client (for component tests)
+```
+
+## Python Testing
+
+### OCR Parser Tests
+```python
+# ml/tests/test_parsers.py
+def test_maybank_parser():
+    raw_text = """
+    15/01/2025 PAYMENT TO ABC SDN BHD 1,234.00 50,000.00
+    """
+    transactions = parse_maybank(raw_text)
+    assert len(transactions) == 1
+    assert transactions[0].amount == -1234.00
+```
+
+### PDF Generation Tests
+```python
+# ml/tests/test_pdf_generator.py
+def test_bank_recon_report():
+    # Test PDF generation produces valid bytes
+```
+
+## E2E Testing (Playwright)
+
+### Test Files
+```
+e2e/tests/
+├── reconciliation-workflow.spec.ts  # Full reconciliation flow
+└── extraction-workflow.spec.ts      # Document extraction flow
+```
+
+### Example
+```typescript
+// e2e/tests/reconciliation-workflow.spec.ts
 import { test, expect } from "@playwright/test";
 
 test("complete reconciliation flow", async ({ page }) => {
-  await page.goto("/companies/1/reconciliation");
-
-  // Upload bank statement
-  await page.setInputFiles('input[type="file"]', "fixtures/maybank.pdf");
-  await expect(page.getByText("Extraction complete")).toBeVisible();
-
-  // Run matching
-  await page.click("button:has-text('Run Matching')");
-  await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", /[0-9]+/);
-
-  // Review matches
-  await expect(page.getByText("matches found")).toBeVisible();
+  // Navigate, upload, match, review
 });
 ```
 
 ## Test Coverage Requirements
 
-| Area | Minimum |
-|------|---------|
-| Rust matching engine | 90% |
-| Python OCR parsers | 85% |
-| Frontend components | 70% |
-| Critical user flows | 100% |
+| Area | Minimum | Source |
+|------|---------|--------|
+| Statements | 80% | vitest.config.ts |
+| Branches | 75% | vitest.config.ts |
+| Functions | 80% | vitest.config.ts |
+| Lines | 80% | vitest.config.ts |
+
+## Commands
+
+```bash
+pnpm test                # Run all Vitest tests
+pnpm test:watch          # Watch mode
+pnpm test:ui             # Vitest UI
+pnpm test:coverage       # With coverage report
+pnpm test:e2e            # Playwright E2E
+pnpm test:python         # Python ML tests (cd ml && pytest -v)
+pnpm test:all            # Vitest + Python
+```
 
 ## CI Pipeline
+
 ```yaml
 # .github/workflows/test.yml
 test:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    - name: Rust tests
-      run: cargo test
-    - name: Python tests
-      run: pytest --cov=services --cov-fail-under=85
-    - name: Frontend tests
+    - name: Install dependencies
+      run: pnpm install
+    - name: Frontend + Convex tests
       run: pnpm test --coverage
+    - name: Python tests
+      run: cd ml && pytest --cov=services --cov-fail-under=85
+    - name: E2E tests
+      run: pnpm test:e2e
 ```

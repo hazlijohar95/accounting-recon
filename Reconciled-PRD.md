@@ -1,3 +1,9 @@
+> **This is a planning/vision document written before development began.**
+> It does NOT reflect the current implementation. Key differences:
+> - No Rust backend -- matching engine runs in Convex (TypeScript)
+> - Extraction uses browser-side PDF.js + Bedrock Vision, not a separate pipeline
+> - For current architecture, see `agent_docs/architecture.md`
+
 # Reconciled - Intelligent Accounting Reconciliation SaaS
 
 > **Product Requirements Document (PRD)**

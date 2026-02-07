@@ -1,74 +1,99 @@
 # Logging & Observability
 
-## Structured Logging Format
+## Overview
 
-All services use JSON structured logging:
+Logging is split across three tiers:
+1. **Convex** -- Audit logging (`auditLog` table) + error monitoring (`errors` table)
+2. **Python ML** -- structlog JSON output
+3. **Frontend** -- Client-side error capture (`lib/error-monitor.ts`) -> Convex `errors` table
 
-```json
-{
-  "timestamp": "2025-01-29T10:30:45.123Z",
-  "level": "info",
-  "service": "rust-api",
-  "trace_id": "abc123",
-  "span_id": "def456",
-  "message": "Document uploaded",
-  "context": {
-    "company_id": "xyz",
-    "document_id": "doc123",
-    "file_size_bytes": 1048576
-  }
+## Convex Audit Logging (`convex/lib/auditLogger.ts`)
+
+All sensitive operations are logged to the `auditLog` table with structured metadata.
+
+### Logged Actions
+- Document: `document_upload`, `document_delete`
+- Extraction: `extraction_start`, `extraction_complete`, `extraction_fail`, `extraction_retry`
+- Matching: `match_create`, `match_approve`, `match_reject`, `match_manual`, `match_bulk_approve`, `match_bulk_reject`
+- Session: `session_create`, `session_start`, `session_complete`
+- Export: `export_generate`, `export_download`
+- Settings: `settings_change`, `company_update`
+- Queue: `queue_create`, `queue_pause`, `queue_resume`, `queue_cancel`
+- Transaction: `transaction_edit`, `transaction_delete`
+- Suspense: `suspense_query`, `suspense_resolve`
+
+### Schema
+```typescript
+auditLog: {
+  companyId: Id<"companies">,
+  userId: Id<"users">,
+  action: string,          // e.g., "match_approve"
+  resourceType: string,    // e.g., "match"
+  resourceId?: string,
+  metadata?: any,          // Additional context
+  timestamp: number,
+  ipAddress?: string,
+  userAgent?: string,
 }
 ```
 
-## Rust Logging
+### Indexes for Querying
+- `by_company_time` -- view company activity timeline
+- `by_user_time` -- view user activity
+- `by_resource` -- find all actions on a specific resource
+- `by_company_action` -- filter by action type within company
 
-### Setup (tracing)
-```rust
-// In main.rs
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+## Self-Hosted Error Monitoring
 
-fn init_logging() {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().json())
-        .with(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
-}
+### Client-Side (`lib/error-monitor.ts`)
+
+Captures browser errors and sends them to Convex for monitoring.
+
+**Error Types:**
+- `uncaught` -- `window.onerror` events
+- `promise` -- `unhandledrejection` events
+- `boundary` -- React error boundary catches
+- `api` -- fetch/API call failures
+- `convex` -- Convex mutation/query errors
+- `manual` -- explicitly logged errors
+
+**Features:**
+- Throttling: 1 second minimum between reports
+- Rate limiting: max 10 errors per minute
+- Deduplication: fingerprint-based (same error counted, not duplicated)
+- Ignored patterns: ResizeObserver, script errors, library internals
+
+**Usage:**
+```typescript
+// Initialize once in root component
+import { initErrorMonitor } from '@/lib/error-monitor';
+initErrorMonitor(convexClient);
+
+// Log manually caught errors
+import { logManualError, logApiError, logConvexError, logBoundaryError } from '@/lib/error-monitor';
+logManualError(error, { context: "during matching" });
+logApiError(error, "/api/chat/assistant", "POST");
+logConvexError(error, "companies.create", { name: "..." });
+logBoundaryError(error, errorInfo, "ReconcileView");
 ```
 
-### Usage
-```rust
-use tracing::{info, warn, error, instrument};
+### Server-Side (`convex/errors.ts`)
 
-#[instrument(skip(state), fields(company_id = %args.company_id))]
-pub async fn upload_document(
-    State(state): State<AppState>,
-    args: UploadArgs,
-) -> Result<Json<Response>, AppError> {
-    info!(file_name = %args.filename, "Starting upload");
+Stores errors in the `errors` table with:
+- Message, stack trace, error type
+- URL, user agent, user ID
+- Fingerprint for deduplication
+- Occurrence count
+- First/last seen timestamps
+- Resolution status
 
-    let result = process_file(&args.file).await;
+**Cleanup:** Cron job deletes errors older than 30 days (daily at 3 AM UTC).
 
-    match &result {
-        Ok(doc) => info!(document_id = %doc.id, "Upload complete"),
-        Err(e) => error!(error = %e, "Upload failed"),
-    }
+## Python Logging (structlog)
 
-    result
-}
-```
-
-### Log Levels
-- `error` - Failures requiring attention
-- `warn` - Unexpected but recoverable
-- `info` - Business events (uploads, matches, exports)
-- `debug` - Technical details
-- `trace` - Verbose debugging
-
-## Python Logging
-
-### Setup (structlog)
+### Setup
 ```python
-# In main.py
+# In ml/main.py
 import structlog
 
 structlog.configure(
@@ -84,61 +109,25 @@ logger = structlog.get_logger()
 
 ### Usage
 ```python
-from structlog import get_logger
-
-logger = get_logger()
-
-async def extract_bank_statement(s3_path: str, bank_type: str):
-    logger.info("extraction_started", s3_path=s3_path, bank_type=bank_type)
-
-    try:
-        result = await process_ocr(s3_path)
-        logger.info(
-            "extraction_complete",
-            s3_path=s3_path,
-            transaction_count=len(result.transactions)
-        )
-        return result
-    except Exception as e:
-        logger.error("extraction_failed", s3_path=s3_path, error=str(e))
-        raise
+logger.info("extraction_started", s3_path=s3_path, bank_type=bank_type)
+logger.info("extraction_complete", document_id=doc_id, transaction_count=len(txns))
+logger.error("extraction_failed", document_id=doc_id, error=str(e))
 ```
 
-## Request Tracing
+## Convex-Specific Logging
 
-### Trace ID Propagation
-```rust
-// Middleware to propagate trace ID
-pub async fn trace_middleware<B>(
-    request: Request<B>,
-    next: Next<B>,
-) -> Response {
-    let trace_id = request
-        .headers()
-        .get("x-trace-id")
-        .map(|v| v.to_str().unwrap_or_default())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+### Extraction Logger (`convex/lib/extractionLogger.ts`)
+Structured logging for extraction operations with consistent field names.
 
-    let span = tracing::info_span!("request", trace_id = %trace_id);
-    let _guard = span.enter();
+### Matching Logger (`convex/lib/matchingLogger.ts`)
+Structured logging for matching engine operations.
 
-    let mut response = next.run(request).await;
-    response.headers_mut().insert("x-trace-id", trace_id.parse().unwrap());
-    response
-}
-```
-
-### Cross-Service Tracing
-```python
-# Python receiving trace ID from Rust
-@app.middleware("http")
-async def trace_middleware(request: Request, call_next):
-    trace_id = request.headers.get("x-trace-id", str(uuid.uuid4()))
-    structlog.contextvars.bind_contextvars(trace_id=trace_id)
-
-    response = await call_next(request)
-    response.headers["x-trace-id"] = trace_id
-    return response
+### Console Logging in Convex
+Convex functions use `console.log/warn/error` which appear in the Convex dashboard logs:
+```typescript
+console.log(`[Layer 5] AWS Bedrock SUCCESS: ${suggestions.length} suggestions`);
+console.error(`[Layer 5] AWS Bedrock FAILED: ${errorMsg}`);
+console.log(`[Layer 7] Partial matching complete: ${partialMatches.length} matches created`);
 ```
 
 ## Key Events to Log
@@ -147,52 +136,46 @@ async def trace_middleware(request: Request, call_next):
 | Event | Level | Context |
 |-------|-------|---------|
 | Document uploaded | info | company_id, doc_type, file_size |
-| Extraction started | info | document_id, bank_type |
+| Extraction started | info | document_id, extraction_path |
 | Extraction complete | info | document_id, transaction_count |
 | Matching started | info | session_id, company_id |
-| Match found | debug | bank_txn_id, accrual_doc_id, confidence |
-| Matching complete | info | session_id, match_rate |
+| Match found | debug | cash_txn_id, accrual_doc_id, confidence, layer |
+| Matching complete | info | session_id, match_rate, matches_by_layer |
 | Export generated | info | session_id, format, file_size |
 
 ### Error Events
 | Event | Level | Context |
 |-------|-------|---------|
 | OCR failed | error | document_id, error_message |
-| LLM timeout | warn | batch_size, timeout_ms |
+| LLM timeout/failure | warn | batch_size, error_message |
 | Invalid file format | warn | filename, detected_type |
-| Auth failed | warn | user_id, endpoint |
+| Auth failed | warn | endpoint, user_id |
+| Rate limit exceeded | warn | user_id, action |
 
 ## Metrics to Track
 
 ### Performance
-- Request latency (p50, p95, p99)
 - OCR processing time per page
 - Matching engine time by layer
-- Export generation time
+- API route response time
+- Extraction queue throughput
 
 ### Business
 - Documents processed per day
 - Transactions extracted per day
 - Match rate by company
-- LLM tokens used
+- LLM tokens used (Bedrock)
 
 ### Errors
 - OCR failure rate
-- LLM timeout rate
-- API error rate by endpoint
+- LLM failure rate (Bedrock availability)
+- Client error rate by type
 
 ## Log Aggregation
 
-Use CloudWatch Logs or similar:
 ```
-rust-api -> CloudWatch Log Group: /reconciled/rust-api
-python-ml -> CloudWatch Log Group: /reconciled/python-ml
-```
-
-Query example (CloudWatch Insights):
-```
-fields @timestamp, @message
-| filter service = "rust-api" and level = "error"
-| sort @timestamp desc
-| limit 100
+Convex dashboard      → Convex function logs (console.log)
+Convex auditLog table → Queryable audit trail
+Convex errors table   → Client + server error monitoring
+Python ML (Fly.io)    → Fly.io log dashboard
 ```
