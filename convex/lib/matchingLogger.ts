@@ -46,17 +46,22 @@ export interface MatchingDecisionLog {
 }
 
 // ============================================================================
-// In-Memory Log Buffer
+// In-Memory Log Buffer (development/debugging only)
+// This buffer is NOT queried in production. It exists for local debugging
+// and development inspection of matching decisions. The query functions
+// below (getMatchingDecisionLog, getDecisionsByLayer, etc.) are utilities
+// for development use only.
 // ============================================================================
 
-const MAX_BUFFER_SIZE = 2000;
+const MAX_BUFFER_SIZE = 1000;
 const decisionBuffer: MatchingDecisionLog[] = [];
 
 function addToBuffer(entry: MatchingDecisionLog): void {
-  decisionBuffer.push(entry);
-  if (decisionBuffer.length > MAX_BUFFER_SIZE) {
-    decisionBuffer.shift();
+  if (decisionBuffer.length >= MAX_BUFFER_SIZE) {
+    // Trim oldest 10% to avoid shifting on every insert at capacity
+    decisionBuffer.splice(0, Math.floor(MAX_BUFFER_SIZE * 0.1));
   }
+  decisionBuffer.push(entry);
 }
 
 // ============================================================================

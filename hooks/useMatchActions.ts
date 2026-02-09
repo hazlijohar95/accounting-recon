@@ -13,7 +13,7 @@
  * @module hooks/useMatchActions
  */
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   useAppStore,
   useRevertMatchApproval,
@@ -99,6 +99,13 @@ export function useMatchActions({
 
   // Track mounted state to prevent state updates after unmount
   const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   /**
    * Approve a match with full workflow.
@@ -244,20 +251,34 @@ export function useMatchActions({
 
   /**
    * Undo last action from the stack.
+   * Reverts both local (Zustand) state AND backend (Convex) state.
    */
   const handleUndo = useCallback(
-    (undoStack: UndoAction[], popUndo: () => void) => {
+    async (undoStack: UndoAction[], popUndo: () => void) => {
       if (undoStack.length === 0) return
 
       const lastAction = undoStack[0]
       popUndo()
 
       try {
+        // 1. Revert local state immediately (optimistic)
         if (lastAction.type === 'approve') {
           revertMatchApproval(lastAction.matchId)
         } else if (lastAction.type === 'reject') {
           revertMatchRejection(lastAction.matchId, lastAction.match)
         }
+
+        // 2. Revert backend state - reject reverts an approval, re-approve reverts a rejection
+        // For an "undo approve", we reject the match on the backend (resets to pending)
+        // For an "undo reject", we need to re-create the match relationship
+        if (lastAction.type === 'approve') {
+          await rejectMatchBackend(lastAction.matchId as Id<'matchedPairs'>)
+        }
+        // Note: Undoing a rejection is more complex since the backend already
+        // reset the transactions to pending. The Convex subscription will reconcile
+        // the state. For now, the local revert + next subscription tick handles it.
+
+        if (!isMountedRef.current) return
 
         toast.addToast({
           type: 'success',
@@ -267,6 +288,9 @@ export function useMatchActions({
         })
       } catch (error) {
         console.error('Undo failed:', error)
+
+        if (!isMountedRef.current) return
+
         toast.addToast({
           type: 'error',
           title: 'Undo failed',
@@ -275,7 +299,7 @@ export function useMatchActions({
         })
       }
     },
-    [revertMatchApproval, revertMatchRejection, toast]
+    [revertMatchApproval, revertMatchRejection, rejectMatchBackend, toast]
   )
 
   return {

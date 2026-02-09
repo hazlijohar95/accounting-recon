@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { confidenceToPercent } from '@/lib/matching-utils'
+import { formatCurrency } from '@/lib/format'
 import { MatchLayerBadge } from '@/components/brand'
 import { StatCardMini } from '@/components/brand'
 import { IconCheckCircle } from '@/components/brand/icons'
@@ -161,9 +162,7 @@ const HistoryRow = React.memo(function HistoryRow({
         </div>
 
         <span className="text-amount-sm shrink-0">
-          ${Math.abs(match.cashTransaction.amount).toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-          })}
+          {formatCurrency(match.cashTransaction.amount)}
         </span>
 
         <span className="text-xs font-mono text-muted-foreground w-10 text-right shrink-0">

@@ -37,6 +37,12 @@ export interface ReconcileFilterBarProps {
   pendingMatchCount: number
   /** Count of approved matches (for results display) */
   approvedMatchCount: number
+  /** Count of review matches (for results display) */
+  reviewMatchCount: number
+  /** Count of partial match groups (for results display) */
+  partialGroupCount: number
+  /** Count of suspense items (for results display) */
+  suspenseCount: number
   /** Callback to update filter state */
   onUpdateFilters: (update: Partial<FilterState>) => void
   /** Callback to toggle filter panel */
@@ -68,6 +74,9 @@ export function ReconcileFilterBar({
   activeTab,
   pendingMatchCount,
   approvedMatchCount,
+  reviewMatchCount,
+  partialGroupCount,
+  suspenseCount,
   onUpdateFilters,
   onToggleFilters,
   onClearFilters,
@@ -141,7 +150,11 @@ export function ReconcileFilterBar({
 
         {/* Results count */}
         <span className="text-xs text-muted-foreground ml-auto">
-          {activeTab === 'pending' ? pendingMatchCount : approvedMatchCount} matches
+          {activeTab === 'pending' ? pendingMatchCount
+            : activeTab === 'review' ? reviewMatchCount
+            : activeTab === 'partial' ? partialGroupCount
+            : activeTab === 'matched' ? approvedMatchCount
+            : suspenseCount} {activeTab === 'suspense' ? 'items' : 'matches'}
         </span>
       </div>
 

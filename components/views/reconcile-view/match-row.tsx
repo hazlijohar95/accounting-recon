@@ -4,6 +4,7 @@ import React from 'react'
 import { IconCheckCircle, IconWarningCircle } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import { confidenceToPercent } from '@/lib/matching-utils'
+import { formatCurrency } from '@/lib/format'
 import { MatchLayerBadge, TruncatedText } from '@/components/brand'
 import type { MatchPair } from '@/lib/store'
 import type { MatchLayer } from '@/components/brand'
@@ -76,7 +77,7 @@ export const MatchRow = React.memo(function MatchRow({
 
         {/* Amount */}
         <div className="text-amount-sm">
-          ${Math.abs(match.cashTransaction.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {formatCurrency(match.cashTransaction.amount)}
         </div>
 
         {/* Warning Icon for medium confidence */}

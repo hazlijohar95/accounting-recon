@@ -53,12 +53,18 @@ export class ReferenceMatchLayer implements MatchingLayer {
       for (const accrual of accrualDocs) {
         if (matchedAccrualIds.has(accrual._id)) continue;
 
-        // Get accrual document number
+        // Get accrual document number (both full normalized and numeric-only for comparison)
         const accrualDocNum = normalizeDocNumber(accrual.docNumber);
         if (!accrualDocNum) continue;
 
-        // Check if any reference matches (exact match only)
-        const refMatch = cashRefs.some((ref) => ref === accrualDocNum);
+        // Also extract just the numeric portion for matching against extracted references
+        // (extractReferences returns numeric suffixes like "12345" from "REF-12345")
+        const accrualNumericOnly = accrual.docNumber?.match(/(\d+)$/)?.[1] || "";
+
+        // Check if any reference matches (supports both full normalized and numeric-only)
+        const refMatch = cashRefs.some(
+          (ref) => ref === accrualDocNum || ref === accrualNumericOnly
+        );
         if (!refMatch) continue;
 
         // Calculate confidence based on amount similarity

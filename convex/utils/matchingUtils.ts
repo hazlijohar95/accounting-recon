@@ -145,7 +145,8 @@ export const REFERENCE_PATTERNS = [
 ];
 
 /**
- * Extract references from a description string
+ * Extract references from a description string.
+ * Focuses on structured reference patterns to reduce false positives.
  */
 export function extractReferences(description: string): string[] {
   if (!description) return [];
@@ -154,16 +155,29 @@ export function extractReferences(description: string): string[] {
     const match = description.match(pattern);
     if (match && match[1]) refs.push(match[1]);
   }
-  const standaloneNumbers = description.match(/\b(\d{6,})\b/g);
+  // Only capture standalone numbers that are 8+ digits (more likely to be reference numbers,
+  // less likely to be account numbers, dates, or phone numbers)
+  const standaloneNumbers = description.match(/\b(\d{8,})\b/g);
   if (standaloneNumbers) refs.push(...standaloneNumbers);
   return [...new Set(refs)];
 }
 
 /**
- * Normalize document number
+ * Normalize document number for comparison.
+ * Preserves the prefix category to avoid false matches between different document types
+ * (e.g., INV-001 vs PO-001 should NOT match).
  */
 export function normalizeDocNumber(docNumber: string | undefined): string {
   if (!docNumber) return "";
+
+  // Extract the prefix (e.g., "INV", "PO", "REC") and the numeric suffix
+  const prefixMatch = docNumber.match(/^([A-Za-z]+)[-/#\s]*(\d+)$/);
+  if (prefixMatch) {
+    // Return normalized form: PREFIX + number (e.g., "INV001", "PO001")
+    return `${prefixMatch[1].toUpperCase()}${prefixMatch[2]}`;
+  }
+
+  // If no prefix, extract trailing numeric portion
   const numericMatch = docNumber.match(/(\d+)$/);
   return numericMatch ? numericMatch[1] : docNumber.replace(/[^\d]/g, "");
 }

@@ -68,16 +68,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // SECURITY: Validate request body size (2MB max — matching payloads can be large)
-    const contentLength = req.headers.get('content-length')
-    if (contentLength && parseInt(contentLength, 10) > 2 * 1024 * 1024) {
+    // SECURITY: Validate actual request body size before parsing (not Content-Length header which can be omitted/spoofed)
+    const bodyText = await req.text()
+    if (bodyText.length > 2 * 1024 * 1024) {
       return new Response(
         JSON.stringify({ error: 'Request body too large' }),
         { status: 413, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
-    const body = await req.json() as MatchingRequest
+    const body = JSON.parse(bodyText) as MatchingRequest
     const { cashTransactions, accrualDocuments, sessionId } = body
 
     // SECURITY: Validate input arrays

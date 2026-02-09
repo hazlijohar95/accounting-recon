@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useMemo, useEffect } from 'react'
+import { useReducer, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import type { MatchPair, MatchConfidence } from '@/lib/store'
 import {
@@ -216,22 +216,45 @@ export function useReconcileState() {
 
   const [state, dispatch] = useReducer(reconcileReducer, initialState)
 
-  // Sync state to URL when filters or tab change
+  // Sync state to URL when filters or tab change (debounced to avoid excessive router.replace calls)
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const syncToUrl = useCallback(
     (filters: FilterState, tab: Tab) => {
-      const params = serializeFiltersToUrl(filters, tab, searchParams)
-      const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
-      router.replace(newUrl, { scroll: false })
+      // Clear any pending sync
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current)
+      }
+      // Debounce URL sync by 300ms to avoid hammering router on every keystroke
+      syncTimeoutRef.current = setTimeout(() => {
+        const params = serializeFiltersToUrl(filters, tab, searchParams)
+        const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
+        router.replace(newUrl, { scroll: false })
+      }, 300)
     },
     [pathname, router, searchParams]
   )
 
-  // Action creators with URL sync
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  // Keep a ref to current state to avoid stale closures in callbacks
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+
+  // Action creators with URL sync (using refs to avoid stale closures)
   const setActiveTab = useCallback((tab: Tab) => {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: tab })
-    // Sync to URL after dispatch
-    syncToUrl(state.filters, tab)
-  }, [syncToUrl, state.filters])
+    syncToUrl(stateRef.current.filters, tab)
+  }, [syncToUrl])
 
   const setSelectedMatch = useCallback((match: MatchPair | null) => {
     dispatch({ type: 'SET_SELECTED_MATCH', payload: match })
@@ -263,10 +286,9 @@ export function useReconcileState() {
 
   const updateFilters = useCallback((filters: Partial<FilterState>) => {
     dispatch({ type: 'SET_FILTERS', payload: filters })
-    // Sync to URL with updated filters
-    const newFilters = { ...state.filters, ...filters }
-    syncToUrl(newFilters, state.activeTab)
-  }, [syncToUrl, state.filters, state.activeTab])
+    const newFilters = { ...stateRef.current.filters, ...filters }
+    syncToUrl(newFilters, stateRef.current.activeTab)
+  }, [syncToUrl])
 
   const setShowFilters = useCallback((show: boolean) => {
     dispatch({ type: 'SET_SHOW_FILTERS', payload: show })
@@ -274,9 +296,8 @@ export function useReconcileState() {
 
   const clearFilters = useCallback(() => {
     dispatch({ type: 'CLEAR_FILTERS' })
-    // Sync cleared filters to URL
-    syncToUrl(initialFilterState, state.activeTab)
-  }, [syncToUrl, state.activeTab])
+    syncToUrl(initialFilterState, stateRef.current.activeTab)
+  }, [syncToUrl])
 
   const pushUndo = useCallback((action: UndoAction) => {
     dispatch({ type: 'PUSH_UNDO', payload: action })

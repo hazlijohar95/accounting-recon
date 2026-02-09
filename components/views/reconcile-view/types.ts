@@ -49,6 +49,7 @@ export interface ReconcileState {
   isRunningMatching: boolean
   isLoading: boolean
   matchingResult: MatchingResult | null
+  /** Reserved for future use: AI reasoning overlay in match detail panel */
   showReasoningOverlay: boolean
   showKeyboardHelp: boolean
   filters: FilterState
@@ -64,6 +65,7 @@ export const initialReconcileState: ReconcileState = {
   isRunningMatching: false,
   isLoading: false,
   matchingResult: null,
+  /** Reserved for future use: AI reasoning overlay in match detail panel */
   showReasoningOverlay: false,
   showKeyboardHelp: false,
   filters: initialFilterState,

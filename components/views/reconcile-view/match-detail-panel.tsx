@@ -289,17 +289,73 @@ export function MobileMatchDetailPanel({
   onReject,
   onClose,
 }: MobileMatchDetailPanelProps) {
+  const panelRef = React.useRef<HTMLDivElement>(null)
+
+  // Lock body scroll and trap focus when panel is open
+  React.useEffect(() => {
+    if (!selectedMatch) return
+
+    // Lock body scroll
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    // Focus trap: focus the panel when opened
+    const panel = panelRef.current
+    if (panel) {
+      const firstFocusable = panel.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      firstFocusable?.focus()
+    }
+
+    // Handle Escape key to close
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+
+      // Trap focus within panel
+      if (e.key === 'Tab' && panel) {
+        const focusableElements = panel.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+        const first = focusableElements[0]
+        const last = focusableElements[focusableElements.length - 1]
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last?.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first?.focus()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = originalOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [selectedMatch, onClose])
+
   if (!selectedMatch) return null
 
   return (
-    <div className="lg:hidden fixed inset-0 z-40">
+    <div className="lg:hidden fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Match details">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
       {/* Panel */}
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-background border-l border-border flex flex-col animate-in slide-in-from-right duration-200">
+      <div
+        ref={panelRef}
+        className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-background border-l border-border flex flex-col animate-in slide-in-from-right duration-200"
+      >
         {/* Close button for mobile */}
         <button
           onClick={onClose}

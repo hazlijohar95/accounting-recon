@@ -119,6 +119,8 @@ export function useChatPersistence({
 
       // Capture the current index before the async operation
       const currentIndex = lastSavedCountRef.current
+      // Advance counter synchronously to prevent duplicate saves in the same render cycle
+      lastSavedCountRef.current++
 
       addMessage({
         sessionId: sessionId as Id<'reconciliationSessions'>,
@@ -126,17 +128,13 @@ export function useChatPersistence({
         content: serialized,
         metadata: toolCalls.length > 0 ? { toolCalls } : undefined,
         workosUserId,
-      }).then(() => {
-        // Only advance the counter on success, and only if we haven't gone past this point
-        if (lastSavedCountRef.current === currentIndex) {
-          lastSavedCountRef.current = currentIndex + 1
-        }
       }).catch((err) => {
         console.error('[ChatPersistence] Failed to save message:', err instanceof Error ? err.message : err)
+        // Roll back counter on failure so the message will be retried on next render
+        if (lastSavedCountRef.current > currentIndex) {
+          lastSavedCountRef.current = currentIndex
+        }
       })
-
-      // Optimistically advance to avoid duplicate saves in the same render cycle
-      lastSavedCountRef.current++
     }
   }, [messages, isHydrated, sessionId, addMessage, workosUserId])
 

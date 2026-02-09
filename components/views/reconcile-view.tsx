@@ -49,7 +49,7 @@ import {
 } from '@/components/brand/icons'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useToastHelpers } from '@/components/ui/toast'
-import { useRunMatching, usePreviewMatching } from '@/lib/convex-hooks'
+import { useRunMatching } from '@/lib/convex-hooks'
 import { cn } from '@/lib/utils'
 import {
   MatchCelebration,
@@ -161,7 +161,6 @@ function ReconcileViewContent() {
     selectedMatch,
     manualMatchItem,
     isRunningMatching,
-    isLoading,
     matchingResult,
     showKeyboardHelp,
     filters,
@@ -172,7 +171,6 @@ function ReconcileViewContent() {
     setSelectedMatch,
     setManualMatchItem,
     setRunningMatching,
-    setLoading,
     setMatchingResult,
     setShowKeyboardHelp,
     updateFilters,
@@ -185,7 +183,7 @@ function ReconcileViewContent() {
 
   // Convex hooks for matching engine
   const runMatching = useRunMatching()
-  const previewMatching = usePreviewMatching()
+
 
   // Toast notifications (P0-4, P1-5)
   const toast = useToastHelpers()
@@ -216,7 +214,7 @@ function ReconcileViewContent() {
     } finally {
       setIsResyncing(false)
     }
-  }, [selectedCompanyId, convexSessionId, isResyncing, resyncDocuments, toast, router])
+  }, [selectedCompanyId, convexSessionId, isResyncing, resyncDocuments, toast, router, workosUserId])
 
   // Apply filters to matches
   const filterMatches = useCallback((matchList: MatchPair[]) => {
@@ -383,18 +381,21 @@ function ReconcileViewContent() {
     prevCounts.current = { cash, accrual }
   }, [sessionStats?.stats?.cashTransactions, sessionStats?.stats?.accrualTransactions, toast])
 
-  // Helper to auto-advance to next pending match
+  // Helper to auto-advance to next match in the active tab's list
   const advanceToNextMatch = useCallback(() => {
-    const currentIndex = currentMatchIndex
+    const activeList = getActiveList(activeTab)
+    const currentIndex = selectedMatch
+      ? activeList.findIndex((m) => m.id === selectedMatch.id)
+      : -1
     const nextIndex = currentIndex + 1
-    if (nextIndex < pendingMatches.length) {
-      setSelectedMatch(pendingMatches[nextIndex])
-    } else if (pendingMatches.length > 0) {
-      setSelectedMatch(pendingMatches[0])
+    if (nextIndex < activeList.length) {
+      setSelectedMatch(activeList[nextIndex])
+    } else if (activeList.length > 0) {
+      setSelectedMatch(activeList[0])
     } else {
       setSelectedMatch(null)
     }
-  }, [currentMatchIndex, pendingMatches, setSelectedMatch])
+  }, [activeTab, getActiveList, selectedMatch, setSelectedMatch])
 
   // Use unified match actions hook - handles approval/rejection workflow
   const {
@@ -427,15 +428,15 @@ function ReconcileViewContent() {
 
       switch (e.key.toLowerCase()) {
         case 'a':
-          // Approve current match
-          if (match && !match.approved && tab === 'pending') {
+          // Approve current match (works on pending and review tabs)
+          if (match && !match.approved && (tab === 'pending' || tab === 'review')) {
             e.preventDefault()
             handleApprove(match.id)
           }
           break
         case 'r':
-          // Reject current match
-          if (match && !match.approved && tab === 'pending') {
+          // Reject current match (works on pending and review tabs)
+          if (match && !match.approved && (tab === 'pending' || tab === 'review')) {
             e.preventDefault()
             handleReject(match.id)
           }
@@ -824,6 +825,9 @@ function ReconcileViewContent() {
           activeTab={activeTab}
           pendingMatchCount={pendingMatches.length}
           approvedMatchCount={approvedMatches.length}
+          reviewMatchCount={reviewMatches.length}
+          partialGroupCount={partialMatchGroups.length}
+          suspenseCount={suspenseItems.length}
           onUpdateFilters={updateFilters}
           onToggleFilters={() => setShowFilters(!showFilters)}
           onClearFilters={clearFilters}
@@ -915,7 +919,7 @@ function ReconcileViewContent() {
           aria-labelledby={`tab-${activeTab}`}
         >
           {/* Loading Skeleton */}
-          {(isLoading || dataIsLoading) && (
+          {(dataIsLoading) && (
             <>
               {Array.from({ length: 5 }).map((_, i) => (
                 <SkeletonMatchRow key={i} />
@@ -924,7 +928,7 @@ function ReconcileViewContent() {
           )}
 
           {/* Pending Matches (High Confidence - Ready to Approve) */}
-          {!(isLoading || dataIsLoading) && activeTab === 'pending' && (
+          {!(dataIsLoading) && activeTab === 'pending' && (
             <>
               {pendingMatches.length > 0 && (
                 <div className="px-4 py-2 bg-success/5 border-b border-success/20 text-xs text-success flex items-center gap-2">
@@ -944,7 +948,7 @@ function ReconcileViewContent() {
           )}
 
           {/* Review Matches (Medium/Low Confidence - Needs Careful Review) */}
-          {!(isLoading || dataIsLoading) && activeTab === 'review' && (
+          {!(dataIsLoading) && activeTab === 'review' && (
             <>
               {reviewMatches.length > 0 && (
                 <div className="px-4 py-2 bg-warning/10 border-b border-warning/20 text-xs text-warning flex items-center gap-2">
@@ -965,7 +969,7 @@ function ReconcileViewContent() {
           )}
 
           {/* Partial Matches (One-to-Many Payment Matches) */}
-          {!(isLoading || dataIsLoading) && activeTab === 'partial' && (
+          {!(dataIsLoading) && activeTab === 'partial' && (
             <>
               {partialMatchGroups.length > 0 && (
                 <div className="px-4 py-2 bg-cyan-500/10 border-b border-cyan-500/20 text-xs text-cyan-700 dark:text-cyan-300 flex items-center gap-2">
@@ -987,7 +991,7 @@ function ReconcileViewContent() {
           )}
 
           {/* Approved Matches — Approval History Timeline */}
-          {!(isLoading || dataIsLoading) && activeTab === 'matched' && approvedMatches.length > 0 && (
+          {!(dataIsLoading) && activeTab === 'matched' && approvedMatches.length > 0 && (
             <HistoryList
               matches={approvedMatches}
               onSelectMatch={setSelectedMatch}
@@ -996,7 +1000,7 @@ function ReconcileViewContent() {
           )}
 
           {/* Suspense Items */}
-          {!(isLoading || dataIsLoading) && activeTab === 'suspense' && (
+          {!(dataIsLoading) && activeTab === 'suspense' && (
             <>
               {suspenseItems.map((item) => (
                 <SuspenseRow key={item.id} item={item} onFindMatch={handleFindMatch} />
@@ -1005,7 +1009,7 @@ function ReconcileViewContent() {
           )}
 
           {/* Empty States */}
-          {!(isLoading || dataIsLoading) &&
+          {!(dataIsLoading) &&
             ((activeTab === 'pending' && pendingMatches.length === 0) ||
               (activeTab === 'review' && reviewMatches.length === 0) ||
               (activeTab === 'partial' && partialMatchGroups.length === 0) ||

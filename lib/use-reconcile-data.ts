@@ -245,8 +245,9 @@ export function useReconcileData(
   const result = useMemo((): UseReconcileDataResult => {
     if (isDemo) {
       // Demo mode: use store data directly
-      const pending = storeMatches.filter((m) => !m.approved);
-      const approved = storeMatches.filter((m) => m.approved);
+      const pending = storeMatches.filter((m) => m.status === "pending" || (!m.status && !m.approved));
+      const approved = storeMatches.filter((m) => m.status === "approved" || (!m.status && m.approved));
+      const rejected = storeMatches.filter((m) => m.status === "rejected");
 
       // Convert suspense items to transactions for display
       const suspenseTransactions = storeSuspense.map((item): Transaction => ({
@@ -262,7 +263,7 @@ export function useReconcileData(
         matches: storeMatches,
         pendingMatches: pending,
         approvedMatches: approved,
-        rejectedMatches: [],
+        rejectedMatches: rejected,
         suspenseTransactions,
         sessionId: storeActiveSession?.id as Id<"reconciliationSessions"> | null,
         sessionName: storeActiveSession?.name,
@@ -271,7 +272,7 @@ export function useReconcileData(
         counts: {
           pending: pending.length,
           approved: approved.length,
-          rejected: 0,
+          rejected: rejected.length,
           suspense: suspenseTransactions.length,
         },
       };
@@ -300,10 +301,9 @@ export function useReconcileData(
       .map(convexMatchToUIMatch)
       .filter((m): m is MatchPair => m !== null);
 
-    const pending = allMatches.filter((m) => !m.approved);
-    const approved = allMatches.filter((m) => m.approved);
-    // Note: We could also track rejected matches if needed
-    const rejected: MatchPair[] = [];
+    const pending = allMatches.filter((m) => m.status === "pending");
+    const approved = allMatches.filter((m) => m.status === "approved");
+    const rejected = allMatches.filter((m) => m.status === "rejected");
 
     // Transform suspense items
     const suspenseTransactions = (convexSuspense || []).map(

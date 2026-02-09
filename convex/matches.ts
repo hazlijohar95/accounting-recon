@@ -656,11 +656,20 @@ export const approveHighConfidence = mutation({
 
     const now = Date.now();
     for (const match of matches) {
+      // Capture old doc state for aggregate update
+      const oldDoc = { ...match };
+
       await ctx.db.patch(match._id, {
         status: "approved",
         reviewedAt: now,
         reviewedBy: user._id, // Server-derived from auth context
       });
+
+      // Update aggregates for each status change (pending -> approved)
+      const newDoc = await ctx.db.get(match._id);
+      if (newDoc) {
+        await matchCountsByStatus.replace(ctx, oldDoc, newDoc);
+      }
     }
 
     // Log bulk audit event

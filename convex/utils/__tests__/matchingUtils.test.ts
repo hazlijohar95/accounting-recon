@@ -193,9 +193,10 @@ describe("extractReferences", () => {
     expect(extractReferences("CHK#99999 deposit")).toContain("99999");
   });
 
-  it("should extract standalone 6+ digit numbers", () => {
-    expect(extractReferences("Payment 123456")).toContain("123456");
-    expect(extractReferences("Payment 12345")).not.toContain("12345"); // Only 5 digits
+  it("should extract standalone 8+ digit numbers (reduced from 6 to avoid false positives)", () => {
+    expect(extractReferences("Payment 12345678")).toContain("12345678");
+    expect(extractReferences("Payment 1234567")).not.toContain("1234567"); // Only 7 digits
+    expect(extractReferences("Payment 123456")).not.toContain("123456"); // Only 6 digits - too short, reduces false positives
   });
 
   it("should return unique references", () => {
@@ -216,13 +217,19 @@ describe("extractReferences", () => {
 // ============ DOCUMENT NUMBER NORMALIZATION TESTS ============
 
 describe("normalizeDocNumber", () => {
-  it("should extract trailing numeric portion", () => {
-    expect(normalizeDocNumber("INV-12345")).toBe("12345");
-    expect(normalizeDocNumber("PO#99999")).toBe("99999");
+  it("should preserve prefix + number for typed documents", () => {
+    expect(normalizeDocNumber("INV-12345")).toBe("INV12345");
+    expect(normalizeDocNumber("PO#99999")).toBe("PO99999");
   });
 
-  it("should remove non-numeric characters", () => {
+  it("should extract trailing numeric portion for non-prefixed input", () => {
+    // Non-prefix format falls back to numeric extraction
     expect(normalizeDocNumber("ABC-123-DEF")).toBe("123");
+  });
+
+  it("should prevent false matches between different document types", () => {
+    // INV-001 and PO-001 should NOT normalize to the same value
+    expect(normalizeDocNumber("INV-001")).not.toBe(normalizeDocNumber("PO-001"));
   });
 
   it("should handle purely numeric input", () => {

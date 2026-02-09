@@ -1,8 +1,9 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { IconArrowDown, IconBank, IconCheckCircle } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/format'
 import { TruncatedText } from '@/components/brand'
 import type { MatchPair } from '@/lib/store'
 
@@ -35,6 +36,35 @@ export const PartialMatchGroup = React.memo(function PartialMatchGroup({
 }: PartialMatchGroupProps) {
   if (matches.length === 0) return null
 
+  // Confirmation state for bulk actions
+  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Reset confirmation after 3 seconds
+  useEffect(() => {
+    return () => {
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current)
+    }
+  }, [])
+
+  const startConfirm = useCallback((action: 'approve' | 'reject') => {
+    if (confirmAction === action) {
+      // Second click - execute
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current)
+      setConfirmAction(null)
+      setIsProcessing(true)
+      const handler = action === 'approve' ? onApprove : onReject
+      Promise.all(matches.map(m => handler(m.id)))
+        .finally(() => setIsProcessing(false))
+    } else {
+      // First click - show confirmation
+      setConfirmAction(action)
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current)
+      confirmTimeoutRef.current = setTimeout(() => setConfirmAction(null), 3000)
+    }
+  }, [confirmAction, matches, onApprove, onReject])
+
   // Get the cash transaction from the first match (all share the same cash txn)
   const cashTxn = matches[0].cashTransaction
   const totalCashAmount = Math.abs(cashTxn.amount)
@@ -47,14 +77,6 @@ export const PartialMatchGroup = React.memo(function PartialMatchGroup({
   const variance = totalCashAmount - totalMatchedAmount
   const variancePercent = totalCashAmount > 0 ? (Math.abs(variance) / totalCashAmount) * 100 : 0
   const isExact = Math.abs(variance) < 0.01
-
-  const handleApproveAll = () => {
-    matches.forEach(m => onApprove(m.id))
-  }
-
-  const handleRejectAll = () => {
-    matches.forEach(m => onReject(m.id))
-  }
 
   return (
     <div
@@ -81,7 +103,7 @@ export const PartialMatchGroup = React.memo(function PartialMatchGroup({
           </div>
           <div className="text-right">
             <div className="text-sm font-mono font-medium">
-              ${totalCashAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              {formatCurrency(cashTxn.amount)}
             </div>
             <div className="text-xs text-muted-foreground">Bank payment</div>
           </div>
@@ -124,7 +146,7 @@ export const PartialMatchGroup = React.memo(function PartialMatchGroup({
               </div>
             </div>
             <div className="text-sm font-mono">
-              ${Math.abs(match.accrualTransaction.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              {formatCurrency(match.accrualTransaction.amount)}
             </div>
             {match.approved && (
               <IconCheckCircle size={14} className="text-success" />
@@ -138,7 +160,7 @@ export const PartialMatchGroup = React.memo(function PartialMatchGroup({
         <div className="flex items-center gap-4 text-xs">
           <span className="text-muted-foreground">
             Total: <span className="font-mono font-medium text-foreground">
-              ${totalMatchedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              {formatCurrency(totalMatchedAmount)}
             </span>
           </span>
           <span className={cn(
@@ -153,16 +175,28 @@ export const PartialMatchGroup = React.memo(function PartialMatchGroup({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleRejectAll}
-            className="px-2 py-1 text-xs border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"
+            onClick={() => startConfirm('reject')}
+            disabled={isProcessing}
+            className={cn(
+              'px-2 py-1 text-xs border transition-colors disabled:opacity-50',
+              confirmAction === 'reject'
+                ? 'border-destructive bg-destructive/20 text-destructive font-medium'
+                : 'border-destructive/30 text-destructive hover:bg-destructive/10'
+            )}
           >
-            Reject All
+            {isProcessing ? 'Processing...' : confirmAction === 'reject' ? 'Confirm?' : 'Reject All'}
           </button>
           <button
-            onClick={handleApproveAll}
-            className="px-2 py-1 text-xs bg-cyan-500 text-white hover:bg-cyan-600 transition-colors"
+            onClick={() => startConfirm('approve')}
+            disabled={isProcessing}
+            className={cn(
+              'px-2 py-1 text-xs transition-colors disabled:opacity-50',
+              confirmAction === 'approve'
+                ? 'bg-cyan-700 text-white font-medium'
+                : 'bg-cyan-500 text-white hover:bg-cyan-600'
+            )}
           >
-            Approve All
+            {isProcessing ? 'Processing...' : confirmAction === 'approve' ? 'Confirm?' : 'Approve All'}
           </button>
         </div>
       </div>

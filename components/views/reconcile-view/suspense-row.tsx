@@ -3,6 +3,7 @@
 import React from 'react'
 import { IconWarningCircle, IconSearch } from '@/components/brand/icons'
 import { TruncatedText } from '@/components/brand'
+import { formatCurrency } from '@/lib/format'
 import type { Transaction } from '@/lib/store'
 
 /**
@@ -43,7 +44,7 @@ export const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }
             </button>
           )}
           <div className="text-amount-sm">
-            ${Math.abs(item.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {formatCurrency(item.amount)}
           </div>
         </div>
       </div>

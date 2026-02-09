@@ -3,7 +3,7 @@
  * Coordinates all 5 matching layers and updates session state
  */
 
-import { action, internalMutation, internalQuery } from "../_generated/server";
+import { action, internalAction, internalMutation, internalQuery } from "../_generated/server";
 import { internal, api } from "../_generated/api";
 import { v } from "convex/values";
 import { Id, Doc } from "../_generated/dataModel";
@@ -399,9 +399,11 @@ export interface MatchingResult {
 }
 
 /**
- * Run the full 5-layer matching engine
+ * Run the full 5-layer matching engine.
+ * SECURITY: This is an internalAction - only callable from other Convex functions,
+ * not directly from clients. Use sessions.runMatching as the public entry point.
  */
-export const runMatchingEngine = action({
+export const runMatchingEngine = internalAction({
   args: {
     sessionId: v.id("reconciliationSessions"),
     useLLM: v.optional(v.boolean()),
@@ -600,33 +602,64 @@ export const runMatchingEngine = action({
           }
 
           // Create matches from LLM suggestions
-          // DESIGN SPEC: ≥90% auto-match, 70-89% suggest, <70% suspense
+          // DESIGN SPEC: >=90% auto-match, 70-89% suggest, <70% suspense
           const LLM_MIN_CONFIDENCE = 70;
+
+          // Build sets of valid unmatched IDs for validation
+          const validCashIds = new Set(unmatchedCash.map(t => t._id));
+          const validAccrualIds = new Set(unmatchedAccrual.map(d => d._id));
+
           for (const suggestion of llmSuggestions) {
             if (suggestion.confidence >= LLM_MIN_CONFIDENCE) {
-              // Only use confident matches (≥70% per design spec)
-              await ctx.runMutation(internal.matching.engine.createMatchedPair, {
-                sessionId: args.sessionId,
-                cashTransactionId: suggestion.cashTransactionId as Id<"transactions">,
-                accrualDocumentId: suggestion.accrualDocumentId as Id<"accrualDocuments">,
-                confidenceScore: suggestion.confidence,
-                matchLayer: 5,
-                matchReason: suggestion.reasoning,
-              });
+              // Validate that the LLM-suggested IDs actually exist in our unmatched pools
+              const cashId = suggestion.cashTransactionId as Id<"transactions">;
+              const accrualId = suggestion.accrualDocumentId as Id<"accrualDocuments">;
 
-              llmMatches.push({
-                cashTransactionId: suggestion.cashTransactionId as Id<"transactions">,
-                accrualDocumentId: suggestion.accrualDocumentId as Id<"accrualDocuments">,
-                confidenceScore: suggestion.confidence,
-                matchLayer: 5,
-                matchReason: suggestion.reasoning,
-              });
+              if (!validCashIds.has(cashId)) {
+                console.warn(`[Layer 5] Skipping LLM suggestion: invalid cash ID ${suggestion.cashTransactionId}`);
+                continue;
+              }
+              if (!validAccrualIds.has(accrualId)) {
+                console.warn(`[Layer 5] Skipping LLM suggestion: invalid accrual ID ${suggestion.accrualDocumentId}`);
+                continue;
+              }
+
+              try {
+                // Only use confident matches (>=70% per design spec)
+                await ctx.runMutation(internal.matching.engine.createMatchedPair, {
+                  sessionId: args.sessionId,
+                  cashTransactionId: cashId,
+                  accrualDocumentId: accrualId,
+                  confidenceScore: suggestion.confidence,
+                  matchLayer: 5,
+                  matchReason: suggestion.reasoning,
+                });
+
+                llmMatches.push({
+                  cashTransactionId: cashId,
+                  accrualDocumentId: accrualId,
+                  confidenceScore: suggestion.confidence,
+                  matchLayer: 5,
+                  matchReason: suggestion.reasoning,
+                });
+
+                // Remove from valid sets so they aren't matched again
+                validCashIds.delete(cashId);
+                validAccrualIds.delete(accrualId);
+              } catch (matchError) {
+                // Handle race condition: item already matched by concurrent operation
+                console.warn(`[Layer 5] Skipping match (already matched): ${matchError instanceof Error ? matchError.message : matchError}`);
+              }
             }
           }
 
           matchesByLayer[5] = llmMatches.length;
         } catch (error) {
-          console.error("LLM matching failed:", error);
+          // Surface LLM failure instead of silently swallowing
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error("LLM matching failed:", errorMsg);
+          llmErrorMessage = llmErrorMessage || errorMsg;
+          usedMockLLM = true;
         }
       }
 
@@ -815,9 +848,11 @@ export const runMatchingEngine = action({
 });
 
 /**
- * Quick preview of what matching would find without persisting
+ * Quick preview of what matching would find without persisting.
+ * SECURITY: This is an internalAction - only callable from other Convex functions.
+ * Use sessions.previewMatching as the public entry point.
  */
-export const previewMatching = action({
+export const previewMatching = internalAction({
   args: {
     sessionId: v.id("reconciliationSessions"),
   },

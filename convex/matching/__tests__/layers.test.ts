@@ -449,11 +449,10 @@ describe("Reference Extraction Patterns", () => {
     expect(matches).toHaveLength(1);
   });
 
-  it("should match #XXXXX pattern", () => {
-    // extractReferences extracts numeric parts from INV/REF/PO patterns, plus standalone 6+ digit numbers
-    // "#12345" is only 5 digits and doesn't match REFERENCE_PATTERNS, so use a 6-digit number
-    const cash = [createCashTxn("c1", -100.0, "2025-01-20", "Payment for order 123456")];
-    const accrual = [createAccrualDoc("a1", -100.0, "2025-01-14", "123456")];
+  it("should match standalone 8+ digit number pattern", () => {
+    // extractReferences captures standalone 8+ digit numbers (raised from 6 to reduce false positives)
+    const cash = [createCashTxn("c1", -100.0, "2025-01-20", "Payment for order 12345678")];
+    const accrual = [createAccrualDoc("a1", -100.0, "2025-01-14", "12345678")];
 
     const matches = layer3ReferenceMatch(cash, accrual);
     expect(matches).toHaveLength(1);

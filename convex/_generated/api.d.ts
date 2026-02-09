@@ -1648,38 +1648,7 @@ export declare const api: {
     >;
   };
   matching: {
-    engine: {
-      previewMatching: FunctionReference<
-        "action",
-        "public",
-        { sessionId: Id<"reconciliationSessions"> },
-        any
-      >;
-      runMatchingEngine: FunctionReference<
-        "action",
-        "public",
-        {
-          config?: {
-            amountTolerance?: number;
-            amountVariancePercent?: number;
-            exactDateWindow?: number;
-            fuzzyDateWindow?: number;
-            minFuzzySimilarity?: number;
-            windowDateWindow?: number;
-          };
-          sessionId: Id<"reconciliationSessions">;
-          useLLM?: boolean;
-        },
-        any
-      >;
-    };
     index: {
-      previewMatching: FunctionReference<
-        "action",
-        "public",
-        { sessionId: Id<"reconciliationSessions"> },
-        any
-      >;
       runLLMMatching: FunctionReference<
         "action",
         "public",
@@ -1700,23 +1669,6 @@ export declare const api: {
             reference?: string;
           }>;
           maxItems?: number;
-        },
-        any
-      >;
-      runMatchingEngine: FunctionReference<
-        "action",
-        "public",
-        {
-          config?: {
-            amountTolerance?: number;
-            amountVariancePercent?: number;
-            exactDateWindow?: number;
-            fuzzyDateWindow?: number;
-            minFuzzySimilarity?: number;
-            windowDateWindow?: number;
-          };
-          sessionId: Id<"reconciliationSessions">;
-          useLLM?: boolean;
         },
         any
       >;
@@ -4217,11 +4169,34 @@ export declare const internal: {
           type: "cash" | "accrual";
         }>
       >;
+      previewMatching: FunctionReference<
+        "action",
+        "internal",
+        { sessionId: Id<"reconciliationSessions"> },
+        any
+      >;
       resetSuspenseForRerun: FunctionReference<
         "mutation",
         "internal",
         { sessionId: Id<"reconciliationSessions"> },
         number
+      >;
+      runMatchingEngine: FunctionReference<
+        "action",
+        "internal",
+        {
+          config?: {
+            amountTolerance?: number;
+            amountVariancePercent?: number;
+            exactDateWindow?: number;
+            fuzzyDateWindow?: number;
+            minFuzzySimilarity?: number;
+            windowDateWindow?: number;
+          };
+          sessionId: Id<"reconciliationSessions">;
+          useLLM?: boolean;
+        },
+        any
       >;
       updateSessionStats: FunctionReference<
         "mutation",
@@ -4369,6 +4344,29 @@ export declare const internal: {
           status: "pending" | "matched" | "suspense";
           type: "cash" | "accrual";
         }>
+      >;
+      previewMatching: FunctionReference<
+        "action",
+        "internal",
+        { sessionId: Id<"reconciliationSessions"> },
+        any
+      >;
+      runMatchingEngine: FunctionReference<
+        "action",
+        "internal",
+        {
+          config?: {
+            amountTolerance?: number;
+            amountVariancePercent?: number;
+            exactDateWindow?: number;
+            fuzzyDateWindow?: number;
+            minFuzzySimilarity?: number;
+            windowDateWindow?: number;
+          };
+          sessionId: Id<"reconciliationSessions">;
+          useLLM?: boolean;
+        },
+        any
       >;
       updateSessionStats: FunctionReference<
         "mutation",

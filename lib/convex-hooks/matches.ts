@@ -60,17 +60,20 @@ export function useApproveHighConfidenceMatches() {
 
 export function useRunMatching() {
   const action = useAction(api.sessions.runMatching);
+  const workosUserId = useWorkosUserId();
   return useCallback(
     (sessionId: Id<"reconciliationSessions">, useLLM?: boolean) =>
-      action({ sessionId, useLLM }),
-    [action]
+      action(withWorkosUserId({ sessionId, useLLM }, workosUserId)),
+    [action, workosUserId]
   );
 }
 
 export function usePreviewMatching() {
   const action = useAction(api.sessions.previewMatching);
+  const workosUserId = useWorkosUserId();
   return useCallback(
-    (sessionId: Id<"reconciliationSessions">) => action({ sessionId }),
-    [action]
+    (sessionId: Id<"reconciliationSessions">) =>
+      action(withWorkosUserId({ sessionId }, workosUserId)),
+    [action, workosUserId]
   );
 }

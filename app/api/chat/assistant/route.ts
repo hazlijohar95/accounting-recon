@@ -19,6 +19,28 @@ const MAX_MESSAGES = 100
 // SECURITY: Maximum request body size (1MB) to prevent memory exhaustion
 const MAX_REQUEST_BODY_SIZE = 1 * 1024 * 1024
 
+// SECURITY: Rate limiter for agent mutation tools to prevent rapid-fire prompt injection
+// Tracks last mutation timestamp per session — rejects if called faster than 2s apart
+const mutationTimestamps = new Map<string, number>()
+const MUTATION_COOLDOWN_MS = 2000
+
+function checkMutationRateLimit(sessionKey: string): { allowed: boolean; retryAfterMs?: number } {
+  const now = Date.now()
+  const lastTs = mutationTimestamps.get(sessionKey)
+  if (lastTs && now - lastTs < MUTATION_COOLDOWN_MS) {
+    return { allowed: false, retryAfterMs: MUTATION_COOLDOWN_MS - (now - lastTs) }
+  }
+  mutationTimestamps.set(sessionKey, now)
+  // Prevent unbounded growth — evict entries older than 60s
+  if (mutationTimestamps.size > 1000) {
+    const cutoff = now - 60_000
+    for (const [key, ts] of mutationTimestamps) {
+      if (ts < cutoff) mutationTimestamps.delete(key)
+    }
+  }
+  return { allowed: true }
+}
+
 interface AssistantContext {
   sessionId?: string
   companyName?: string
@@ -87,16 +109,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // SECURITY: Validate request body size before parsing
-    const contentLength = req.headers.get('content-length')
-    if (contentLength && parseInt(contentLength, 10) > MAX_REQUEST_BODY_SIZE) {
+    // SECURITY: Validate actual request body size before parsing (not Content-Length header which can be omitted/spoofed)
+    const bodyText = await req.text()
+    if (bodyText.length > MAX_REQUEST_BODY_SIZE) {
       return new Response(
         JSON.stringify({ error: 'Request body too large' }),
         { status: 413, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
-    const body = await req.json()
+    const body = JSON.parse(bodyText)
     const { messages, context } = body as {
       messages: UIMessage[]
       context?: AssistantContext
@@ -875,6 +897,12 @@ export async function POST(req: NextRequest) {
           }),
           execute: async ({ matchId }) => {
             try {
+              // SECURITY: Mutation rate limiting to prevent rapid-fire prompt injection
+              const rateCheck = checkMutationRateLimit(`${workosUserId}:mutation`)
+              if (!rateCheck.allowed) {
+                return { success: false, matchId, error: `Mutation rate limited. Please wait ${Math.ceil((rateCheck.retryAfterMs || 0) / 1000)}s before the next action.` }
+              }
+
               if (!isValidConvexId(matchId)) {
                 return { success: false, matchId, error: 'Invalid match ID' }
               }
@@ -906,6 +934,12 @@ export async function POST(req: NextRequest) {
           }),
           execute: async ({ matchId }) => {
             try {
+              // SECURITY: Mutation rate limiting to prevent rapid-fire prompt injection
+              const rateCheck = checkMutationRateLimit(`${workosUserId}:mutation`)
+              if (!rateCheck.allowed) {
+                return { success: false, matchId, error: `Mutation rate limited. Please wait ${Math.ceil((rateCheck.retryAfterMs || 0) / 1000)}s before the next action.` }
+              }
+
               if (!isValidConvexId(matchId)) {
                 return { success: false, matchId, error: 'Invalid match ID' }
               }
@@ -941,6 +975,12 @@ export async function POST(req: NextRequest) {
           }),
           execute: async ({ sessionId, cashTransactionId, accrualDocumentId, confidence, reason }) => {
             try {
+              // SECURITY: Mutation rate limiting to prevent rapid-fire prompt injection
+              const rateCheck = checkMutationRateLimit(`${workosUserId}:mutation`)
+              if (!rateCheck.allowed) {
+                return { success: false, error: `Mutation rate limited. Please wait ${Math.ceil((rateCheck.retryAfterMs || 0) / 1000)}s before the next action.` }
+              }
+
               if (!isValidConvexId(sessionId) || !isValidConvexId(cashTransactionId) || !isValidConvexId(accrualDocumentId)) {
                 return { success: false, error: 'Invalid ID provided' }
               }
@@ -978,6 +1018,12 @@ export async function POST(req: NextRequest) {
           }),
           execute: async ({ sessionId }) => {
             try {
+              // SECURITY: Mutation rate limiting to prevent rapid-fire prompt injection
+              const rateCheck = checkMutationRateLimit(`${workosUserId}:mutation`)
+              if (!rateCheck.allowed) {
+                return { success: false, sessionId, error: `Mutation rate limited. Please wait ${Math.ceil((rateCheck.retryAfterMs || 0) / 1000)}s before the next action.` }
+              }
+
               if (!isValidConvexId(sessionId)) {
                 return { success: false, sessionId, error: 'Invalid session ID' }
               }

@@ -120,12 +120,14 @@ export const clearHistory = mutation({
     // SECURITY: Verify user has access to this session
     await requireSessionAccess(ctx, args.sessionId, args.workosUserId);
 
+    // Delete in batches to avoid unbounded reads. The cron (deleteExpired)
+    // will clean up any remaining messages if there are more than 500.
     const messages = await ctx.db
       .query("reconciliationChatMessages")
       .withIndex("by_session", (q) =>
         q.eq("sessionId", args.sessionId)
       )
-      .collect();
+      .take(500);
 
     for (const message of messages) {
       await ctx.db.delete(message._id);
