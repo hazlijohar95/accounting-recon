@@ -65,10 +65,10 @@ import {
   useMatchesSafe,
   useSessionsSafe,
   useActiveSessionSafe,
-  useAccrualDocumentsWithState,
-  useSuspenseItemsWithState,
-  useCashTransactionsWithState,
-  useSessionsWithState,
+  useAccrualDocumentsCombined,
+  useSuspenseItemsCombined,
+  useCashTransactionsCombined,
+  useSessionsCombined,
 } from "@/lib/convex-hooks";
 
 // ============ TEST DATA HELPERS ============
@@ -620,7 +620,7 @@ describe("Safe Hooks", () => {
 
 // ============ WITH-STATE HOOK TESTS ============
 
-describe("WithState Hooks", () => {
+describe("Combined Hooks (with loading state)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseIsDemo.mockReturnValue(true);
@@ -636,11 +636,11 @@ describe("WithState Hooks", () => {
     vi.restoreAllMocks();
   });
 
-  describe("useAccrualDocumentsWithState", () => {
+  describe("useAccrualDocumentsCombined", () => {
     it("returns isLoading=false in demo mode", () => {
       mockUseStoreAccrualDocuments.mockReturnValue([createDemoAccrualDoc()]);
 
-      const { result } = renderHook(() => useAccrualDocumentsWithState());
+      const { result } = renderHook(() => useAccrualDocumentsCombined());
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.data).toHaveLength(1);
@@ -651,7 +651,7 @@ describe("WithState Hooks", () => {
       mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
       mockUseQuery.mockReturnValue(undefined);
 
-      const { result } = renderHook(() => useAccrualDocumentsWithState());
+      const { result } = renderHook(() => useAccrualDocumentsCombined());
 
       expect(result.current.isLoading).toBe(true);
       expect(result.current.data).toEqual([]);
@@ -662,18 +662,18 @@ describe("WithState Hooks", () => {
       mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
       mockUseQuery.mockReturnValue([createConvexAccrualDoc()]);
 
-      const { result } = renderHook(() => useAccrualDocumentsWithState());
+      const { result } = renderHook(() => useAccrualDocumentsCombined());
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.data).toHaveLength(1);
     });
   });
 
-  describe("useSuspenseItemsWithState", () => {
+  describe("useSuspenseItemsCombined", () => {
     it("returns isLoading=false in demo mode", () => {
       mockUseStoreSuspenseItems.mockReturnValue([createDemoSuspenseItem()]);
 
-      const { result } = renderHook(() => useSuspenseItemsWithState());
+      const { result } = renderHook(() => useSuspenseItemsCombined());
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.data).toHaveLength(1);
@@ -684,17 +684,17 @@ describe("WithState Hooks", () => {
       mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
       mockUseQuery.mockReturnValue(undefined);
 
-      const { result } = renderHook(() => useSuspenseItemsWithState());
+      const { result } = renderHook(() => useSuspenseItemsCombined());
 
       expect(result.current.isLoading).toBe(true);
     });
   });
 
-  describe("useCashTransactionsWithState", () => {
+  describe("useCashTransactionsCombined", () => {
     it("returns isLoading=false in demo mode", () => {
       mockUseStoreCashTransactions.mockReturnValue([createDemoTransaction()]);
 
-      const { result } = renderHook(() => useCashTransactionsWithState());
+      const { result } = renderHook(() => useCashTransactionsCombined());
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.data).toHaveLength(1);
@@ -705,17 +705,17 @@ describe("WithState Hooks", () => {
       mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
       mockUseQuery.mockReturnValue(undefined);
 
-      const { result } = renderHook(() => useCashTransactionsWithState());
+      const { result } = renderHook(() => useCashTransactionsCombined());
 
       expect(result.current.isLoading).toBe(true);
     });
   });
 
-  describe("useSessionsWithState", () => {
+  describe("useSessionsCombined", () => {
     it("returns isLoading=false in demo mode", () => {
       mockUseStoreSessions.mockReturnValue([createDemoSession()]);
 
-      const { result } = renderHook(() => useSessionsWithState());
+      const { result } = renderHook(() => useSessionsCombined());
 
       expect(result.current.isLoading).toBe(false);
       expect(result.current.data).toHaveLength(1);
@@ -726,7 +726,7 @@ describe("WithState Hooks", () => {
       mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
       mockUseQuery.mockReturnValue(undefined);
 
-      const { result } = renderHook(() => useSessionsWithState());
+      const { result } = renderHook(() => useSessionsCombined());
 
       expect(result.current.isLoading).toBe(true);
     });

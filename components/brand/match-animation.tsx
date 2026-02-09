@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 
 interface TransactionMatchAnimationProps {
@@ -25,10 +25,14 @@ export function TransactionMatchAnimation({
     setStep(0)
     const steps = [500, 800, 300, 400, 600]
     let currentStep = 0
+    let timerId: ReturnType<typeof setTimeout> | null = null
+    let cancelled = false
 
     const runStep = () => {
+      if (cancelled) return
       if (currentStep < steps.length) {
-        setTimeout(() => {
+        timerId = setTimeout(() => {
+          if (cancelled) return
           setStep(currentStep + 1)
           currentStep++
           runStep()
@@ -39,6 +43,11 @@ export function TransactionMatchAnimation({
     }
 
     runStep()
+
+    return () => {
+      cancelled = true
+      if (timerId !== null) clearTimeout(timerId)
+    }
   }, [animate, onComplete])
 
   return (
@@ -175,6 +184,7 @@ export function ReconciliationProgress({
   const total = matched + pending + suspense
   const matchedPercent = total > 0 ? (matched / total) * 100 : 0
   const pendingPercent = total > 0 ? (pending / total) * 100 : 0
+  const frameRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!animate) {
@@ -193,11 +203,17 @@ export function ReconciliationProgress({
       setDisplayMatched(Math.round(matched * eased))
 
       if (progress < 1) {
-        requestAnimationFrame(animateValue)
+        frameRef.current = requestAnimationFrame(animateValue)
       }
     }
 
-    requestAnimationFrame(animateValue)
+    frameRef.current = requestAnimationFrame(animateValue)
+
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+      }
+    }
   }, [matched, animate])
 
   return (

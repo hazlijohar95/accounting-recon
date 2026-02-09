@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { verifyQueryCompanyAccess } from "./lib/auth";
-import { transactionCounts } from "./lib/aggregates";
+import { transactionCounts, transactionSums } from "./lib/aggregates";
 
-// Return validators for analytics
+// ============ RETURN VALIDATORS ============
+
 const monthlyFlowReturnValidator = v.array(
   v.object({
     month: v.string(),
@@ -38,37 +39,59 @@ const reconStatsReturnValidator = v.object({
   suspense: v.number(),
   total: v.number(),
   matchRate: v.number(),
+  totalCashIn: v.number(),
+  totalCashOut: v.number(),
 });
 
-// ============ ANALYTICS QUERIES ============
-// All queries use requireCompanyAccess for proper authentication & authorization
+// ============ SHORT MONTH NAMES (deterministic, no locale dependency) ============
 
-// Get monthly cash flow for past 12 months
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+/** Format "2025-01" as "Jan 25" -- deterministic, no toLocaleDateString */
+function formatMonthKey(monthKey: string): string {
+  const [yearStr, monthStr] = monthKey.split("-");
+  const monthIndex = parseInt(monthStr, 10) - 1;
+  const shortYear = yearStr.slice(-2);
+  return `${MONTH_NAMES[monthIndex]} ${shortYear}`;
+}
+
+// ============ ANALYTICS QUERIES ============
+// All queries use verifyQueryCompanyAccess for proper authentication & authorization
+
+/**
+ * Monthly cash flow for the past N months.
+ *
+ * Uses the `by_type` index to fetch only cash transactions (instead of all),
+ * then groups by month in memory. For most companies this is a significant
+ * reduction vs. a full table scan.
+ */
 export const getMonthlyCashFlow = query({
   args: {
     companyId: v.id("companies"),
-    months: v.optional(v.number()), // Default 12
+    months: v.optional(v.number()),
+    workosUserId: v.optional(v.string()),
   },
   returns: monthlyFlowReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access (returns empty if not authorized)
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
     if (!allowed) return [];
 
+    // Use by_type index to only fetch cash transactions (not accrual)
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+      .withIndex("by_type", (q) => q.eq("companyId", args.companyId).eq("type", "cash"))
       .collect();
 
-    // Group by month (YYYY-MM format)
     const monthlyData: Record<string, { inflow: number; outflow: number }> = {};
 
     for (const tx of transactions) {
-      // Only process cash transactions with valid dates
-      if (tx.type !== "cash" || !tx.date) continue;
+      if (!tx.date) continue;
 
-      const monthKey = tx.date.substring(0, 7); // "2025-01"
-      if (!monthKey || monthKey.length !== 7) continue;
+      const monthKey = tx.date.substring(0, 7);
+      if (monthKey.length !== 7) continue;
 
       if (!monthlyData[monthKey]) {
         monthlyData[monthKey] = { inflow: 0, outflow: 0 };
@@ -81,63 +104,56 @@ export const getMonthlyCashFlow = query({
       }
     }
 
-    // Sort by month and take last N months
     const sortedMonths = Object.keys(monthlyData).sort();
-    const limitedMonths = sortedMonths.slice(-(args.months || 12));
+    const limitedMonths = sortedMonths.slice(-(args.months ?? 12));
 
-    // Format for chart consumption
     return limitedMonths.map((monthKey) => {
-      const [year, month] = monthKey.split("-");
-      const date = new Date(parseInt(year), parseInt(month) - 1);
-      const monthLabel = date.toLocaleDateString("en-US", {
-        month: "short",
-        year: "2-digit",
-      });
-
+      const data = monthlyData[monthKey];
       return {
-        month: monthLabel, // "Jan 25"
-        monthKey, // "2025-01" for sorting
-        inflow: monthlyData[monthKey].inflow,
-        outflow: monthlyData[monthKey].outflow,
-        net: monthlyData[monthKey].inflow - monthlyData[monthKey].outflow,
+        month: formatMonthKey(monthKey),
+        monthKey,
+        inflow: data.inflow,
+        outflow: data.outflow,
+        net: data.inflow - data.outflow,
       };
     });
   },
 });
 
-// Get expense breakdown by category
+/**
+ * Expense breakdown by category.
+ *
+ * Uses `by_type` index to only fetch cash transactions, then filters to
+ * outflows within the specified period. Groups by category.
+ */
 export const getExpenseBreakdown = query({
   args: {
     companyId: v.id("companies"),
-    periodStart: v.optional(v.string()), // ISO date
-    periodEnd: v.optional(v.string()), // ISO date
-    limit: v.optional(v.number()), // Top N categories
+    periodStart: v.optional(v.string()),
+    periodEnd: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    workosUserId: v.optional(v.string()),
   },
   returns: expenseBreakdownReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access (returns empty if not authorized)
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
     if (!allowed) return [];
 
+    // Use by_type index: only cash transactions
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+      .withIndex("by_type", (q) => q.eq("companyId", args.companyId).eq("type", "cash"))
       .collect();
 
-    // Filter to outflows (expenses) within period
-    const expenses = transactions.filter((tx) => {
-      if (tx.amount >= 0) return false; // Only outflows
-      if (!tx.date) return false; // Skip invalid dates
-      if (args.periodStart && tx.date < args.periodStart) return false;
-      if (args.periodEnd && tx.date > args.periodEnd) return false;
-      return true;
-    });
-
-    // Group by category
     const categoryTotals: Record<string, number> = {};
     let totalExpenses = 0;
 
-    for (const tx of expenses) {
+    for (const tx of transactions) {
+      // Only outflows with valid dates
+      if (tx.amount >= 0 || !tx.date) continue;
+      if (args.periodStart && tx.date < args.periodStart) continue;
+      if (args.periodEnd && tx.date > args.periodEnd) continue;
+
       const category = tx.category || "Uncategorized";
       const amount = Math.abs(tx.amount);
 
@@ -145,7 +161,6 @@ export const getExpenseBreakdown = query({
       totalExpenses += amount;
     }
 
-    // Sort by amount descending
     const sorted = Object.entries(categoryTotals)
       .map(([category, amount]) => ({
         category,
@@ -154,20 +169,20 @@ export const getExpenseBreakdown = query({
       }))
       .sort((a, b) => b.amount - a.amount);
 
-    // Apply limit
-    const limited = args.limit ? sorted.slice(0, args.limit) : sorted;
+    const limit = args.limit;
+    const limited = limit ? sorted.slice(0, limit) : sorted;
 
-    // If we limited results, group remaining into "Other"
-    if (args.limit && sorted.length > args.limit) {
-      const otherCategories = sorted.slice(args.limit);
-      const otherTotal = otherCategories.reduce((sum, c) => sum + c.amount, 0);
-      const otherPercentage = totalExpenses > 0 ? Math.round((otherTotal / totalExpenses) * 100) : 0;
+    // Group remaining categories into "Other"
+    if (limit && sorted.length > limit) {
+      const otherTotal = sorted
+        .slice(limit)
+        .reduce((sum, c) => sum + c.amount, 0);
 
       if (otherTotal > 0) {
         limited.push({
           category: "Other",
           amount: otherTotal,
-          percentage: otherPercentage,
+          percentage: totalExpenses > 0 ? Math.round((otherTotal / totalExpenses) * 100) : 0,
         });
       }
     }
@@ -176,28 +191,32 @@ export const getExpenseBreakdown = query({
   },
 });
 
-// Get top expenses (individual transactions)
+/**
+ * Top individual expenses (largest outflows).
+ *
+ * Uses `by_type` index for cash transactions only.
+ */
 export const getTopExpenses = query({
   args: {
     companyId: v.id("companies"),
-    limit: v.optional(v.number()), // Default 5
+    limit: v.optional(v.number()),
+    workosUserId: v.optional(v.string()),
   },
   returns: topExpenseReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access (returns empty if not authorized)
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
     if (!allowed) return [];
 
+    // Use by_type index: only cash transactions
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+      .withIndex("by_type", (q) => q.eq("companyId", args.companyId).eq("type", "cash"))
       .collect();
 
-    // Filter to outflows with valid data and sort by amount
     return transactions
       .filter((tx) => tx.amount < 0 && tx.date && tx.description)
-      .sort((a, b) => a.amount - b.amount) // Most negative first
-      .slice(0, args.limit || 5)
+      .sort((a, b) => a.amount - b.amount)
+      .slice(0, args.limit ?? 5)
       .map((tx) => ({
         id: tx._id,
         description: tx.description,
@@ -208,22 +227,45 @@ export const getTopExpenses = query({
   },
 });
 
-// Get reconciliation summary stats
+/**
+ * Reconciliation summary stats -- all O(log n) via aggregates.
+ *
+ * Returns match counts AND cash totals in a single query, eliminating
+ * the need for the frontend to fetch all transactions just for sums.
+ */
 export const getReconciliationStats = query({
   args: {
     companyId: v.id("companies"),
+    workosUserId: v.optional(v.string()),
   },
   returns: reconStatsReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access (returns default if not authorized)
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
-    if (!allowed) return { matched: 0, pending: 0, suspense: 0, total: 0, matchRate: 0 };
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
+    if (!allowed) {
+      return {
+        matched: 0, pending: 0, suspense: 0,
+        total: 0, matchRate: 0,
+        totalCashIn: 0, totalCashOut: 0,
+      };
+    }
 
-    // O(log n) counts using aggregates instead of O(n) collect + filter
-    const [matched, pending, suspense] = await Promise.all([
-      transactionCounts.count(ctx, { bounds: { prefix: [args.companyId, "cash", "matched"] } }),
-      transactionCounts.count(ctx, { bounds: { prefix: [args.companyId, "cash", "pending"] } }),
-      transactionCounts.count(ctx, { bounds: { prefix: [args.companyId, "cash", "suspense"] } }),
+    // All O(log n) using aggregates
+    const [matched, pending, suspense, totalCashIn, totalCashOut] = await Promise.all([
+      transactionCounts.count(ctx, {
+        bounds: { prefix: [args.companyId, "cash", "matched"] },
+      }),
+      transactionCounts.count(ctx, {
+        bounds: { prefix: [args.companyId, "cash", "pending"] },
+      }),
+      transactionCounts.count(ctx, {
+        bounds: { prefix: [args.companyId, "cash", "suspense"] },
+      }),
+      transactionSums.sum(ctx, {
+        bounds: { prefix: [args.companyId, "cash", "inflow"] },
+      }),
+      transactionSums.sum(ctx, {
+        bounds: { prefix: [args.companyId, "cash", "outflow"] },
+      }),
     ]);
 
     const total = matched + pending + suspense;
@@ -234,11 +276,14 @@ export const getReconciliationStats = query({
       suspense,
       total,
       matchRate: total > 0 ? Math.round((matched / total) * 100) : 0,
+      totalCashIn,
+      totalCashOut,
     };
   },
-});;
+});
 
-// Return validator for recent activity
+// ============ RECENT ACTIVITY ============
+
 const recentActivityReturnValidator = v.array(
   v.object({
     id: v.id("transactions"),
@@ -251,32 +296,43 @@ const recentActivityReturnValidator = v.array(
   })
 );
 
-// Get recent activity for activity log
+/**
+ * Format a timestamp as "h:mm AM/PM" deterministically (no locale dependency).
+ */
+function formatTime(timestamp: number): string {
+  const d = new Date(timestamp);
+  const hours24 = d.getUTCHours();
+  const minutes = d.getUTCMinutes();
+  const period = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  const paddedMinutes = String(minutes).padStart(2, "0");
+  return `${hours12}:${paddedMinutes} ${period}`;
+}
+
+/**
+ * Recent transaction activity for the activity log.
+ * Used by the reports view.
+ */
 export const getRecentActivity = query({
   args: {
     companyId: v.id("companies"),
     limit: v.optional(v.number()),
+    workosUserId: v.optional(v.string()),
   },
   returns: recentActivityReturnValidator,
   handler: async (ctx, args) => {
-    // SECURITY: Verify user has access (returns empty if not authorized)
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
     if (!allowed) return [];
 
-    // Get recent transactions as activity
     const transactions = await ctx.db
       .query("transactions")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
       .order("desc")
-      .take(args.limit || 10);
+      .take(args.limit ?? 10);
 
     return transactions.map((tx) => ({
       id: tx._id,
-      time: new Date(tx._creationTime).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }),
+      time: formatTime(tx._creationTime),
       date: tx.date,
       description: tx.description,
       amount: tx.amount,
