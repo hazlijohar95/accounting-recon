@@ -904,12 +904,20 @@ export default defineSchema({
     // Agent-generated natural language summary (one LLM call at end of analysis)
     summary: v.optional(v.string()),
 
+    // LLM token usage tracking (populated after analysis completes)
+    tokenUsage: v.optional(v.object({
+      promptTokens: v.number(),
+      completionTokens: v.number(),
+      totalTokens: v.number(),
+    })),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_company", ["companyId"])
     .index("by_user_status", ["userId", "status"])
     .index("by_company_status", ["companyId", "status"])
+    .index("by_status", ["status"])
     .index("by_reconciliation_session", ["reconciliationSessionId"]),
 
   // Agent findings — persisted intelligence from the analysis engine

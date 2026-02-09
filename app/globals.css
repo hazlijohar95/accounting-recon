@@ -610,6 +610,12 @@
   transition: width var(--sidebar-transition);
 }
 
+/* =============================================
+   Agent Animation System
+   Shared easing: cubic-bezier(0.4, 0, 0.2, 1) (Material deceleration)
+   Shared timing: 200ms for expand/collapse, 250ms for entrance
+   ============================================= */
+
 /* Agent step expand/collapse — uses grid trick for smooth height animation */
 .agent-step-content {
   display: grid;
@@ -625,11 +631,11 @@
   overflow: hidden;
 }
 
-/* Agent finding card expand/collapse */
+/* Agent finding card expand/collapse — matches step timing */
 .agent-finding-body {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: grid-template-rows 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .agent-finding-body[data-expanded="true"] {
@@ -640,7 +646,7 @@
   overflow: hidden;
 }
 
-/* Agent finding card entrance animation */
+/* Agent finding card entrance animation — staggered via CSS custom property */
 @keyframes agent-finding-enter {
   from {
     opacity: 0;
@@ -653,10 +659,17 @@
 }
 
 .agent-finding-enter {
+  opacity: 0;
   animation: agent-finding-enter 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: calc(var(--finding-index, 0) * 50ms);
 }
 
-/* Agent flow panel entrance */
+/* Smooth opacity transition for resolved/dismissed finding cards */
+.agent-finding-card {
+  transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Agent flow panel entrance + exit */
 @keyframes agent-flow-enter {
   from {
     opacity: 0;
@@ -668,8 +681,44 @@
   }
 }
 
+@keyframes agent-flow-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
 .agent-flow-enter {
   animation: agent-flow-enter 250ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.agent-flow-exit {
+  animation: agent-flow-exit 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* Agent summary text fade-in */
+@keyframes agent-summary-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.agent-summary-enter {
+  animation: agent-summary-enter 300ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Agent step state transition — smooth border/opacity changes */
+.agent-step-wrapper {
+  transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Respect reduced motion preferences */
@@ -679,10 +728,16 @@
     transition: none;
   }
   .agent-finding-enter,
-  .agent-flow-enter {
+  .agent-flow-enter,
+  .agent-flow-exit,
+  .agent-summary-enter {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+  .agent-finding-card,
+  .agent-step-wrapper {
+    transition: none;
   }
 }
 

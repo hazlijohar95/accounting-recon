@@ -12,7 +12,7 @@
  * @module components/views/upload-view/agent/agent-flow
  */
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/cn'
 import { IconBrain, IconX, IconArrowRight } from '@/components/brand/icons'
 import { useToast } from '@/components/ui/toast'
@@ -37,6 +37,12 @@ interface AgentFlowProps {
   onAddMoreFiles?: () => void
   onRetryExtraction?: (documentIds: Id<'documents'>[]) => void
 }
+
+/**
+ * Must match the `.agent-flow-exit` animation duration in globals.css.
+ * Used by handleDismiss to wait for the exit animation before unmounting.
+ */
+const AGENT_EXIT_DURATION_MS = 200
 
 // ============================================================================
 // Step State Resolution
@@ -64,8 +70,11 @@ function resolveStepState(
 export function AgentFlow({ agent, files, extractionProgress, onProceed, onAddMoreFiles, onRetryExtraction }: AgentFlowProps) {
   const toast = useToast()
   const [isProceeding, setIsProceeding] = useState(false)
+  const [isDismissing, setIsDismissing] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Don't render if no active agent session
+  // Don't render if no active agent session and not animating out
+  if (!agent.session && !isDismissing) return null
   if (!agent.session) return null
 
   const currentStep = agent.session.currentStep
@@ -107,8 +116,27 @@ export function AgentFlow({ agent, files, extractionProgress, onProceed, onAddMo
     }
   }
 
+  async function handleDismiss() {
+    setIsDismissing(true)
+    // Wait for exit animation to complete (duration must match globals.css .agent-flow-exit)
+    await new Promise((resolve) => setTimeout(resolve, AGENT_EXIT_DURATION_MS))
+    try {
+      await agent.dismiss()
+    } catch {
+      toast.addToast({
+        type: 'error',
+        title: 'Could not dismiss',
+        description: 'The assistant could not be dismissed. Try again.',
+      })
+      setIsDismissing(false)
+    }
+  }
+
   return (
-    <div className="space-y-1 mb-4 agent-flow-enter">
+    <div
+      ref={containerRef}
+      className={cn('space-y-1 mb-4', isDismissing ? 'agent-flow-exit' : 'agent-flow-enter')}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-1 pb-1">
         <div className="flex items-center gap-2">
@@ -126,15 +154,7 @@ export function AgentFlow({ agent, files, extractionProgress, onProceed, onAddMo
           <button
             type="button"
             className="text-xs text-muted-foreground hover:text-foreground transition-colors focus-ring p-0.5"
-            onClick={() => {
-              agent.dismiss().catch(() => {
-                toast.addToast({
-                  type: 'error',
-                  title: 'Could not dismiss',
-                  description: 'The assistant could not be dismissed. Try again.',
-                })
-              })
-            }}
+            onClick={handleDismiss}
             aria-label="Dismiss assistant"
           >
             <IconX size={10} />

@@ -182,6 +182,11 @@ export function detectDateGaps(
  *
  * Matches on: same signed amount AND date within ±1 day AND
  * description overlap >= 80%. Debit/credit pairs are NOT flagged.
+ *
+ * Optimization for large batches:
+ * - Groups by signed amount (cents) for O(n) bucketing
+ * - Sorts each group by date for early exit when dates diverge
+ * - Uses frequency-based charOverlap (O(m+n) per pair)
  */
 export function detectDuplicates(
   transactions: TransactionInfo[],
@@ -197,7 +202,7 @@ export function detectDuplicates(
     byAmount.set(key, group);
   }
 
-  const MAX_GROUP_SIZE = 50; // Cap to avoid O(n²) with large same-amount groups (e.g. payroll)
+  const MAX_GROUP_SIZE = 30; // Cap to avoid O(n²) with large same-amount groups (e.g. payroll)
   const duplicatePairs: Array<{ a: TransactionInfo; b: TransactionInfo }> = [];
   const seen = new Set<string>();
 
@@ -205,15 +210,21 @@ export function detectDuplicates(
     if (group.length < 2) continue;
     if (group.length > MAX_GROUP_SIZE) continue; // Skip oversized groups — likely not duplicates
 
+    // Sort by date within group so we can break early when dates diverge
+    group.sort((x, y) => x.date.localeCompare(y.date));
+
     for (let i = 0; i < group.length; i++) {
       for (let j = i + 1; j < group.length; j++) {
         const a = group[i];
         const b = group[j];
+
+        // Early exit: since group is date-sorted, if b is >1 day after a,
+        // all subsequent j values will also be >1 day — break inner loop
+        const gap = daysBetween(a.date, b.date);
+        if (gap > 1) break;
+
         const pairKey = [a._id, b._id].sort().join("|");
         if (seen.has(pairKey)) continue;
-
-        // Check date proximity (±1 day)
-        if (daysBetween(a.date, b.date) > 1) continue;
 
         // Check description similarity (>= 80%)
         if (charOverlap(a.description, b.description) < 0.8) continue;

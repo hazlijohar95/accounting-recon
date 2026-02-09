@@ -220,6 +220,11 @@ export type DataModel = {
         | "dismissed"
         | "expired";
       summary?: string;
+      tokenUsage?: {
+        completionTokens: number;
+        promptTokens: number;
+        totalTokens: number;
+      };
       updatedAt: number;
       uploadAnalysisId?: Id<"uploadAnalyses">;
       userId: Id<"users">;
@@ -237,6 +242,10 @@ export type DataModel = {
       | "reconciliationSessionId"
       | "status"
       | "summary"
+      | "tokenUsage"
+      | "tokenUsage.completionTokens"
+      | "tokenUsage.promptTokens"
+      | "tokenUsage.totalTokens"
       | "updatedAt"
       | "uploadAnalysisId"
       | "userId";
@@ -246,6 +255,7 @@ export type DataModel = {
       by_company: ["companyId", "_creationTime"];
       by_company_status: ["companyId", "status", "_creationTime"];
       by_reconciliation_session: ["reconciliationSessionId", "_creationTime"];
+      by_status: ["status", "_creationTime"];
       by_user_status: ["userId", "status", "_creationTime"];
     };
     searchIndexes: {};

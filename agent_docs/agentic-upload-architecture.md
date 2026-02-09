@@ -1,6 +1,6 @@
 # Agentic Upload Architecture
 
-**Status:** Phase 4 Complete — Cross-Page Context
+**Status:** Phase 5 Complete — Polish & Optimization (Reviewed & Hardened)
 **Last Updated:** 2026-02-10
 **Author:** Architecture Review
 
@@ -652,11 +652,11 @@ Compare to current `uploadAnalysis.runAnalysis()`: ~5,000-10,000 tokens per batc
 
 | # | Task | Status | Files |
 |---|------|--------|-------|
-| 5.1 | Add smooth collapse/expand animations (Framer Motion or CSS) | `pending` | Components |
-| 5.2 | Optimize rule engine for 50+ document batches | `pending` | `convex/agentEngine.ts` |
-| 5.3 | Add agent session expiry cron (24h) | `pending` | `convex/crons.ts` |
-| 5.4 | E2E tests for agent flow | `pending` | `tests/e2e/agent-upload.spec.ts` |
-| 5.5 | Measure and optimize LLM token usage | `pending` | Monitoring |
+| 5.1 | Add smooth collapse/expand animations (CSS) — unified timing, staggered entrance, exit animations, opacity transitions. Named duration constant (`AGENT_EXIT_DURATION_MS`) links CSS and JS timing. | `done` | `app/globals.css`, `components/views/upload-view/agent/finding-card.tsx`, `components/views/upload-view/agent/findings-summary.tsx`, `components/views/upload-view/agent/agent-step.tsx`, `components/views/upload-view/agent/agent-flow.tsx` |
+| 5.2 | Optimize rule engine for 50+ document batches — parallel DB reads, O(m+n) charOverlap, date-sorted duplicate detection with early exit, single-pass stats | `done` | `convex/agentEngine.ts`, `convex/lib/agentRules.ts`, `convex/lib/agentUtils.ts` |
+| 5.3 | Add agent session expiry cron (24h) — global sweep across active/analyzing/ready statuses, by_status index. Documented index limitation and scaling notes. | `done` | `convex/crons.ts`, `convex/agentSession.ts`, `convex/schema.ts` |
+| 5.4 | E2E tests for agent flow — Playwright tests with proper `test.skip()` gating (visible in reports, never silently passes). Shared helpers `requireAgentFlow()`, `requireFindings()`, `requireFindingBySeverity()` for explicit precondition checks. Covers structure, interactions, findings, dismiss, proceed, accessibility (keyboard Enter+Space), animations, cross-page context. | `done` | `e2e/tests/agent-upload.spec.ts` |
+| 5.5 | Measure and optimize LLM token usage — Bedrock caller with token tracking, persisted on session, console logging. Documented SDK naming mapping (inputTokens/outputTokens -> promptTokens/completionTokens). | `done` | `convex/agentEngine.ts`, `convex/agentSession.ts`, `convex/schema.ts` |
 
 ---
 
@@ -687,6 +687,7 @@ Compare to current `uploadAnalysis.runAnalysis()`: ~5,000-10,000 tokens per batc
 | `components/views/reconcile-view/agent-findings-banner.tsx` | Read-only findings banner for /reconcile |
 | `hooks/useAgentSession.ts` | React hook for agent state + Convex subscriptions |
 | `hooks/useAgentFindingsForReconciliation.ts` | Reconcile page agent findings hook |
+| `e2e/tests/agent-upload.spec.ts` | Playwright E2E tests with explicit `test.skip()` gating for agent flow |
 
 ### Modified Files
 
@@ -702,7 +703,7 @@ Compare to current `uploadAnalysis.runAnalysis()`: ~5,000-10,000 tokens per batc
 | `convex/geminiExtraction.ts` | Enrich extraction to capture company names + counterparties |
 | `convex/nativePdfExtraction.ts` | Same enrichment as Gemini path |
 | `convex/lib/extractionUtils.ts` | Add company name / counterparty to extraction prompts |
-| `app/globals.css` | Claude-style collapse/expand animations |
+| `app/globals.css` | Claude-style collapse/expand animations, `prefers-reduced-motion` support |
 
 ---
 
@@ -754,7 +755,8 @@ Compare to current `uploadAnalysis.runAnalysis()`: ~5,000-10,000 tokens per batc
 | Collapse pattern | Claude-style accordion | Familiar pattern, keeps context visible without clutter. |
 | Token strategy | Tiered (rules → LLM fallback) | ~2,200 tokens per batch vs. 10,000 today. 4x cheaper. |
 | LLM provider | Bedrock Claude Haiku | Fast, cheap, sufficient for structured reasoning. |
-| Implementation order | Engine → UI → Edge cases | Ensures intelligence works before we build the conversation. |
+| Implementation order | Engine -> UI -> Edge cases | Ensures intelligence works before we build the conversation. |
+| E2E test strategy | `test.skip()` gating, not silent `if` guards | Skipped tests are visible in reports. Silent `if` guards give false confidence. |
 | Agent persona | Calm explainer | Plain language, non-alarming, explains why things matter. |
 | Multi-company | Parallel lanes | Accommodates real-world scenario of mixed document uploads. |
 | Cross-page | Full agent context on /reconcile | Continuous experience from upload to reconciliation. |

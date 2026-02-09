@@ -122,39 +122,43 @@ export const getFindingsForReconciliation = query({
 
 /**
  * Batch-fetch all data needed for agent analysis.
- * Uses per-document index lookups instead of full company scans.
+ * Uses parallel Promise.all for document lookups and per-document index queries.
+ * For 50 documents, this runs ~50 parallel reads instead of ~150 sequential ones.
  */
 export const getAnalysisData = internalQuery({
   args: {
     documentIds: v.array(v.id("documents")),
   },
   handler: async (ctx, { documentIds }) => {
-    // Fetch documents
-    const documents: Doc<"documents">[] = [];
-    for (const docId of documentIds) {
-      const doc = await ctx.db.get(docId);
-      if (doc) documents.push(doc);
-    }
+    // Parallel fetch: all documents at once
+    const docResults = await Promise.all(
+      documentIds.map((docId) => ctx.db.get(docId)),
+    );
+    const documents: Doc<"documents">[] = docResults.filter(
+      (d): d is Doc<"documents"> => d !== null,
+    );
 
-    // Fetch transactions per-document via index (avoids full company scan)
-    const transactions: Doc<"transactions">[] = [];
-    for (const docId of documentIds) {
-      const docTxns = await ctx.db
-        .query("transactions")
-        .withIndex("by_source_document", (q) => q.eq("sourceDocumentId", docId))
-        .collect();
-      transactions.push(...docTxns);
-    }
+    // Parallel fetch: transactions per-document via index
+    const txnResults = await Promise.all(
+      documentIds.map((docId) =>
+        ctx.db
+          .query("transactions")
+          .withIndex("by_source_document", (q) => q.eq("sourceDocumentId", docId))
+          .collect(),
+      ),
+    );
+    const transactions: Doc<"transactions">[] = txnResults.flat();
 
-    // Fetch accrual docs per-document via index
-    const accrualDocs: Doc<"accrualDocuments">[] = [];
-    for (const docId of documentIds) {
-      const docAccruals = await ctx.db
-        .query("accrualDocuments")
-        .withIndex("by_source_document", (q) => q.eq("sourceDocumentId", docId))
-        .collect();
-      accrualDocs.push(...docAccruals);
-    }
+    // Parallel fetch: accrual docs per-document via index
+    const accrualResults = await Promise.all(
+      documentIds.map((docId) =>
+        ctx.db
+          .query("accrualDocuments")
+          .withIndex("by_source_document", (q) => q.eq("sourceDocumentId", docId))
+          .collect(),
+      ),
+    );
+    const accrualDocs: Doc<"accrualDocuments">[] = accrualResults.flat();
 
     return { documents, transactions, accrualDocs };
   },
@@ -316,7 +320,7 @@ async function executeAnalysisPipeline(
   ctx: ActionCtx,
   agentSessionId: Id<"agentSessions">,
   session: { companyId: Id<"companies">; documentIds: Id<"documents">[] },
-): Promise<{ findingCount: number; criticalCount: number; warningCount: number }> {
+): Promise<{ findingCount: number; criticalCount: number; warningCount: number; tokenUsage: TokenTracker }> {
   // Step 1: Fetch all data
   const data = await ctx.runQuery(internal.agentEngine.getAnalysisData, {
     documentIds: session.documentIds,
@@ -384,7 +388,7 @@ async function executeAnalysisPipeline(
   let allFindings: AgentFinding[] = [...rulesFindings, ...crossRefFindings];
 
   // Create Bedrock caller once for both LLM steps (entity resolution + summary)
-  const bedrockCall = createBedrockCaller();
+  const { call: bedrockCall, tracker: tokenTracker } = createBedrockCaller();
 
   // Step 5: Check if entity resolution is needed + build company lanes
   const multiCompanyFinding = allFindings.find((f) => f.type === "multi_company_detected");
@@ -449,14 +453,21 @@ async function executeAnalysisPipeline(
     }
   }
 
-  // Step 5b: Compute stats for summary generation
+  // Step 5b: Compute stats for summary generation (single-pass)
+  let bankStatements = 0;
+  let invoices = 0;
+  let receipts = 0;
+  for (const d of documentInfos) {
+    if (d.documentType === "bank_statement") bankStatements++;
+    else if (["invoice", "purchase_invoice", "sales_invoice"].includes(d.documentType)) invoices++;
+    else if (d.documentType === "receipt") receipts++;
+  }
+
   const stats: AgentStats = {
     totalDocuments: documentInfos.length,
-    bankStatements: documentInfos.filter((d) => d.documentType === "bank_statement").length,
-    invoices: documentInfos.filter((d) =>
-      ["invoice", "purchase_invoice", "sales_invoice"].includes(d.documentType),
-    ).length,
-    receipts: documentInfos.filter((d) => d.documentType === "receipt").length,
+    bankStatements,
+    invoices,
+    receipts,
     totalTransactions: transactionInfos.length,
     totalAccrualDocs: accrualDocInfos.length,
   };
@@ -497,16 +508,30 @@ async function executeAnalysisPipeline(
     findings: findingsForStorage,
   });
 
-  // Step 8: Complete analysis
+  // Step 8: Complete analysis (with token usage tracking)
   await ctx.runMutation(internal.agentSession.completeAnalysis, {
     sessionId: agentSessionId,
     summary,
+    tokenUsage: tokenTracker.totalTokens > 0 ? {
+      promptTokens: tokenTracker.promptTokens,
+      completionTokens: tokenTracker.completionTokens,
+      totalTokens: tokenTracker.totalTokens,
+    } : undefined,
   });
+
+  // Log token usage for monitoring
+  if (tokenTracker.totalTokens > 0) {
+    console.log(
+      `[AgentEngine] Token usage: ${tokenTracker.promptTokens} prompt + ` +
+      `${tokenTracker.completionTokens} completion = ${tokenTracker.totalTokens} total`,
+    );
+  }
 
   return {
     findingCount: allFindings.length,
     criticalCount: allFindings.filter((f) => f.severity === "critical").length,
     warningCount: allFindings.filter((f) => f.severity === "warning").length,
+    tokenUsage: tokenTracker,
   };
 }
 
@@ -601,7 +626,8 @@ export const runAgentAnalysisInternal = internalAction({
 
       console.log(
         `[AgentEngine] Analysis complete: ${result.findingCount} findings ` +
-        `(${result.criticalCount} critical, ${result.warningCount} warning)`,
+        `(${result.criticalCount} critical, ${result.warningCount} warning), ` +
+        `tokens: ${result.tokenUsage.totalTokens}`,
       );
     } catch (error) {
       await handleAnalysisError(ctx, agentSessionId, session.companyId, error);
@@ -610,16 +636,29 @@ export const runAgentAnalysisInternal = internalAction({
 });
 
 // ============================================================================
-// Bedrock Caller Factory
+// Bedrock Caller Factory (with Token Tracking)
 // ============================================================================
 
 /**
- * Create a Bedrock caller function for LLM layer use.
+ * Token usage accumulator for a single analysis run.
+ */
+interface TokenTracker {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+/**
+ * Create a Bedrock caller function for LLM layer use, with token tracking.
  *
  * Returns a function that takes a prompt string and returns the LLM response text.
  * Uses Claude Haiku for fast, cheap inference.
+ * Also returns a tracker object that accumulates token usage across calls.
  */
-function createBedrockCaller(): (prompt: string) => Promise<string> {
+function createBedrockCaller(): {
+  call: (prompt: string) => Promise<string>;
+  tracker: TokenTracker;
+} {
   const region = process.env.AWS_REGION || "us-east-1";
   const modelId = process.env.AGENT_MODEL_ID
     || process.env.ANALYSIS_MODEL_ID
@@ -633,13 +672,34 @@ function createBedrockCaller(): (prompt: string) => Promise<string> {
     sessionToken: process.env.AWS_SESSION_TOKEN,
   });
 
-  return async (prompt: string): Promise<string> => {
-    const { text } = await generateText({
+  const tracker: TokenTracker = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+  };
+
+  const call = async (prompt: string): Promise<string> => {
+    const result = await generateText({
       model: bedrock(modelId),
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
       maxOutputTokens: 1024,
     });
-    return text;
+
+    // Accumulate token usage from the Vercel AI SDK response.
+    // The SDK uses inputTokens/outputTokens naming, but we store as
+    // promptTokens/completionTokens (OpenAI convention) for consistency
+    // with the rest of the codebase and common monitoring tools.
+    if (result.usage) {
+      const input = result.usage.inputTokens ?? 0;
+      const output = result.usage.outputTokens ?? 0;
+      tracker.promptTokens += input;
+      tracker.completionTokens += output;
+      tracker.totalTokens += input + output;
+    }
+
+    return result.text;
   };
+
+  return { call, tracker };
 }

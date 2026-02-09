@@ -3633,7 +3633,15 @@ export declare const internal: {
     completeAnalysis: FunctionReference<
       "mutation",
       "internal",
-      { sessionId: Id<"agentSessions">; summary: string },
+      {
+        sessionId: Id<"agentSessions">;
+        summary: string;
+        tokenUsage?: {
+          completionTokens: number;
+          promptTokens: number;
+          totalTokens: number;
+        };
+      },
       null
     >;
     createInternal: FunctionReference<
@@ -3646,6 +3654,12 @@ export declare const internal: {
         userId: Id<"users">;
       },
       Id<"agentSessions">
+    >;
+    expireStaleSessionsGlobal: FunctionReference<
+      "mutation",
+      "internal",
+      {},
+      number
     >;
     getInternal: FunctionReference<
       "query",

@@ -180,7 +180,11 @@ export function daysBetween(dateA: string, dateB: string): number {
  * Simple character-level overlap ratio between two strings.
  * Returns 0.0–1.0 using Dice-style normalization.
  *
- * Note: This is a bag-of-characters match, not positional.
+ * Uses frequency-count approach: O(m + n) instead of O(m * n).
+ * Counts character frequencies in both strings, then sums the
+ * minimums to get the match count. This is mathematically equivalent
+ * to the old bag-of-characters approach but much faster for long strings.
+ *
  * "ABC" vs "CBA" returns 1.0. For duplicate detection this is
  * acceptable because the 80% threshold is combined with same-amount
  * and same-date guards, making anagram false positives extremely unlikely
@@ -192,21 +196,27 @@ export function charOverlap(a: string, b: string): number {
   if (aLower === bLower) return 1.0;
   if (aLower.length === 0 || bLower.length === 0) return 0.0;
 
-  const shorter = aLower.length <= bLower.length ? aLower : bLower;
-  const longer = aLower.length > bLower.length ? aLower : bLower;
+  // Build frequency maps: O(m + n)
+  const freqA = new Map<string, number>();
+  for (const ch of aLower) {
+    freqA.set(ch, (freqA.get(ch) || 0) + 1);
+  }
 
+  const freqB = new Map<string, number>();
+  for (const ch of bLower) {
+    freqB.set(ch, (freqB.get(ch) || 0) + 1);
+  }
+
+  // Sum minimum frequencies: O(min(unique_a, unique_b))
   let matches = 0;
-  const used = new Set<number>();
-  for (const ch of shorter) {
-    for (let i = 0; i < longer.length; i++) {
-      if (!used.has(i) && longer[i] === ch) {
-        matches++;
-        used.add(i);
-        break;
-      }
+  for (const [ch, countA] of freqA) {
+    const countB = freqB.get(ch);
+    if (countB) {
+      matches += Math.min(countA, countB);
     }
   }
-  return (2 * matches) / (shorter.length + longer.length);
+
+  return (2 * matches) / (aLower.length + bLower.length);
 }
 
 /** Format a number as a currency string (no symbol, just formatting). */

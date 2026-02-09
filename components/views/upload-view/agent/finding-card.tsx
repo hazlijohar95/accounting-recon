@@ -33,6 +33,8 @@ import type { Id } from '@/convex/_generated/dataModel'
 
 interface FindingCardProps {
   finding: AgentFindingData
+  /** Index in the list, used for staggered entrance animation */
+  index?: number
   onRespond: (
     findingId: AgentFindingData['_id'],
     status: 'acknowledged' | 'resolved' | 'dismissed',
@@ -87,7 +89,7 @@ const SEVERITY_CONFIG: Record<
 // Component
 // ============================================================================
 
-export function FindingCard({ finding, onRespond, onRetryExtraction, onRemoveDocuments }: FindingCardProps) {
+export function FindingCard({ finding, index = 0, onRespond, onRetryExtraction, onRemoveDocuments }: FindingCardProps) {
   const [isExpanded, setIsExpanded] = useState(finding.severity === 'critical')
   const [isResponding, setIsResponding] = useState(false)
   const [responseText, setResponseText] = useState('')
@@ -119,11 +121,12 @@ export function FindingCard({ finding, onRespond, onRetryExtraction, onRemoveDoc
   return (
     <div
       className={cn(
-        'border border-border border-l-2 transition-colors duration-150 agent-finding-enter',
+        'border border-border border-l-2 agent-finding-card agent-finding-enter',
         config.borderClass,
         isResolved && 'opacity-60',
         !isResolved && config.bgClass,
       )}
+      style={{ '--finding-index': index } as React.CSSProperties}
     >
       {/* Header — always visible */}
       <button

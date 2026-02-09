@@ -561,15 +561,24 @@ export const completeAnalysis = internalMutation({
   args: {
     sessionId: v.id("agentSessions"),
     summary: v.string(),
+    tokenUsage: v.optional(v.object({
+      promptTokens: v.number(),
+      completionTokens: v.number(),
+      totalTokens: v.number(),
+    })),
   },
   returns: v.null(),
-  handler: async (ctx, { sessionId, summary }) => {
-    await ctx.db.patch(sessionId, {
+  handler: async (ctx, { sessionId, summary, tokenUsage }) => {
+    const patch: Record<string, unknown> = {
       status: "ready",
       currentStep: "validate",
       summary,
       updatedAt: Date.now(),
-    });
+    };
+    if (tokenUsage) {
+      patch.tokenUsage = tokenUsage;
+    }
+    await ctx.db.patch(sessionId, patch);
     return null;
   },
 });
@@ -715,5 +724,71 @@ export const getInternal = internalQuery({
   args: { sessionId: v.id("agentSessions") },
   handler: async (ctx, { sessionId }) => {
     return await ctx.db.get(sessionId);
+  },
+});
+
+// ============================================================================
+// Cron: Global Session Expiry
+// ============================================================================
+
+const STALE_STATUSES = ["active", "analyzing", "ready"] as const;
+const EXPIRY_HOURS = 24;
+const MAX_EXPIRE_PER_RUN = 100; // Safety cap per cron tick
+
+/**
+ * Global agent session expiry cron handler.
+ *
+ * Sweeps all sessions in stale statuses (active, analyzing, ready)
+ * and expires any older than 24h. This covers cases where:
+ * - User abandons the upload page (active sessions left behind)
+ * - Analysis hangs or fails silently (stuck in "analyzing")
+ * - User reviews findings but never proceeds or dismisses (stuck in "ready")
+ *
+ * Runs every 15 minutes. Uses the by_status index for efficient queries.
+ *
+ * Note: The by_status index filters by status only, so we fetch up to
+ * MAX_EXPIRE_PER_RUN sessions per status and filter by updatedAt in JS.
+ * If there are many non-stale sessions in a status (e.g. hundreds of recent
+ * "active" sessions), the take() limit may prevent reaching older stale ones.
+ * In practice this is not an issue — agent sessions are short-lived and
+ * the 15-minute cron interval ensures eventual cleanup. A compound index
+ * on ["status", "updatedAt"] would allow index-level range filtering but
+ * adds schema complexity for minimal gain at current scale.
+ */
+export const expireStaleSessionsGlobal = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    const cutoff = now - EXPIRY_HOURS * 60 * 60 * 1000;
+    let expiredCount = 0;
+
+    for (const status of STALE_STATUSES) {
+      if (expiredCount >= MAX_EXPIRE_PER_RUN) break;
+
+      const sessions = await ctx.db
+        .query("agentSessions")
+        .withIndex("by_status", (q) => q.eq("status", status))
+        .take(MAX_EXPIRE_PER_RUN - expiredCount);
+
+      for (const session of sessions) {
+        // Use updatedAt for expiry check — a recently-interacted session
+        // should not be expired even if created >24h ago
+        const lastActivity = session.updatedAt || session.createdAt;
+        if (lastActivity < cutoff) {
+          await ctx.db.patch(session._id, {
+            status: "expired",
+            updatedAt: now,
+          });
+          expiredCount++;
+        }
+      }
+    }
+
+    if (expiredCount > 0) {
+      console.log(`[AgentSession] Expired ${expiredCount} stale session(s)`);
+    }
+
+    return expiredCount;
   },
 });

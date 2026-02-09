@@ -57,7 +57,7 @@ export function AgentStep({ step, label, summary, state, children }: AgentStepPr
 
   if (state === 'completed') {
     return (
-      <div className="group border border-border bg-background">
+      <div className="group border border-border bg-background agent-step-wrapper">
         <button
           type="button"
           className="w-full flex items-center gap-2 px-3 py-2 cursor-pointer focus-ring text-left"
@@ -90,7 +90,7 @@ export function AgentStep({ step, label, summary, state, children }: AgentStepPr
 
   if (state === 'future') {
     return (
-      <div className="border border-border bg-background opacity-40 transition-opacity duration-200">
+      <div className="border border-border bg-background opacity-40 agent-step-wrapper">
         <div className="flex items-center gap-2 px-3 py-2">
           <span className="shrink-0 w-3.5 h-3.5 border border-border flex items-center justify-center text-[8px] text-muted-foreground tabular-nums">
             {stepNumber}
@@ -103,7 +103,7 @@ export function AgentStep({ step, label, summary, state, children }: AgentStepPr
 
   // Active state — always expanded
   return (
-    <div className="border border-foreground/20 bg-background">
+    <div className="border border-foreground/20 bg-background agent-step-wrapper">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
         <IconSpinner size={14} className="shrink-0 text-foreground" />
         <span className="text-sm text-foreground font-medium">{label}</span>

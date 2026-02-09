@@ -67,4 +67,13 @@ crons.interval(
   internal.extractionQueue.processRetryableItems
 );
 
+// Expire stale agent sessions every 15 minutes
+// Sessions in active/analyzing/ready status with no activity for >24h get expired
+// Prevents abandoned sessions from accumulating
+crons.interval(
+  "expire-stale-agent-sessions",
+  { minutes: 15 },
+  internal.agentSession.expireStaleSessionsGlobal
+);
+
 export default crons;

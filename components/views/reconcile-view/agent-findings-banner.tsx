@@ -142,7 +142,7 @@ export function AgentFindingsBanner({
               <IconCaretDown
                 size={14}
                 className={cn(
-                  'text-muted-foreground transition-transform duration-200',
+                  'text-muted-foreground transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]',
                   isOpen && 'rotate-180',
                 )}
               />

@@ -62,7 +62,7 @@ export function FindingsSummary({ findings, summary, onRespond, onRetryExtractio
     <div className="space-y-3">
       {/* Agent summary */}
       {summary && (
-        <p className="text-sm text-muted-foreground leading-relaxed">
+        <p className="text-sm text-muted-foreground leading-relaxed agent-summary-enter">
           {summary}
         </p>
       )}
@@ -86,6 +86,7 @@ export function FindingsSummary({ findings, summary, onRespond, onRetryExtractio
           label="Must Address"
           severity="critical"
           findings={criticalFindings}
+          startIndex={0}
           onRespond={onRespond}
           onRetryExtraction={onRetryExtraction}
           onRemoveDocuments={onRemoveDocuments}
@@ -98,6 +99,7 @@ export function FindingsSummary({ findings, summary, onRespond, onRetryExtractio
           label="Good to Know"
           severity="warning"
           findings={warningFindings}
+          startIndex={criticalFindings.length}
           onRespond={onRespond}
           onRetryExtraction={onRetryExtraction}
           onRemoveDocuments={onRemoveDocuments}
@@ -110,6 +112,7 @@ export function FindingsSummary({ findings, summary, onRespond, onRetryExtractio
           label="For Your Information"
           severity="info"
           findings={infoFindings}
+          startIndex={criticalFindings.length + warningFindings.length}
           onRespond={onRespond}
           onRetryExtraction={onRetryExtraction}
           onRemoveDocuments={onRemoveDocuments}
@@ -140,6 +143,7 @@ function FindingGroup({
   label,
   severity,
   findings,
+  startIndex,
   onRespond,
   onRetryExtraction,
   onRemoveDocuments,
@@ -147,6 +151,7 @@ function FindingGroup({
   label: string
   severity: FindingSeverity
   findings: AgentFindingData[]
+  startIndex: number
   onRespond: FindingsSummaryProps['onRespond']
   onRetryExtraction?: FindingsSummaryProps['onRetryExtraction']
   onRemoveDocuments?: FindingsSummaryProps['onRemoveDocuments']
@@ -157,10 +162,11 @@ function FindingGroup({
         {label} ({findings.length})
       </h4>
       <div className="space-y-1">
-        {findings.map((finding) => (
+        {findings.map((finding, i) => (
           <FindingCard
             key={finding._id}
             finding={finding}
+            index={startIndex + i}
             onRespond={onRespond}
             onRetryExtraction={onRetryExtraction}
             onRemoveDocuments={onRemoveDocuments}
