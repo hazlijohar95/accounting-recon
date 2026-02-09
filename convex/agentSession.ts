@@ -714,6 +714,98 @@ export const setAllLanesSelection = mutation({
 });
 
 // ============================================================================
+// Token Usage Queries
+// ============================================================================
+
+/**
+ * Get aggregated token usage statistics for a company.
+ *
+ * Returns:
+ * - Total tokens used (prompt + completion)
+ * - Session count (with and without token usage)
+ * - Per-session breakdown (most recent first)
+ * - Estimated cost (using Claude Sonnet 4 pricing: $3/M input, $15/M output)
+ *
+ * Note: Only returns sessions that have tokenUsage data (i.e., sessions
+ * where the LLM layer ran). Sessions that completed with rules-only
+ * analysis have no token data and are excluded from token stats but
+ * included in the total session count.
+ */
+export const getTokenUsageStats = query({
+  args: {
+    companyId: v.id("companies"),
+    workosUserId: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
+    if (!allowed) return null;
+
+    const pageSize = args.limit ?? 50;
+
+    // Fetch all sessions for this company (most recent first)
+    const allSessions = await ctx.db
+      .query("agentSessions")
+      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+      .order("desc")
+      .take(pageSize);
+
+    // Aggregate stats
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalTokens = 0;
+    let sessionsWithTokens = 0;
+    const sessionBreakdown: Array<{
+      sessionId: Id<"agentSessions">;
+      status: string;
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      documentCount: number;
+      createdAt: number;
+    }> = [];
+
+    for (const session of allSessions) {
+      if (session.tokenUsage && session.tokenUsage.totalTokens > 0) {
+        totalPromptTokens += session.tokenUsage.promptTokens;
+        totalCompletionTokens += session.tokenUsage.completionTokens;
+        totalTokens += session.tokenUsage.totalTokens;
+        sessionsWithTokens++;
+
+        sessionBreakdown.push({
+          sessionId: session._id,
+          status: session.status,
+          promptTokens: session.tokenUsage.promptTokens,
+          completionTokens: session.tokenUsage.completionTokens,
+          totalTokens: session.tokenUsage.totalTokens,
+          documentCount: session.documentIds.length,
+          createdAt: session.createdAt,
+        });
+      }
+    }
+
+    // Estimated cost: Claude Sonnet 4 pricing ($3/M input, $15/M output)
+    const estimatedCostUsd =
+      (totalPromptTokens / 1_000_000) * 3 +
+      (totalCompletionTokens / 1_000_000) * 15;
+
+    const avgTokensPerSession =
+      sessionsWithTokens > 0 ? Math.round(totalTokens / sessionsWithTokens) : 0;
+
+    return {
+      totalSessions: allSessions.length,
+      sessionsWithTokens,
+      totalPromptTokens,
+      totalCompletionTokens,
+      totalTokens,
+      avgTokensPerSession,
+      estimatedCostUsd: Math.round(estimatedCostUsd * 10000) / 10000, // 4 decimal places
+      sessionBreakdown,
+    };
+  },
+});
+
+// ============================================================================
 // Internal Queries
 // ============================================================================
 

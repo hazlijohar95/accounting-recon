@@ -1,0 +1,13 @@
+Date,Description,Debit,Credit,Balance
+2025-01-02,Opening Balance,,,10000.00
+2025-01-05,Payment to Vendor ABC,1500.00,,8500.00
+2025-01-08,Receipt from Client XYZ,,3200.00,11700.00
+2025-01-10,Office Supplies - Staples,85.50,,11614.50
+2025-01-12,Monthly Rent,2500.00,,9114.50
+2025-01-15,Payment to Vendor ABC,1500.00,,7614.50
+2025-01-18,Receipt from Client DEF,,4500.00,12114.50
+2025-01-20,Utility Bill - TNB,450.00,,11664.50
+2025-01-22,Internet Bill - Unifi,199.00,,11465.50
+2025-01-25,Receipt from Client XYZ,,2800.00,14265.50
+2025-01-28,Payment to Vendor GHI,950.00,,13315.50
+2025-01-30,Bank Charges,25.00,,13290.50

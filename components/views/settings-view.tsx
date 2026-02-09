@@ -36,13 +36,15 @@ import {
   IconCaretRight,
   IconLoader,
   IconWarning,
-  IconCheck
+  IconCheck,
+  IconChartBar
 } from '@/components/brand/icons'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
+import { UsageSection } from '@/components/views/settings-view/usage-section'
 
 // Section types for navigation
-type SettingsSection = 'profile' | 'company' | 'preferences' | 'notifications' | 'data'
+type SettingsSection = 'profile' | 'company' | 'preferences' | 'notifications' | 'usage' | 'data'
 
 interface SectionNavItem {
   id: SettingsSection
@@ -56,6 +58,7 @@ const sections: SectionNavItem[] = [
   { id: 'company', label: 'Company', icon: <IconBuildings size={18} />, description: 'Company settings' },
   { id: 'preferences', label: 'Preferences', icon: <IconGear size={18} />, description: 'Display & formatting' },
   { id: 'notifications', label: 'Notifications', icon: <IconBell size={18} />, description: 'Email preferences' },
+  { id: 'usage', label: 'Usage', icon: <IconChartBar size={18} />, description: 'Token usage stats' },
   { id: 'data', label: 'Data', icon: <IconDatabase size={18} />, description: 'Export & delete' },
 ]
 
@@ -87,21 +90,9 @@ export function SettingsView() {
   // Auto-select first company if none selected but companies exist
   useEffect(() => {
     if (!selectedCompanyId && allCompanies && allCompanies.length > 0 && !isDemo) {
-      console.log('[Settings] Auto-selecting first company:', allCompanies[0]._id)
       setSelectedCompanyId(allCompanies[0]._id)
     }
   }, [selectedCompanyId, allCompanies, setSelectedCompanyId, isDemo])
-
-  // Debug logging for settings view state
-  useEffect(() => {
-    console.log('[Settings] Current state:', {
-      isAuthenticated,
-      isDemo,
-      selectedCompanyId,
-      companiesCount: allCompanies?.length ?? 'loading',
-      companyLoaded: company ? company.name : 'null',
-    })
-  }, [isAuthenticated, isDemo, selectedCompanyId, allCompanies, company])
 
   // If not authenticated, show sign-in prompt
   if (!isAuthenticated && !isDemo) {
@@ -160,6 +151,7 @@ export function SettingsView() {
           {activeSection === 'company' && <CompanySection company={company} isDemo={isDemo} />}
           {activeSection === 'preferences' && <PreferencesSection />}
           {activeSection === 'notifications' && <NotificationsSection />}
+          {activeSection === 'usage' && <UsageSection isDemo={isDemo} />}
           {activeSection === 'data' && <DataSection isDemo={isDemo} />}
         </div>
       </div>

@@ -48,7 +48,7 @@ export function AgentProgressView({
     : 0
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-testid="agent-progress">
       {/* Step 1: Extraction */}
       <ProgressStep
         icon={IconFileText}

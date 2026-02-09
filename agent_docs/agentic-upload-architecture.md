@@ -1,6 +1,6 @@
 # Agentic Upload Architecture
 
-**Status:** Phase 5 Complete — Polish & Optimization (Reviewed & Hardened)
+**Status:** Phase 6 In Progress — Token Usage Dashboard & Real-World E2E Testing
 **Last Updated:** 2026-02-10
 **Author:** Architecture Review
 
@@ -688,13 +688,21 @@ Compare to current `uploadAnalysis.runAnalysis()`: ~5,000-10,000 tokens per batc
 | `hooks/useAgentSession.ts` | React hook for agent state + Convex subscriptions |
 | `hooks/useAgentFindingsForReconciliation.ts` | Reconcile page agent findings hook |
 | `e2e/tests/agent-upload.spec.ts` | Playwright E2E tests with explicit `test.skip()` gating for agent flow |
+| `hooks/useTokenUsage.ts` | React hook for token usage stats with daily aggregation |
+| `components/views/settings-view/usage-section.tsx` | Token Usage Dashboard UI (StatCards + Recharts charts + session table) |
+| `e2e/helpers.ts` | Shared E2E test helpers (navigation, element finders, assertions) |
+| `e2e/fixtures/test-bank-statement.csv` | Test fixture: 12-row bank statement CSV |
+| `e2e/tests/agent-lifecycle.spec.ts` | Full lifecycle E2E tests (upload + agent + proceed + settings) |
 
 ### Modified Files
 
 | File | Changes |
 |------|---------|
 | `convex/schema.ts` | Add `agentSessions`, `agentFindings` tables; add enrichment fields to `documents` |
-| `components/views/upload-view.tsx` | Integrate agent flow above existing 3-tab system |
+| `components/views/upload-view.tsx` | Integrate agent flow above existing 3-tab system; add `data-testid` attributes |
+| `components/views/settings-view.tsx` | Add "Usage" tab with `IconChartBar`, `UsageSection` component |
+| `convex/agentSession.ts` | Add `getTokenUsageStats` query for aggregated token usage |
+| `hooks/useAgentSession.ts` | Expose `tokenUsage` in session return type |
 | `components/views/reconcile-view.tsx` | Agent findings hook, banner, suspense context strip, agentSummary prop threading |
 | `components/views/reconcile-view/index.ts` | Added AgentFindingsBanner export |
 | `components/ai/reconcile-agent/reconcile-agent.tsx` | Added `agentSummary?` prop forwarding |

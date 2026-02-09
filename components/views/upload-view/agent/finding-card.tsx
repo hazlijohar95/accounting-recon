@@ -127,6 +127,9 @@ export function FindingCard({ finding, index = 0, onRespond, onRetryExtraction, 
         !isResolved && config.bgClass,
       )}
       style={{ '--finding-index': index } as React.CSSProperties}
+      data-testid={`agent-finding-${finding.severity}`}
+      data-finding-status={finding.status}
+      data-finding-type={finding.type}
     >
       {/* Header — always visible */}
       <button
@@ -228,17 +231,18 @@ export function FindingCard({ finding, index = 0, onRespond, onRetryExtraction, 
                   /* Specialized actions for extraction issues */
                   <>
                     {onRetryExtraction && finding.relatedDocumentIds && finding.relatedDocumentIds.length > 0 && (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1.5 px-2 py-1 text-xs border border-border bg-background hover:bg-secondary transition-colors focus-ring disabled:opacity-50"
-                        onClick={() => {
-                          onRetryExtraction(finding.relatedDocumentIds!)
-                          handleRespond('resolved', 'Retrying extraction')
-                        }}
-                        disabled={isResponding}
-                      >
-                        Retry Extraction
-                      </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 px-2 py-1 text-xs border border-border bg-background hover:bg-secondary transition-colors focus-ring disabled:opacity-50"
+                      onClick={() => {
+                        onRetryExtraction(finding.relatedDocumentIds!)
+                        handleRespond('resolved', 'Retrying extraction')
+                      }}
+                      disabled={isResponding}
+                      data-testid="finding-action-retry"
+                    >
+                      Retry Extraction
+                    </button>
                     )}
                     {onRemoveDocuments && finding.relatedDocumentIds && finding.relatedDocumentIds.length > 0 && (
                       <button
@@ -271,6 +275,7 @@ export function FindingCard({ finding, index = 0, onRespond, onRetryExtraction, 
                       className="inline-flex items-center gap-1.5 px-2 py-1 text-xs border border-border bg-background hover:bg-secondary transition-colors focus-ring disabled:opacity-50"
                       onClick={() => handleRespond('resolved')}
                       disabled={isResponding}
+                      data-testid="finding-action-resolve"
                     >
                       <IconCheck size={10} />
                       Resolve

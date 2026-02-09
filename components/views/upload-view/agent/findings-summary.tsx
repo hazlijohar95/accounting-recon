@@ -59,16 +59,16 @@ export function FindingsSummary({ findings, summary, onRespond, onRetryExtractio
   }, [findings])
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-testid="findings-summary">
       {/* Agent summary */}
       {summary && (
-        <p className="text-sm text-muted-foreground leading-relaxed agent-summary-enter">
+        <p className="text-sm text-muted-foreground leading-relaxed agent-summary-enter" data-testid="agent-summary">
           {summary}
         </p>
       )}
 
       {/* Findings count bar */}
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+      <div className="flex items-center gap-3 text-xs text-muted-foreground" data-testid="findings-count-bar">
         <span>{findings.length} finding{findings.length !== 1 ? 's' : ''}</span>
         {openCount > 0 && openCount < findings.length && (
           <span className="text-foreground/60">

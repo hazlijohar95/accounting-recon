@@ -127,7 +127,7 @@ export function AgentFindingsBanner({
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className={cn('border-b', config.borderColor, config.bgColor)}>
+      <div className={cn('border-b', config.borderColor, config.bgColor)} data-testid="agent-findings-banner">
         {/* Collapsed strip — always visible */}
         <div className="px-4 py-3 flex items-center justify-between">
           <CollapsibleTrigger asChild>

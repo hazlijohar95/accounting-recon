@@ -136,6 +136,7 @@ export function AgentFlow({ agent, files, extractionProgress, onProceed, onAddMo
     <div
       ref={containerRef}
       className={cn('space-y-1 mb-4', isDismissing ? 'agent-flow-exit' : 'agent-flow-enter')}
+      data-testid="agent-flow"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-1 pb-1">
@@ -156,6 +157,7 @@ export function AgentFlow({ agent, files, extractionProgress, onProceed, onAddMo
             className="text-xs text-muted-foreground hover:text-foreground transition-colors focus-ring p-0.5"
             onClick={handleDismiss}
             aria-label="Dismiss assistant"
+            data-testid="agent-dismiss"
           >
             <IconX size={10} />
           </button>
@@ -267,6 +269,7 @@ export function AgentFlow({ agent, files, extractionProgress, onProceed, onAddMo
             )}
             onClick={handleProceed}
             disabled={isProceeding || agent.hasUnresolvedCritical}
+            data-testid="agent-proceed"
           >
             {isProceeding ? (
               <>

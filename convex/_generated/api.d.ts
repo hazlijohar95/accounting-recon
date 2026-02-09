@@ -421,6 +421,12 @@ export declare const api: {
       },
       any
     >;
+    getTokenUsageStats: FunctionReference<
+      "query",
+      "public",
+      { companyId: Id<"companies">; limit?: number; workosUserId?: string },
+      any
+    >;
     proceed: FunctionReference<
       "action",
       "public",

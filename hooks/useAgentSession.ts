@@ -66,6 +66,11 @@ export interface UseAgentSessionReturn {
       documentIds: Id<"documents">[];
       isSelected: boolean;
     }>;
+    tokenUsage?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+    };
   } | null;
 
   // Findings (real-time, sorted by severity)
@@ -149,6 +154,7 @@ export function useAgentSession({
       documentIds: rawSession.documentIds as Id<"documents">[],
       summary: rawSession.summary ?? undefined,
       companyLanes: rawSession.companyLanes ?? undefined,
+      tokenUsage: rawSession.tokenUsage ?? undefined,
     };
   }, [rawSession]);
 

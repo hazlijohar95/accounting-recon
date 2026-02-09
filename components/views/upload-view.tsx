@@ -518,7 +518,7 @@ function UploadViewContent() {
   }>
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6" data-testid="upload-view">
       {/* Header */}
       <header>
         <h1 className="text-lg font-medium tracking-tight">Upload Documents</h1>
@@ -648,6 +648,7 @@ function UploadViewContent() {
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
           aria-hidden="true"
           tabIndex={-1}
+          data-testid="upload-file-input"
         />
       </div>
 
@@ -671,6 +672,7 @@ function UploadViewContent() {
                   <button
                     onClick={processAll}
                     className="px-4 py-2 bg-foreground text-background text-xs font-medium hover:bg-foreground/90 transition-colors focus-ring"
+                    data-testid="upload-process-all"
                   >
                     Process All ({fileState.stats.idle})
                   </button>
