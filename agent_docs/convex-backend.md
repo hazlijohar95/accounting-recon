@@ -6,7 +6,7 @@ Convex is the primary backend for Reconciled. All data, business logic, matching
 
 | Module | Purpose |
 |--------|---------|
-| `schema.ts` | Database schema (30+ tables) |
+| `schema.ts` | Database schema (37 tables) |
 | `companies.ts` | Company CRUD, onboarding |
 | `transactions.ts` | Bank transaction CRUD, import |
 | `accrualDocuments.ts` | Invoice/receipt records |
@@ -20,6 +20,8 @@ Convex is the primary backend for Reconciled. All data, business logic, matching
 | `cloudinaryExtraction.ts` | Cloudinary-based extraction |
 | `extractionQueue.ts` | Batch extraction queue (50+ docs) |
 | `uploadAnalysis.ts` | AI document classification |
+| `agentSession.ts` | Agent session CRUD, lifecycle management (active → analyzing → ready → proceeded/dismissed/expired) |
+| `agentEngine.ts` | 3-layer intelligence engine: Rules, Cross-Reference, LLM + reconciliation queries |
 | `users.ts` | User management |
 | `onboarding.ts` | Multi-step onboarding flow |
 | `settings.ts` | User/company settings |
@@ -50,9 +52,19 @@ Convex is the primary backend for Reconciled. All data, business logic, matching
 | `auditLogger.ts` | Structured audit trail logging |
 | `extractionLogger.ts` | Extraction-specific logging |
 | `matchingLogger.ts` | Matching engine logging |
-| `extractionUtils.ts` | Extraction utility functions |
+| `extractionUtils.ts` | Extraction utility functions (including enrichment for company names + counterparties) |
 | `analysisUtils.ts` | Upload analysis utilities |
 | `vertexAuth.ts` | Vertex AI (Gemini) authentication |
+| `agentRules.ts` | Agent Layer 1: 7 rule-based checks (date gaps, duplicates, amounts, extraction quality, period coverage, classification, multi-company) |
+| `agentCrossRef.ts` | Agent Layer 2: 4 cross-reference checks (accrual company ref, matchability preview, orphaned docs, basis consistency) |
+| `agentLlm.ts` | Agent Layer 3: LLM entity resolution + natural language summary generation |
+| `agentUtils.ts` | Shared agent utilities (bigram Dice similarity, helpers) |
+| `aggregates.ts` | Aggregate computation utilities |
+| `constants.ts` | Shared constants |
+| `validation.ts` | Validation utilities |
+| `workspaceAuth.ts` | Workspace-level auth helpers |
+| `workspaceCascade.ts` | Workspace cascade delete operations |
+| `workspaceValidators.ts` | Workspace-specific validators |
 
 ## Matching Engine
 
@@ -74,7 +86,11 @@ convex/matching/
 │   └── partial.ts     # Layer 7: One-to-many partial matching
 └── __tests__/
     ├── layers.test.ts # Layer unit tests
-    └── partial.test.ts # Partial matching tests
+    ├── partial.test.ts # Partial matching tests
+    ├── engine.test.ts  # Engine orchestration tests
+    ├── pipeline.test.ts # Pipeline tests
+    ├── sanitization.test.ts # Input sanitization tests
+    └── llm.test.ts     # LLM matching tests
 ```
 
 ### Layer Execution Flow
@@ -188,3 +204,53 @@ All sensitive operations are logged to the `auditLog` table:
 - Queue operations
 
 Each entry includes: `companyId`, `userId`, `action`, `resourceType`, `resourceId`, `metadata`, `timestamp`.
+
+## Agent Intelligence Engine
+
+The agent engine provides pre-reconciliation document analysis via a 3-layer pipeline. See `agent_docs/agentic-upload-architecture.md` for full details.
+
+### Key Modules
+
+| Module | Purpose |
+|--------|---------|
+| `agentSession.ts` | Session CRUD, lifecycle (active → analyzing → ready → proceeded), reconciliation linking |
+| `agentEngine.ts` | Pipeline orchestrator, finding queries (`getFindingsForSession`, `getFindingsForReconciliation`) |
+| `lib/agentRules.ts` | Layer 1: 7 deterministic checks (zero tokens) |
+| `lib/agentCrossRef.ts` | Layer 2: 4 cross-document checks (zero tokens) |
+| `lib/agentLlm.ts` | Layer 3: Entity resolution + summary via Bedrock Claude Haiku |
+
+### Data Flow
+
+1. Upload analysis completes → `createInternal` creates agent session
+2. `executeAnalysisPipeline` runs Layers 1 → 2 → 3 sequentially
+3. Findings stored in `agentFindings` table (severity: critical/warning/info)
+4. User proceeds → `linkReconciliationSession` connects to reconciliation
+5. `/reconcile` page queries findings via `getFindingsForReconciliation` (two-hop: reconciliation session → agent session → findings)
+
+### Test Coverage
+- `convex/lib/__tests__/agentRules.test.ts` — 81 tests
+- `convex/lib/__tests__/agentCrossRef.test.ts` — 34 tests
+- `convex/lib/__tests__/agentLlm.test.ts` — 40 tests
+- `convex/lib/__tests__/agentUtils.test.ts` — 36 tests
+
+## Export System (`convex/exports/`)
+
+Handles CSV, XLSX, and PDF report generation with accounting software integrations.
+
+```
+convex/exports/
+├── index.ts              # Main export orchestration
+├── types.ts              # Shared export types
+├── bankRecon.ts          # Bank reconciliation export
+├── clientQuery.ts        # Client query export
+├── transactionListing.ts # Transaction listing export
+├── pdf.ts                # PDF export coordination
+├── accounting/           # Accounting software integrations
+│   ├── autocount.ts      # AutoCount import format
+│   ├── quickbooks.ts     # QuickBooks import format
+│   ├── sqlAccounting.ts  # SQL Accounting import format
+│   └── xero.ts           # Xero import format
+└── utils/
+    ├── excel.ts          # XLSX generation utilities
+    └── formatting.ts     # Number/date formatting helpers
+```

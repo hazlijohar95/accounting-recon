@@ -1,6 +1,6 @@
 # Agentic Upload Architecture
 
-**Status:** Phase 2 Complete — Agent UI Components
+**Status:** Phase 4 Complete — Cross-Page Context
 **Last Updated:** 2026-02-10
 **Author:** Architecture Review
 
@@ -627,22 +627,25 @@ Compare to current `uploadAnalysis.runAnalysis()`: ~5,000-10,000 tokens per batc
 
 | # | Task | Status | Files |
 |---|------|--------|-------|
-| 3.1 | Multi-company detection and lane creation | `pending` | `convex/agentEngine.ts` |
-| 3.2 | Multi-company UI with lane selection | `pending` | `components/agent/agent-company-lanes.tsx` |
-| 3.3 | Accrual company reference cross-checking | `pending` | `convex/agentEngine.ts` |
-| 3.4 | Handle user adding more files mid-analysis | `pending` | `hooks/useAgentSession.ts` |
-| 3.5 | Handle extraction failures gracefully in agent flow | `pending` | `convex/agentEngine.ts` |
-| 3.6 | Session resumption (user leaves and comes back) | `pending` | `hooks/useAgentSession.ts` |
+| 3.1 | Multi-company detection and lane creation | `done` | `convex/agentEngine.ts` |
+| 3.2 | Multi-company UI with lane selection | `done` | `components/views/upload-view/agent/agent-company-lanes.tsx` |
+| 3.3 | Accrual company reference cross-checking | `done` | `components/views/upload-view/agent/finding-card.tsx` |
+| 3.4 | Handle user adding more files mid-analysis | `done` | `hooks/useAgentSession.ts`, `components/views/upload-view.tsx`, `convex/agentSession.ts`, `convex/agentEngine.ts` |
+| 3.5 | Handle extraction failures gracefully in agent flow | `done` | `components/views/upload-view/agent/finding-card.tsx`, `convex/agentSession.ts` |
+| 3.6 | Session resumption (user leaves and comes back) | `done` | `hooks/useAgentSession.ts`, `components/views/upload-view/agent/agent-flow.tsx` |
 
 ### Phase 4: Cross-Page Context
 **Goal:** Agent intelligence carries to reconciliation page.
 
 | # | Task | Status | Files |
 |---|------|--------|-------|
-| 4.1 | Query agent findings from reconciliation page | `pending` | `convex/agentSession.ts` |
-| 4.2 | Display agent findings banner on /reconcile | `pending` | `components/views/reconcile-view.tsx` |
-| 4.3 | Inject agent context into reconciliation chat | `pending` | `lib/ai/prompts.ts` |
-| 4.4 | Link suspense items to relevant agent findings | `pending` | `convex/agentSession.ts` |
+| 4.1 | Create `useAgentFindingsForReconciliation` hook — real-time subscription to agent session + unresolved findings via reconciliationSessionId | `done` | `hooks/useAgentFindingsForReconciliation.ts` |
+| 4.2 | Create `AgentFindingsBanner` — read-only collapsible banner on /reconcile with severity-grouped findings | `done` | `components/views/reconcile-view/agent-findings-banner.tsx` |
+| 4.3 | Wire banner + hook into `reconcile-view.tsx` — between filter bar and tabs, with dismissal state | `done` | `components/views/reconcile-view.tsx` |
+| 4.4 | Add suspense tab context strip — shows agent finding types relevant to unmatched items | `done` | `components/views/reconcile-view.tsx` (SuspenseAgentContext component) |
+| 4.5 | Thread `agentSummary` to ReconcileAgent — prop flows through ReconcileAgent → useReconcileAgent → transport body | `done` | `components/ai/reconcile-agent/reconcile-agent.tsx`, `components/ai/reconcile-agent/hooks/use-reconcile-agent.ts` |
+| 4.6 | Inject agent context into AI assistant system prompt — pre-match analysis summary + `getAgentFindings` tool | `done` | `app/api/chat/assistant/route.ts` |
+| 4.7 | Update reconcile-view barrel export | `done` | `components/views/reconcile-view/index.ts` |
 
 ### Phase 5: Polish & Optimization
 **Goal:** Performance, animations, and edge case hardening.
@@ -663,33 +666,43 @@ Compare to current `uploadAnalysis.runAnalysis()`: ~5,000-10,000 tokens per batc
 
 | File | Purpose |
 |------|---------|
-| `convex/agentSession.ts` | Agent session CRUD, lifecycle, queries |
-| `convex/agentEngine.ts` | Intelligence engine (3 layers), finding generation |
+| `convex/agentSession.ts` | Agent session CRUD, lifecycle, queries, mutations, actions |
+| `convex/agentEngine.ts` | Intelligence engine (3 layers), finding generation, reconciliation queries |
 | `convex/lib/agentRules.ts` | Pure rule functions (date gaps, dupes, amounts, etc.) |
 | `convex/lib/agentCrossRef.ts` | Cross-reference analysis (accrual checks, match preview) |
 | `convex/lib/agentLlm.ts` | LLM functions (entity resolution, summary generation) |
-| `components/agent/agent-step.tsx` | Collapsible step accordion component |
-| `components/agent/agent-finding-card.tsx` | Individual finding card (severity-styled) |
-| `components/agent/agent-findings-summary.tsx` | Grouped findings with collapsible summary |
-| `components/agent/agent-upload-ack.tsx` | File acknowledgment before processing |
-| `components/agent/agent-progress-view.tsx` | Live extraction progress within agent flow |
-| `components/agent/agent-company-lanes.tsx` | Multi-company lane selection |
-| `components/agent/index.ts` | Barrel exports |
+| `convex/lib/agentUtils.ts` | Shared agent utilities (bigram similarity, helpers) |
+| `convex/lib/__tests__/agentRules.test.ts` | 81 tests for Layer 1 rules |
+| `convex/lib/__tests__/agentCrossRef.test.ts` | 34 tests for Layer 2 cross-reference |
+| `convex/lib/__tests__/agentLlm.test.ts` | 40 tests for Layer 3 LLM |
+| `convex/lib/__tests__/agentUtils.test.ts` | 36 tests for agent utilities |
+| `components/views/upload-view/agent/agent-step.tsx` | Collapsible step accordion component |
+| `components/views/upload-view/agent/finding-card.tsx` | Individual finding card (severity-styled) |
+| `components/views/upload-view/agent/findings-summary.tsx` | Grouped findings with collapsible summary |
+| `components/views/upload-view/agent/agent-upload-ack.tsx` | File acknowledgment before processing |
+| `components/views/upload-view/agent/agent-progress-view.tsx` | Live extraction progress within agent flow |
+| `components/views/upload-view/agent/agent-flow.tsx` | Main 4-step agent flow orchestrator |
+| `components/views/upload-view/agent/agent-company-lanes.tsx` | Multi-company lane selection |
+| `components/views/upload-view/agent/index.ts` | Barrel exports |
+| `components/views/reconcile-view/agent-findings-banner.tsx` | Read-only findings banner for /reconcile |
 | `hooks/useAgentSession.ts` | React hook for agent state + Convex subscriptions |
-| `lib/constants/agent.ts` | Agent constants (step names, finding types, severity colors) |
-| `tests/agentEngine.test.ts` | Unit tests for intelligence engine |
+| `hooks/useAgentFindingsForReconciliation.ts` | Reconcile page agent findings hook |
 
 ### Modified Files
 
 | File | Changes |
 |------|---------|
-| `convex/schema.ts` | Add `agentSessions`, `agentFindings` tables; add fields to `documents` |
-| `components/views/upload-view.tsx` | Integrate agent flow above existing tabs |
+| `convex/schema.ts` | Add `agentSessions`, `agentFindings` tables; add enrichment fields to `documents` |
+| `components/views/upload-view.tsx` | Integrate agent flow above existing 3-tab system |
+| `components/views/reconcile-view.tsx` | Agent findings hook, banner, suspense context strip, agentSummary prop threading |
+| `components/views/reconcile-view/index.ts` | Added AgentFindingsBanner export |
+| `components/ai/reconcile-agent/reconcile-agent.tsx` | Added `agentSummary?` prop forwarding |
+| `components/ai/reconcile-agent/hooks/use-reconcile-agent.ts` | Added `agentSummary` to transport body context |
+| `app/api/chat/assistant/route.ts` | Expanded context with agentSummary, system prompt injection, `getAgentFindings` tool |
 | `convex/geminiExtraction.ts` | Enrich extraction to capture company names + counterparties |
 | `convex/nativePdfExtraction.ts` | Same enrichment as Gemini path |
 | `convex/lib/extractionUtils.ts` | Add company name / counterparty to extraction prompts |
-| `components/views/reconcile-view.tsx` | (Phase 4) Add agent findings banner |
-| `lib/ai/prompts.ts` | (Phase 4) Inject agent context into chat prompts |
+| `app/globals.css` | Claude-style collapse/expand animations |
 
 ---
 

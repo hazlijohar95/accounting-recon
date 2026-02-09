@@ -53,9 +53,11 @@ Does NOT:
 
 ### Convex (Serverless Backend)
 Owns:
-- **All persistent data** -- 30+ tables (see `convex/schema.ts`)
+- **All persistent data** -- 37 tables (see `convex/schema.ts`)
 - **Matching engine** -- 5-layer matching in TypeScript (`convex/matching/`)
+- **Agent intelligence engine** -- 3-layer analysis pipeline: Rules, Cross-Reference, LLM (`convex/agentEngine.ts`, `convex/agentSession.ts`)
 - **Extraction orchestration** -- coordinates OCR via Python ML or native Bedrock Vision
+- **Export system** -- CSV/XLSX/PDF exports with accounting integrations (`convex/exports/`)
 - **Cron jobs** -- error cleanup, enrichment jobs, stale PDF cleanup, chat expiry
 - **Auth verification** -- WorkOS AuthKit JWT validation + database user lookup
 - **Real-time subscriptions** -- auto-push to connected clients
@@ -135,4 +137,31 @@ Does NOT:
    - Explain matching reasoning
 5. Streamed response → Frontend (rendered incrementally)
 6. Chat messages persisted to Convex (24h retention)
+```
+
+## Data Flow: Agent Intelligence (Upload Analysis)
+
+```
+1. User uploads documents → Frontend (Upload View)
+2. Extraction completes → Convex triggers upload analysis
+3. Upload analysis → creates Agent Session (agentSessions table)
+4. Agent Engine runs 3-layer pipeline (agentEngine.ts):
+   Layer 1: Rules Engine (zero-token, pure TypeScript)
+     - Date gap detection, duplicate check, amount validation
+     - Extraction quality, period coverage, document classification
+     - Multi-company detection
+   Layer 2: Cross-Reference Analysis (zero-token)
+     - Accrual company reference matching
+     - Matchability preview, orphaned docs, basis consistency
+   Layer 3: LLM Reasoning (Bedrock Claude Haiku)
+     - Entity resolution (company name disambiguation)
+     - Natural language summary generation
+5. Findings stored → agentFindings table (severity: critical/warning/info)
+6. Agent UI shows findings → User reviews, acknowledges, resolves
+7. User proceeds → Agent session links to reconciliation session
+8. Findings carry to /reconcile:
+   - AgentFindingsBanner shows unresolved findings
+   - Suspense tab context strip explains unmatched items
+   - AI chat system prompt includes agent summary
+   - getAgentFindings tool provides on-demand detail
 ```

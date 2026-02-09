@@ -28,12 +28,20 @@ The main AI assistant for reconciliation. Uses Vercel AI SDK with AWS Bedrock.
 **Key features:**
 - Streaming response via `streamText()`
 - Tool calling (read session data, approve/reject matches, explain reasoning)
+- Agent context injection (pre-upload analysis summary in system prompt)
+- `getAgentFindings` tool for on-demand retrieval of upload agent analysis findings
 - CSRF validation (`validateCSRF`)
 - Rate limiting (per-user)
+- Mutation rate limiting (per-session, 2s cooldown between mutations)
 - Message count limit (100 messages max per request)
 - Request body size limit (1MB)
 - Input sanitization (`sanitizeForPrompt`)
 - Chat history persisted to Convex (24h retention)
+
+**Tools (14 total):**
+- **Query tools (9):** `getMatchExplanation`, `findMatchForSuspense`, `runMatchingAnalysis`, `getExpenseInsights`, `listTransactions`, `listSuspenseItems`, `getAgentFindings`, `getSessionStats`, `getMatchDetails`
+- **Client-side tool (1):** `askForConfirmation` (pauses for user confirmation, no server execute)
+- **Mutation tools (4):** `approveMatch`, `rejectMatch`, `createManualMatch`, `bulkApproveMatches`
 
 **Tech:**
 - Model: `agentModel` from `lib/ai/bedrock-provider` (Claude via Bedrock)

@@ -2,7 +2,7 @@
 
 ## Schema Overview
 
-See `convex/schema.ts` for full schema (30+ tables). Tables are grouped by domain.
+See `convex/schema.ts` for full schema (37 tables). Tables are grouped by domain.
 
 ### Core Reconciliation Tables
 
@@ -61,6 +61,19 @@ See `convex/schema.ts` for full schema (30+ tables). Tables are grouped by domai
 | `userPreferences` | Display and notification prefs | `by_user` |
 | `counters` | Atomic counters for code generation | `by_key` |
 | `reconciliationChatMessages` | AI chat persistence (24h TTL) | `by_session`, `by_expires` |
+
+### Agent Intelligence Tables
+
+| Table | Purpose | Key Indexes |
+|-------|---------|-------------|
+| `agentSessions` | Upload analysis session lifecycle and findings orchestration | `by_company`, `by_user_status`, `by_company_status`, `by_reconciliation_session` |
+| `agentFindings` | Persisted analysis findings (severity: critical/warning/info) | `by_session`, `by_session_type`, `by_session_severity`, `by_company` |
+
+### Export Tables
+
+| Table | Purpose | Key Indexes |
+|-------|---------|-------------|
+| `exportJobs` | CSV/XLSX/accounting export tracking | `by_session`, `by_company`, `by_status` |
 
 ### Key Schema Notes
 

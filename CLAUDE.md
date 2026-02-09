@@ -35,10 +35,11 @@ npx convex deploy           # Deploy Convex to production
 
 **2-tier architecture:** browser + Convex serverless, supplemented by Next.js API routes and a Python ML microservice.
 
-- **Convex** -- owns all data, matching engine (5 layers in TypeScript), extraction orchestration, cron jobs, auth verification, real-time subscriptions
+- **Convex** -- owns all data, matching engine (5 layers in TypeScript), extraction orchestration, agent intelligence engine, cron jobs, auth verification, real-time subscriptions
 - **Next.js API Routes** -- AI chat streaming (Vercel AI SDK + Bedrock), matching SSE endpoint, auth callbacks, CSV import
 - **Python ML (FastAPI on Fly.io)** -- OCR extraction (Mistral), PDF report generation (ReportLab)
 - **Frontend** -- React 19 UI, PDF.js browser-side rendering, Zustand state management
+- **Agent Intelligence Layer** -- 3-layer analysis pipeline (Rules → Cross-Reference → LLM) that analyzes uploads pre-reconciliation, surfaces findings, and carries context to /reconcile
 
 ## Core Domain
 - **Bank transactions** (cash basis) <-> **Invoices/receipts** (accrual basis)
@@ -55,13 +56,23 @@ npx convex deploy           # Deploy Convex to production
 - `agent_docs/testing.md` - Test strategy, coverage thresholds
 - `agent_docs/logging.md` - Structured logging, error monitoring
 - `agent_docs/security.md` - Auth, data isolation, CSRF
+- `agent_docs/agentic-upload-architecture.md` - Agent intelligence layer (3-layer engine, UI, cross-page context)
 
 ## Key Files
 - `Reconciled-PRD.md` - Product requirements (planning document, not current state)
-- `convex/schema.ts` - Database schema (30+ tables)
+- `convex/schema.ts` - Database schema (37 tables)
 - `convex/matching/engine.ts` - Matching engine orchestration
 - `convex/matching/layers/` - Matching layer implementations (Exact, Window, Reference, Fuzzy, Semantic, Partial)
+- `convex/agentSession.ts` - Agent session CRUD, lifecycle management
+- `convex/agentEngine.ts` - 3-layer intelligence engine (Rules, Cross-Ref, LLM)
 - `convex/lib/auth.ts` - Auth helpers (requireAuth, requireCompanyAccess, etc.)
+- `convex/lib/agentRules.ts` - Layer 1: 7 rule-based checks (zero-token)
+- `convex/lib/agentCrossRef.ts` - Layer 2: 4 cross-reference checks (zero-token)
+- `convex/lib/agentLlm.ts` - Layer 3: LLM entity resolution + summary generation
+- `convex/exports/` - Export system (bank recon, client query, transaction listing, accounting integrations)
 - `lib/ai/` - AI providers, prompts, sanitization
 - `app/api/` - Next.js API routes
 - `ml/` - Python ML service (OCR + PDF generation)
+- `components/views/upload-view/agent/` - Agent upload UI (8 components)
+- `hooks/useAgentSession.ts` - Agent session React hook
+- `hooks/useAgentFindingsForReconciliation.ts` - Cross-page agent context hook

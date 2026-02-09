@@ -52,6 +52,32 @@ describe("Layer 7: Partial Match", () => {
 
 Test files are co-located with source in `convex/__tests__/` and `convex/matching/__tests__/`.
 
+### Agent Intelligence Tests
+```typescript
+// convex/lib/__tests__/agentRules.test.ts (81 tests)
+// Layer 1: Date gaps, duplicates, amount validation, extraction quality,
+// period coverage, document classification, multi-company detection
+
+// convex/lib/__tests__/agentCrossRef.test.ts (34 tests)
+// Layer 2: Accrual company ref, matchability preview, orphaned docs, basis consistency
+
+// convex/lib/__tests__/agentLlm.test.ts (40 tests)
+// Layer 3: Entity resolution, summary generation, Bedrock integration mocking
+
+// convex/lib/__tests__/agentUtils.test.ts (36 tests)
+// Shared utilities: bigram Dice similarity, helpers
+```
+
+### Export System Tests
+```typescript
+// convex/exports/__tests__/bankRecon.test.ts
+// convex/exports/__tests__/clientQuery.test.ts
+// convex/exports/__tests__/transactionListing.test.ts
+// convex/exports/accounting/__tests__/exports.test.ts
+// convex/exports/utils/__tests__/excel.test.ts
+// convex/exports/utils/__tests__/formatting.test.ts
+```
+
 ### Convex Function Tests
 ```typescript
 // convex/__tests__/companies.test.ts
@@ -81,6 +107,9 @@ __tests__/
 ├── __mocks__/                  # Module mocks (authkit, next/cache)
 ├── components/
 │   ├── ai/                     # AI component tests
+│   │   └── reconcile-agent/    # Reconcile agent tests
+│   │       ├── hooks/          # Agent hook tests
+│   │       └── tool-parts/     # Tool UI component tests (10+ files)
 │   ├── brand/                  # Brand component tests
 │   ├── design/                 # Design page component tests
 │   │   ├── demo-card.test.tsx
@@ -89,21 +118,30 @@ __tests__/
 │   │   └── components-section.test.tsx
 │   ├── spreadsheet/            # Spreadsheet component tests
 │   └── views/                  # View component tests
+│       └── upload-view/agent/  # Agent upload UI tests
+│           ├── agent-progress-view.test.tsx
+│           ├── agent-upload-ack.test.tsx
+│           ├── finding-card.test.tsx
+│           └── findings-summary.test.tsx
 ├── views/
 │   ├── reports-view.test.tsx   # Reports view tests
 │   └── upload-view.test.tsx    # Upload view tests
 ├── api/                        # API route tests
+│   └── chat/assistant/         # Assistant route helper tests
 ├── integration/                # Integration tests
 │   └── multi-tenant.test.tsx   # Multi-tenant isolation tests
-└── utils/                      # Utility function tests
+└── lib/                        # Library utility tests
 
 convex/
-├── __tests__/                  # Convex function tests
-└── matching/__tests__/         # Matching engine tests
+├── __tests__/                  # Convex function tests (15+ files)
+├── matching/__tests__/         # Matching engine tests (6 files)
+├── lib/__tests__/              # Agent engine + utility tests (5 files)
+└── exports/__tests__/          # Export system tests
 
 hooks/__tests__/                # Hook tests
-lib/__tests__/                  # Library utility tests
 ```
+
+**Total: 133 test files, 2,078 tests**
 
 ### Path Aliases in Tests
 Tests use `@/` alias resolved via vitest config:

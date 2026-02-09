@@ -27,13 +27,40 @@ components/
 ├── views/                   # Page view components
 │   ├── dashboard-view.tsx   # Main dashboard
 │   ├── reconcile-view/      # Reconciliation workspace (modularized)
+│   │   ├── agent-findings-banner.tsx # Agent findings read-only banner
+│   │   ├── match-detail-panel.tsx
+│   │   ├── match-row.tsx
+│   │   ├── suspense-row.tsx
+│   │   ├── filter-bar.tsx
+│   │   ├── partial-match-group.tsx
+│   │   ├── history-list.tsx
+│   │   ├── types.ts
+│   │   ├── use-reconcile-state.ts
+│   │   └── index.ts
 │   ├── upload-view/         # Upload interface (modularized)
+│   │   ├── agent/           # Agent intelligence UI layer
+│   │   │   ├── agent-flow.tsx         # Main 4-step agent flow orchestrator
+│   │   │   ├── agent-step.tsx         # Collapsible accordion step
+│   │   │   ├── agent-upload-ack.tsx   # File acknowledgment pre-process
+│   │   │   ├── agent-progress-view.tsx # Live extraction progress
+│   │   │   ├── finding-card.tsx       # Severity-styled expandable finding
+│   │   │   ├── findings-summary.tsx   # Grouped findings display
+│   │   │   ├── agent-company-lanes.tsx # Multi-company lane selection
+│   │   │   └── index.ts              # Barrel exports
+│   │   └── ...
 │   ├── reports-view.tsx     # Reports interface
 │   ├── spreadsheet-view.tsx # Spreadsheet workspace
 │   └── dlq-view.tsx         # Dead letter queue view
 ├── ai/                      # AI-related components
 │   ├── reconcile-assistant.tsx  # AI chat assistant
 │   ├── reconcile-agent/     # Agentic reconciliation components
+│   │   ├── reconcile-agent.tsx  # Main agent panel (accepts agentSummary prop)
+│   │   ├── hooks/
+│   │   │   ├── use-reconcile-agent.ts  # AI SDK hook (threads agentSummary to API)
+│   │   │   └── use-chat-persistence.ts # Chat persistence hook
+│   │   ├── agent-message-list.tsx
+│   │   ├── agent-input-bar.tsx
+│   │   └── tool-parts/     # Tool UI components (10+ files)
 │   └── index.ts             # Re-exports
 ├── spreadsheet/             # Spreadsheet components
 ├── unified-sheet/           # Unified sheet panel components
@@ -51,6 +78,16 @@ hooks/
 ├── useGeminiExtraction.ts   # Gemini extraction hook
 ├── usePdfExtraction.ts      # PDF extraction hook
 ├── useUploadAnalysis.ts     # Upload analysis hook
+├── useAgentSession.ts       # Agent session state + Convex subscriptions (types: AgentFindingData, FindingSeverity)
+├── useAgentFindingsForReconciliation.ts  # Cross-page agent findings for /reconcile
+├── useMatchActions.ts       # Match approve/reject/undo actions
+├── useDemoGuard.ts          # Demo mode action guard
+├── useSyncedFormState.ts    # Synced form state
+├── useValueAnimation.ts     # Value animation (number counter)
+├── useIntersectionAnimation.ts # Intersection observer animations
+├── useGridHistory.ts        # Spreadsheet undo/redo history
+├── useGridNavigation.ts     # Spreadsheet keyboard navigation
+├── useGridSelection.ts      # Spreadsheet cell selection
 ├── use-generic-spreadsheet.ts # Spreadsheet data hook
 └── index.ts                 # Re-exports
 
@@ -72,9 +109,12 @@ lib/
 └── uploadHandlers.ts        # Upload handler functions
 
 convex/                      # Convex backend
-├── schema.ts                # Database schema (30+ tables)
+├── schema.ts                # Database schema (37 tables)
 ├── matching/                # Matching engine (5 layers)
-├── lib/                     # Auth, validators, errors, logging
+├── agentSession.ts          # Agent session CRUD + lifecycle
+├── agentEngine.ts           # 3-layer intelligence engine
+├── exports/                 # Export system (bank recon, accounting integrations)
+├── lib/                     # Auth, validators, errors, logging, agent rules/cross-ref/LLM
 ├── _generated/              # Generated types
 └── ...                      # Queries, mutations, actions
 ```
