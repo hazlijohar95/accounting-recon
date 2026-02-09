@@ -818,6 +818,8 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"documents">;
+        accountHolderName?: string;
+        accountNumber?: string;
         aiBasisType?: "cash" | "accrual";
         aiClassification?: string;
         aiClassificationConfidence?: number;
@@ -825,6 +827,9 @@ export declare const api: {
         companyId: Id<"companies">;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
         errorMessage?: string;
+        extractedCompanyName?: string;
+        extractedCounterparties?: Array<string>;
+        extractedCurrency?: string;
         extractedText?: string;
         extractedTransactionCount?: number;
         extractionConfidence?: number;
@@ -866,6 +871,8 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"documents">;
+        accountHolderName?: string;
+        accountNumber?: string;
         aiBasisType?: "cash" | "accrual";
         aiClassification?: string;
         aiClassificationConfidence?: number;
@@ -873,6 +880,9 @@ export declare const api: {
         companyId: Id<"companies">;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
         errorMessage?: string;
+        extractedCompanyName?: string;
+        extractedCounterparties?: Array<string>;
+        extractedCurrency?: string;
         extractedText?: string;
         extractedTransactionCount?: number;
         extractionConfidence?: number;
@@ -3881,6 +3891,8 @@ export declare const internal: {
       Array<{
         _creationTime: number;
         _id: Id<"documents">;
+        accountHolderName?: string;
+        accountNumber?: string;
         aiBasisType?: "cash" | "accrual";
         aiClassification?: string;
         aiClassificationConfidence?: number;
@@ -3888,6 +3900,9 @@ export declare const internal: {
         companyId: Id<"companies">;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
         errorMessage?: string;
+        extractedCompanyName?: string;
+        extractedCounterparties?: Array<string>;
+        extractedCurrency?: string;
         extractedText?: string;
         extractedTransactionCount?: number;
         extractionConfidence?: number;
@@ -4021,6 +4036,8 @@ export declare const internal: {
       {
         _creationTime: number;
         _id: Id<"documents">;
+        accountHolderName?: string;
+        accountNumber?: string;
         aiBasisType?: "cash" | "accrual";
         aiClassification?: string;
         aiClassificationConfidence?: number;
@@ -4028,6 +4045,9 @@ export declare const internal: {
         companyId: Id<"companies">;
         documentType: "bank_statement" | "invoice" | "receipt" | "other";
         errorMessage?: string;
+        extractedCompanyName?: string;
+        extractedCounterparties?: Array<string>;
+        extractedCurrency?: string;
         extractedText?: string;
         extractedTransactionCount?: number;
         extractionConfidence?: number;

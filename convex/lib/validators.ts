@@ -249,6 +249,13 @@ export const documentDocValidator = v.object({
   aiBasisType: v.optional(v.union(v.literal("cash"), v.literal("accrual"))),
   aiClassificationConfidence: v.optional(v.number()),
   uploadAnalysisId: v.optional(v.id("uploadAnalyses")),
+  // Bank statement specific fields
+  accountHolderName: v.optional(v.string()),
+  accountNumber: v.optional(v.string()),
+  // Agent enrichment fields (populated during extraction)
+  extractedCompanyName: v.optional(v.string()),
+  extractedCounterparties: v.optional(v.array(v.string())),
+  extractedCurrency: v.optional(v.string()),
 });
 
 // Matched pair document
