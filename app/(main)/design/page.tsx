@@ -1,3 +1,6 @@
+// Force dynamic rendering - component tree uses browser-only APIs
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { LogoMark } from '@/components/brand'

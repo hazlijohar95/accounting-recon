@@ -1,6 +1,5 @@
 'use client'
 
-import { useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { LogoMark } from '@/components/brand'
 
@@ -27,8 +26,6 @@ interface MarketingAssetProps {
 }
 
 function MarketingAsset({ title, dimensions, children, className }: MarketingAssetProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -36,7 +33,6 @@ function MarketingAsset({ title, dimensions, children, className }: MarketingAss
         <span className="text-xs text-muted-foreground">{dimensions}</span>
       </div>
       <div
-        ref={containerRef}
         className={cn('border border-border overflow-hidden', className)}
       >
         {children}

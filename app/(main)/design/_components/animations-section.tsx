@@ -21,38 +21,7 @@ import {
   DataSyncPulse,
   MatchCelebration,
 } from '@/components/brand'
-
-function AnimationDemo({
-  title,
-  description,
-  children,
-  onReplay,
-}: {
-  title: string
-  description: string
-  children: React.ReactNode
-  onReplay?: () => void
-}) {
-  return (
-    <div className="border border-border">
-      <div className="aspect-square bg-muted/30 flex items-center justify-center p-8 relative">
-        {children}
-        {onReplay && (
-          <button
-            onClick={onReplay}
-            className="absolute bottom-2 right-2 text-xs px-2 py-1 border border-border bg-background hover:bg-secondary transition-colors"
-          >
-            Replay
-          </button>
-        )}
-      </div>
-      <div className="p-4 border-t border-border">
-        <h4 className="text-sm font-medium">{title}</h4>
-        <p className="text-xs text-muted-foreground mt-1">{description}</p>
-      </div>
-    </div>
-  )
-}
+import { DemoCard } from './demo-card'
 
 function ConfidenceFillDemo() {
   const [value, setValue] = useState(0)
@@ -183,20 +152,22 @@ export function AnimationsSection() {
           Logo Animation
         </h3>
         <div className="grid grid-cols-2 gap-4">
-          <AnimationDemo
+          <DemoCard
             title="Logo Reveal"
             description="Rectangle-by-rectangle reveal with staggered delays (600ms total)"
+            variant="animation"
             onReplay={() => setLogoKey(k => k + 1)}
           >
             <LogoAnimated key={logoKey} size={80} />
-          </AnimationDemo>
-          <AnimationDemo
+          </DemoCard>
+          <DemoCard
             title="Logo with Text"
             description="Includes wordmark fade-in after logo completes"
+            variant="animation"
             onReplay={() => setLogoKey(k => k + 1)}
           >
             <LogoAnimatedWithText key={logoKey} size={48} />
-          </AnimationDemo>
+          </DemoCard>
         </div>
       </div>
 
@@ -206,19 +177,19 @@ export function AnimationsSection() {
           Loading States
         </h3>
         <div className="grid grid-cols-3 gap-4">
-          <AnimationDemo
+          <DemoCard variant="animation"
             title="Grid Spinner"
             description="3x3 grid with wave pulse animation"
           >
             <LoadingSpinner size="lg" />
-          </AnimationDemo>
-          <AnimationDemo
+          </DemoCard>
+          <DemoCard variant="animation"
             title="Loading Dots"
             description="Three squares with staggered pulse"
           >
             <LoadingDots />
-          </AnimationDemo>
-          <AnimationDemo
+          </DemoCard>
+          <DemoCard variant="animation"
             title="Spinner Sizes"
             description="Available in sm, md, lg variants"
           >
@@ -227,7 +198,7 @@ export function AnimationsSection() {
               <LoadingSpinner size="md" />
               <LoadingSpinner size="lg" />
             </div>
-          </AnimationDemo>
+          </DemoCard>
         </div>
       </div>
 
@@ -237,7 +208,7 @@ export function AnimationsSection() {
           Skeleton Loaders
         </h3>
         <div className="grid grid-cols-3 gap-4">
-          <AnimationDemo
+          <DemoCard variant="animation"
             title="Basic Skeleton"
             description="Sharp-edged placeholder with shimmer"
           >
@@ -246,19 +217,19 @@ export function AnimationsSection() {
               <Skeleton className="h-4 w-3/4" />
               <Skeleton className="h-4 w-1/2" />
             </div>
-          </AnimationDemo>
-          <AnimationDemo
+          </DemoCard>
+          <DemoCard variant="animation"
             title="Text Skeleton"
             description="Pre-configured for text content"
           >
             <SkeletonText lines={4} className="w-full" />
-          </AnimationDemo>
-          <AnimationDemo
+          </DemoCard>
+          <DemoCard variant="animation"
             title="Card Skeleton"
             description="Full card placeholder layout"
           >
             <SkeletonCard className="w-full" />
-          </AnimationDemo>
+          </DemoCard>
         </div>
       </div>
 
@@ -268,34 +239,34 @@ export function AnimationsSection() {
           Status Animations
         </h3>
         <div className="grid grid-cols-4 gap-4">
-          <AnimationDemo
+          <DemoCard variant="animation"
             title="Success"
             description="Scale-in checkmark animation"
             onReplay={() => setSuccessKey(k => k + 1)}
           >
             <SuccessAnimation key={successKey} size={64} />
-          </AnimationDemo>
-          <AnimationDemo
+          </DemoCard>
+          <DemoCard variant="animation"
             title="Success (Green)"
             description="With color variant"
             onReplay={() => setSuccessKey(k => k + 1)}
           >
             <SuccessAnimation key={successKey} size={64} variant="green" />
-          </AnimationDemo>
-          <AnimationDemo
+          </DemoCard>
+          <DemoCard variant="animation"
             title="Error"
             description="X mark with shake animation"
             onReplay={() => setErrorKey(k => k + 1)}
           >
             <ErrorAnimation key={errorKey} size={64} />
-          </AnimationDemo>
-          <AnimationDemo
+          </DemoCard>
+          <DemoCard variant="animation"
             title="Error (Red)"
             description="With destructive color"
             onReplay={() => setErrorKey(k => k + 1)}
           >
             <ErrorAnimation key={errorKey} size={64} variant="red" />
-          </AnimationDemo>
+          </DemoCard>
         </div>
       </div>
 
@@ -347,16 +318,16 @@ export function AnimationsSection() {
 
         <div className="grid grid-cols-2 gap-4">
           {/* Transaction Match Cascade */}
-          <AnimationDemo
+          <DemoCard variant="animation"
             title="Transaction Matching"
             description="Shows two transactions being connected with field matching"
             onReplay={() => setMatchKey((k) => k + 1)}
           >
             <TransactionMatchAnimation key={matchKey} animate />
-          </AnimationDemo>
+          </DemoCard>
 
           {/* Reconciliation Progress */}
-          <AnimationDemo
+          <DemoCard variant="animation"
             title="Reconciliation Progress"
             description="Animated progress bar with status breakdown"
             onReplay={() => setProgressKey((k) => k + 1)}
@@ -370,7 +341,7 @@ export function AnimationsSection() {
                 animate
               />
             </div>
-          </AnimationDemo>
+          </DemoCard>
         </div>
 
         {/* Confidence Fill */}

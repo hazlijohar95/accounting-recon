@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
 import dynamic from 'next/dynamic'
-import { cn } from '@/lib/utils'
 import { LogoMark } from '@/components/brand'
+import { DemoCard } from './demo-card'
+import { CodeBlock } from './code-block'
 
 // Dynamic imports for 3D components (no SSR)
 const Logo3DHero = dynamic(
@@ -37,40 +37,7 @@ function Logo3DPlaceholder({ size = 300 }: { size?: number }) {
   )
 }
 
-function Demo3DCard({
-  title,
-  description,
-  children,
-  className,
-}: {
-  title: string
-  description: string
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <div className={cn('border border-border', className)}>
-      <div className="bg-muted/20 flex items-center justify-center p-4 min-h-[300px]">
-        {children}
-      </div>
-      <div className="p-4 border-t border-border">
-        <h4 className="text-sm font-medium">{title}</h4>
-        <p className="text-xs text-muted-foreground mt-1">{description}</p>
-      </div>
-    </div>
-  )
-}
-
-function CodeSnippet({ code }: { code: string }) {
-  return (
-    <pre className="bg-muted/50 p-4 text-xs overflow-x-auto">
-      <code>{code}</code>
-    </pre>
-  )
-}
-
 export function Logo3DSection() {
-  const [heroColor, setHeroColor] = useState('#737373')
 
   return (
     <section id="3d-logo" className="space-y-8">
@@ -116,17 +83,17 @@ export function Logo3DSection() {
           For landing page heroes. Features entrance animation, subtle idle rotation, and mouse-follow tilt.
         </p>
         <div className="grid grid-cols-2 gap-4">
-          <Demo3DCard
+          <DemoCard variant="3d"
             title="Logo3DHero"
             description="Staggered entrance (80ms delay per rectangle), gentle Y-axis rotation, mouse tilt"
           >
-            <Logo3DHero size={300} color={heroColor} />
-          </Demo3DCard>
+            <Logo3DHero size={300} color="#737373" />
+          </DemoCard>
           <div className="border border-border p-4 space-y-4">
             <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Usage
             </h4>
-            <CodeSnippet
+            <CodeBlock
               code={`import { Logo3DHero } from '@/components/brand/3d'
 
 <Logo3DHero
@@ -166,23 +133,23 @@ export function Logo3DSection() {
           Assembly animation for loading states. Rectangles fly in from random positions, settle with spring physics, then pulse.
         </p>
         <div className="grid grid-cols-3 gap-4">
-          <Demo3DCard
+          <DemoCard variant="3d"
             title="Logo3DLoading"
             description="2.5s loop: fly-in → settle → hold → pulse"
           >
             <Logo3DLoading size={180} />
-          </Demo3DCard>
-          <Demo3DCard
+          </DemoCard>
+          <DemoCard variant="3d"
             title="Small Size"
             description="Lightweight 100px variant for inline use"
           >
             <Logo3DLoading size={100} />
-          </Demo3DCard>
+          </DemoCard>
           <div className="border border-border p-4 space-y-4">
             <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Usage
             </h4>
-            <CodeSnippet
+            <CodeBlock
               code={`import { Logo3DLoading } from '@/components/brand/3d'
 
 <Logo3DLoading
@@ -211,18 +178,18 @@ export function Logo3DSection() {
         <p className="text-xs text-muted-foreground">
           Exploded/floating view for marketing materials. Rectangles float at different depths with oscillation and scroll parallax.
         </p>
-        <Demo3DCard
+        <DemoCard variant="3d"
           title="Logo3DMarketing"
           description="Floating oscillation, scroll parallax, configurable explode factor"
           className="col-span-full"
         >
           <Logo3DMarketing width={600} height={300} explode={0.6} />
-        </Demo3DCard>
+        </DemoCard>
         <div className="border border-border p-4">
           <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
             Props
           </h4>
-          <CodeSnippet
+          <CodeBlock
             code={`<Logo3DMarketing
   width="100%"    // Canvas width (default: '100%')
   height={400}    // Canvas height (default: 400)
@@ -286,7 +253,7 @@ export function Logo3DSection() {
         </div>
         <div className="border border-border p-4">
           <h4 className="text-xs font-medium mb-2">Dynamic Import Pattern</h4>
-          <CodeSnippet
+          <CodeBlock
             code={`// Lazy load for better initial page performance
 const Logo3DHero = dynamic(
   () => import('@/components/brand/3d').then(mod => mod.Logo3DHero),

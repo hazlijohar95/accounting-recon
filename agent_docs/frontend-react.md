@@ -18,7 +18,7 @@ app/                         # Next.js App Router
 │   ├── import/csv/          # CSV import
 │   └── search/              # Search endpoint
 ├── docs/                    # Fumadocs documentation pages
-├── design/                  # Design system showcase
+├── design/                  # Design system showcase (see section below)
 ├── layout.tsx               # Root layout with providers
 └── page.tsx                 # Landing page
 
@@ -240,6 +240,62 @@ Displays which matching algorithm produced a match.
 // Layer 5: Purple (AI Semantic)
 // Layer 6: Blue (Manual)
 ```
+
+## Design System Showcase (`/design`)
+
+The design page is a comprehensive internal showcase at `app/(main)/design/` that documents all brand components, animations, patterns, icons, and UI primitives. It is a **client-rendered** route behind the authenticated layout.
+
+### Architecture
+
+The page follows a **section-based architecture** with shared utility components:
+
+```
+app/(main)/design/
+├── page.tsx                          # Orchestrator - imports all sections
+├── loading.tsx                       # Loading skeleton
+├── _components/
+│   ├── demo-card.tsx                 # Shared demo card (feature/animation/3d variants)
+│   ├── code-block.tsx                # Source code display with copy + line numbers
+│   ├── command-block.tsx             # Terminal command display with copy
+│   ├── design-nav.tsx               # Sticky section navigation
+│   ├── hero-section.tsx             # Page hero with logo
+│   ├── brand-section.tsx            # Color palettes, typography
+│   ├── brand-assets-section.tsx     # Brand asset downloads
+│   ├── logo-section.tsx             # Logo variants (server component)
+│   ├── logo-3d-section.tsx          # WebGL 3D logo demos (dynamic imports)
+│   ├── icons-section.tsx            # 150+ icon grid with search + copy
+│   ├── patterns-section.tsx         # Layout pattern wireframes (server component)
+│   ├── animations-section.tsx       # Animation demos (loading, success, error, transitions)
+│   ├── ai-features-section.tsx      # 5-layer pipeline, confidence gauges, categorization
+│   ├── components-section.tsx       # UI component demos (thin orchestrator)
+│   ├── video-section.tsx            # Remotion launch video player
+│   ├── marketing-section.tsx        # OG images, social cards, posters
+│   └── components/                  # Sub-demos for components-section
+│       ├── buttons-demo.tsx         # Button variants + state toggle
+│       ├── form-inputs-demo.tsx     # Text, file, checkbox inputs
+│       ├── cards-demo.tsx           # Stats card, list container
+│       ├── navigation-demo.tsx      # Sidebar nav, tab nav
+│       ├── status-demos.tsx         # Dot indicators, badges, progress, alerts, timeline
+│       ├── modal-demo.tsx           # Modal dialog preview
+│       ├── data-display-demos.tsx   # Data table, comparison diff view
+│       └── filter-search-demo.tsx   # Search bar, filter pills, advanced filters
+```
+
+### Shared Components
+
+| Component | Purpose | Props |
+|-----------|---------|-------|
+| `DemoCard` | Unified wrapper for demo previews | `title`, `description`, `variant` (`feature`/`animation`/`3d`), `onReplay?`, `className?` |
+| `CodeBlock` | Source code with syntax label + copy | `code`, `language?`, `showLineNumbers?`, `className?` |
+| `CommandBlock` | Terminal command with label + copy | `label`, `command` |
+
+### Design Decisions
+
+- **`DemoCard` variants** replace three identical local wrappers (`FeatureDemo`, `AnimationDemo`, `Demo3DCard`) that existed across section files
+- **`CommandBlock`** is separate from `CodeBlock` because terminal commands need a label/command UI vs source code with language tags
+- **`components-section.tsx`** is a thin orchestrator (~40 lines) importing 11 sub-demo components from the `components/` subdirectory, keeping the 948-line monolith split into focused files
+- **`logo-3d-section.tsx`** uses `next/dynamic` with `ssr: false` for WebGL components
+- **`logo-section.tsx`** and **`patterns-section.tsx`** are server components (no interactivity)
 
 ## State Management (Zustand)
 

@@ -1,10 +1,9 @@
 'use client'
 
-import React, { useState } from 'react'
-import { Player } from '@remotion/player'
-import { LaunchVideo } from '../../../remotion/LaunchVideo'
-import { VIDEO_CONFIG, TOTAL_FRAMES } from '../../../remotion/utils/timing'
+import React, { useState, useEffect } from 'react'
+import { VIDEO_CONFIG, TOTAL_FRAMES } from '../../../../remotion/utils/timing'
 import { IconPlay, IconPause, IconRefresh, IconFilmStrip } from '@/components/brand/icons'
+import { CommandBlock } from './command-block'
 
 /**
  * Video section for the design page.
@@ -12,7 +11,26 @@ import { IconPlay, IconPause, IconRefresh, IconFilmStrip } from '@/components/br
  */
 export function VideoSection() {
   const [isPlaying, setIsPlaying] = useState(false)
-  const [playerRef, setPlayerRef] = useState<ReturnType<typeof Player> | null>(null)
+
+  // Defer Remotion Player to client-only to avoid hydration mismatches.
+  // Remotion computes frame-based style values (position, rotation, opacity)
+  // that differ in precision between server and client renders.
+  const [RemotionPlayer, setRemotionPlayer] = useState<{
+    Player: typeof import('@remotion/player').Player
+    LaunchVideo: typeof import('../../../../remotion/LaunchVideo').LaunchVideo
+  } | null>(null)
+
+  useEffect(() => {
+    Promise.all([
+      import('@remotion/player'),
+      import('../../../../remotion/LaunchVideo'),
+    ]).then(([playerMod, videoMod]) => {
+      setRemotionPlayer({
+        Player: playerMod.Player,
+        LaunchVideo: videoMod.LaunchVideo,
+      })
+    })
+  }, [])
 
   return (
     <section id="launch-video" className="space-y-8">
@@ -31,27 +49,31 @@ export function VideoSection() {
       <div className="space-y-4">
         <div className="border border-border bg-[#0a0a0a] overflow-hidden">
           <div className="aspect-video relative">
-            <Player
-              component={LaunchVideo}
-              durationInFrames={TOTAL_FRAMES}
-              fps={VIDEO_CONFIG.fps}
-              compositionWidth={VIDEO_CONFIG.width}
-              compositionHeight={VIDEO_CONFIG.height}
-              style={{
-                width: '100%',
-                height: '100%',
-              }}
-              controls={false}
-              loop
-              autoPlay={false}
-              clickToPlay
-              acknowledgeRemotionLicense
-              ref={(ref) => {
-                if (ref) {
-                  setPlayerRef(ref as any)
-                }
-              }}
-            />
+            {RemotionPlayer ? (
+              <RemotionPlayer.Player
+                component={RemotionPlayer.LaunchVideo}
+                durationInFrames={TOTAL_FRAMES}
+                fps={VIDEO_CONFIG.fps}
+                compositionWidth={VIDEO_CONFIG.width}
+                compositionHeight={VIDEO_CONFIG.height}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                }}
+                controls={false}
+                loop
+                autoPlay={false}
+                clickToPlay
+                acknowledgeRemotionLicense
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="flex items-center gap-3">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+                  <span className="text-sm text-muted-foreground">Loading video player...</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -147,15 +169,15 @@ export function VideoSection() {
           Render Commands
         </h3>
         <div className="space-y-2">
-          <CodeBlock
+          <CommandBlock
             label="Preview in Remotion Studio"
             command="pnpm remotion:preview"
           />
-          <CodeBlock
+          <CommandBlock
             label="Render MP4"
             command="pnpm remotion:render"
           />
-          <CodeBlock
+          <CommandBlock
             label="Export Thumbnail (frame 300)"
             command="pnpm remotion:still"
           />
@@ -199,33 +221,6 @@ function SceneCard({
         </div>
         <p className="text-sm text-muted-foreground mt-1">{description}</p>
       </div>
-    </div>
-  )
-}
-
-function CodeBlock({ label, command }: { label: string; command: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(command)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <div className="border border-border">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-secondary/30">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <button
-          onClick={handleCopy}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
-      </div>
-      <pre className="px-4 py-3 text-sm font-mono overflow-x-auto">
-        <code>{command}</code>
-      </pre>
     </div>
   )
 }

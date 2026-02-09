@@ -82,6 +82,11 @@ __tests__/
 ├── components/
 │   ├── ai/                     # AI component tests
 │   ├── brand/                  # Brand component tests
+│   ├── design/                 # Design page component tests
+│   │   ├── demo-card.test.tsx
+│   │   ├── code-block.test.tsx
+│   │   ├── command-block.test.tsx
+│   │   └── components-section.test.tsx
 │   ├── spreadsheet/            # Spreadsheet component tests
 │   └── views/                  # View component tests
 ├── views/

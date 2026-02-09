@@ -13,38 +13,7 @@ import {
   DataSyncPulse,
 } from '@/components/brand'
 import { CodeBlock } from './code-block'
-
-function FeatureDemo({
-  title,
-  description,
-  children,
-  onReplay,
-}: {
-  title: string
-  description: string
-  children: React.ReactNode
-  onReplay?: () => void
-}) {
-  return (
-    <div className="border border-border">
-      <div className="bg-muted/30 p-6 relative min-h-[200px] flex items-center justify-center">
-        {children}
-        {onReplay && (
-          <button
-            onClick={onReplay}
-            className="absolute bottom-2 right-2 text-xs px-2 py-1 border border-border bg-background hover:bg-secondary transition-colors"
-          >
-            Replay
-          </button>
-        )}
-      </div>
-      <div className="p-4 border-t border-border">
-        <h4 className="text-sm font-medium">{title}</h4>
-        <p className="text-xs text-muted-foreground mt-1">{description}</p>
-      </div>
-    </div>
-  )
-}
+import { DemoCard } from './demo-card'
 
 function SmartCategorizationDemo() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
@@ -275,24 +244,24 @@ export function AIFeaturesSection() {
           Confidence Score Visualization
         </h3>
         <div className="grid grid-cols-3 gap-4">
-          <FeatureDemo
+          <DemoCard
             title="Gauge - High"
             description="Auto-matched with 95% confidence"
           >
             <ConfidenceGauge value={95} size="lg" />
-          </FeatureDemo>
-          <FeatureDemo
+          </DemoCard>
+          <DemoCard
             title="Gauge - Medium"
             description="Suggested match needs review"
           >
             <ConfidenceGauge value={78} size="lg" />
-          </FeatureDemo>
-          <FeatureDemo
+          </DemoCard>
+          <DemoCard
             title="Gauge - Low"
             description="Requires manual intervention"
           >
             <ConfidenceGauge value={45} size="lg" />
-          </FeatureDemo>
+          </DemoCard>
         </div>
 
         {/* Bar variant */}
@@ -343,13 +312,13 @@ export function AIFeaturesSection() {
         <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
           Transaction Matching Animation
         </h3>
-        <FeatureDemo
+        <DemoCard
           title="Match Cascade"
           description="Visual representation of two transactions being matched"
           onReplay={() => setMatchKey((k) => k + 1)}
         >
           <TransactionMatchAnimation key={matchKey} animate />
-        </FeatureDemo>
+        </DemoCard>
       </div>
 
       {/* Reconciliation Progress */}
