@@ -427,6 +427,16 @@ export declare const api: {
       { sessionId: Id<"agentSessions">; workosUserId?: string },
       { reconciliationSessionId: Id<"reconciliationSessions"> }
     >;
+    removeDocuments: FunctionReference<
+      "mutation",
+      "public",
+      {
+        documentIds: Array<Id<"documents">>;
+        sessionId: Id<"agentSessions">;
+        workosUserId?: string;
+      },
+      null
+    >;
     respondToFinding: FunctionReference<
       "mutation",
       "public",
@@ -436,6 +446,33 @@ export declare const api: {
         userResponse?: string;
         workosUserId?: string;
       },
+      null
+    >;
+    setAllLanesSelection: FunctionReference<
+      "mutation",
+      "public",
+      {
+        mode: "all" | "primary_only";
+        sessionId: Id<"agentSessions">;
+        workosUserId?: string;
+      },
+      null
+    >;
+    toggleLaneSelection: FunctionReference<
+      "mutation",
+      "public",
+      {
+        isSelected: boolean;
+        laneIndex: number;
+        sessionId: Id<"agentSessions">;
+        workosUserId?: string;
+      },
+      null
+    >;
+    triggerReanalysis: FunctionReference<
+      "action",
+      "public",
+      { sessionId: Id<"agentSessions">; workosUserId?: string },
       null
     >;
     updateStep: FunctionReference<
@@ -3490,6 +3527,12 @@ export declare const api: {
  */
 export declare const internal: {
   agentEngine: {
+    clearFindings: FunctionReference<
+      "mutation",
+      "internal",
+      { agentSessionId: Id<"agentSessions"> },
+      null
+    >;
     getAnalysisData: FunctionReference<
       "query",
       "internal",
@@ -3617,6 +3660,12 @@ export declare const internal: {
         reconciliationSessionId: Id<"reconciliationSessions">;
         sessionId: Id<"agentSessions">;
       },
+      null
+    >;
+    resetForReanalysis: FunctionReference<
+      "mutation",
+      "internal",
+      { sessionId: Id<"agentSessions"> },
       null
     >;
     setCompanyLanes: FunctionReference<

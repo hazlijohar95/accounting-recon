@@ -9,6 +9,7 @@ export { PartialMatchGroup, type PartialMatchGroupProps } from './partial-match-
 export { SkeletonMatchRow } from './skeleton-match-row'
 export { TabEmptyState, type TabEmptyStateProps } from './tab-empty-state'
 export { HistoryList } from './history-list'
+export { AgentFindingsBanner, type AgentFindingsBannerProps } from './agent-findings-banner'
 
 // State management hook
 export { useReconcileState } from './use-reconcile-state'

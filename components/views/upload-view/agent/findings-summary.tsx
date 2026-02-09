@@ -13,6 +13,7 @@ import { useMemo } from 'react'
 import { cn } from '@/lib/cn'
 import { FindingCard } from './finding-card'
 import type { AgentFindingData, FindingSeverity } from '@/hooks/useAgentSession'
+import type { Id } from '@/convex/_generated/dataModel'
 
 // ============================================================================
 // Types
@@ -26,13 +27,15 @@ interface FindingsSummaryProps {
     status: 'acknowledged' | 'resolved' | 'dismissed',
     userResponse?: string,
   ) => Promise<void>
+  onRetryExtraction?: (documentIds: Id<'documents'>[]) => void
+  onRemoveDocuments?: (documentIds: Id<'documents'>[]) => void
 }
 
 // ============================================================================
 // Component
 // ============================================================================
 
-export function FindingsSummary({ findings, summary, onRespond }: FindingsSummaryProps) {
+export function FindingsSummary({ findings, summary, onRespond, onRetryExtraction, onRemoveDocuments }: FindingsSummaryProps) {
   const { criticalFindings, warningFindings, infoFindings, openCount } = useMemo(() => {
     const critical: AgentFindingData[] = []
     const warning: AgentFindingData[] = []
@@ -84,6 +87,8 @@ export function FindingsSummary({ findings, summary, onRespond }: FindingsSummar
           severity="critical"
           findings={criticalFindings}
           onRespond={onRespond}
+          onRetryExtraction={onRetryExtraction}
+          onRemoveDocuments={onRemoveDocuments}
         />
       )}
 
@@ -94,6 +99,8 @@ export function FindingsSummary({ findings, summary, onRespond }: FindingsSummar
           severity="warning"
           findings={warningFindings}
           onRespond={onRespond}
+          onRetryExtraction={onRetryExtraction}
+          onRemoveDocuments={onRemoveDocuments}
         />
       )}
 
@@ -104,6 +111,8 @@ export function FindingsSummary({ findings, summary, onRespond }: FindingsSummar
           severity="info"
           findings={infoFindings}
           onRespond={onRespond}
+          onRetryExtraction={onRetryExtraction}
+          onRemoveDocuments={onRemoveDocuments}
         />
       )}
 
@@ -132,11 +141,15 @@ function FindingGroup({
   severity,
   findings,
   onRespond,
+  onRetryExtraction,
+  onRemoveDocuments,
 }: {
   label: string
   severity: FindingSeverity
   findings: AgentFindingData[]
   onRespond: FindingsSummaryProps['onRespond']
+  onRetryExtraction?: FindingsSummaryProps['onRetryExtraction']
+  onRemoveDocuments?: FindingsSummaryProps['onRemoveDocuments']
 }) {
   return (
     <div className="space-y-1.5">
@@ -149,6 +162,8 @@ function FindingGroup({
             key={finding._id}
             finding={finding}
             onRespond={onRespond}
+            onRetryExtraction={onRetryExtraction}
+            onRemoveDocuments={onRemoveDocuments}
           />
         ))}
       </div>

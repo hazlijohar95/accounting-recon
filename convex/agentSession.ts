@@ -166,6 +166,8 @@ export const create = mutation({
 /**
  * Add document IDs to an existing agent session.
  * Called as each file is uploaded and gets a document record.
+ * If the session has already completed analysis (status: "ready"),
+ * resets it to "active" to allow re-analysis with the new documents.
  */
 export const addDocuments = mutation({
   args: {
@@ -176,7 +178,7 @@ export const addDocuments = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
+    if (!session) throw new Error("Agent session not found");
 
     await requireCompanyAccess(ctx, session.companyId, args.workosUserId);
 
@@ -185,11 +187,49 @@ export const addDocuments = mutation({
     const newIds = args.documentIds.filter((id) => !existingSet.has(id.toString()));
 
     if (newIds.length > 0) {
-      await ctx.db.patch(args.sessionId, {
+      const update: Record<string, unknown> = {
         documentIds: [...session.documentIds, ...newIds],
         updatedAt: Date.now(),
-      });
+      };
+
+      // If analysis already completed, reset to active so we can re-analyze
+      // with the expanded document set
+      if (session.status === "ready") {
+        update.status = "active";
+        update.currentStep = "upload";
+      }
+
+      await ctx.db.patch(args.sessionId, update);
     }
+
+    return null;
+  },
+});
+
+/**
+ * Remove document IDs from an existing agent session.
+ * Called when the user decides to remove a document (e.g., after extraction failure).
+ */
+export const removeDocuments = mutation({
+  args: {
+    sessionId: v.id("agentSessions"),
+    documentIds: v.array(v.id("documents")),
+    workosUserId: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Agent session not found");
+
+    await requireCompanyAccess(ctx, session.companyId, args.workosUserId);
+
+    const removeSet = new Set(args.documentIds.map((id) => id.toString()));
+    const remaining = session.documentIds.filter((id) => !removeSet.has(id.toString()));
+
+    await ctx.db.patch(args.sessionId, {
+      documentIds: remaining,
+      updatedAt: Date.now(),
+    });
 
     return null;
   },
@@ -212,7 +252,7 @@ export const updateStep = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
+    if (!session) throw new Error("Agent session not found");
 
     await requireCompanyAccess(ctx, session.companyId, args.workosUserId);
 
@@ -236,7 +276,7 @@ export const dismiss = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
+    if (!session) throw new Error("Agent session not found");
 
     await requireCompanyAccess(ctx, session.companyId, args.workosUserId);
 
@@ -355,9 +395,77 @@ export const proceed = action({
   },
 });
 
+/**
+ * Trigger a re-analysis of the agent session.
+ *
+ * Called when the user adds more files after analysis completed.
+ * Resets the session to "active" (if needed), then schedules
+ * runAgentAnalysisInternal to re-run the full pipeline.
+ *
+ * Safe to call multiple times — tryStartAnalysis uses CAS to
+ * prevent duplicate concurrent analyses.
+ */
+export const triggerReanalysis = action({
+  args: {
+    sessionId: v.id("agentSessions"),
+    workosUserId: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // Get the session to verify it exists and check auth
+    const session = await ctx.runQuery(api.agentSession.get, {
+      id: args.sessionId,
+      workosUserId: args.workosUserId,
+    });
+
+    if (!session) throw new Error("Agent session not found");
+
+    // If the session is already in "active" state (reset by addDocuments),
+    // schedule the analysis. If it's "ready" but addDocuments hasn't been
+    // called yet, reset it first.
+    if (session.status === "ready") {
+      await ctx.runMutation(internal.agentSession.resetForReanalysis, {
+        sessionId: args.sessionId,
+      });
+    }
+
+    // Schedule the analysis pipeline (CAS in tryStartAnalysis prevents duplicates)
+    await ctx.scheduler.runAfter(0, internal.agentEngine.runAgentAnalysisInternal, {
+      agentSessionId: args.sessionId,
+    });
+
+    return null;
+  },
+});
+
 // ============================================================================
 // Internal Mutations (called from actions, no auth check)
 // ============================================================================
+
+/**
+ * Reset a session to "active" for re-analysis.
+ * Called by triggerReanalysis when the session is still in "ready" state.
+ */
+export const resetForReanalysis = internalMutation({
+  args: {
+    sessionId: v.id("agentSessions"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) return null;
+
+    // Only reset from "ready" — don't interrupt "analyzing" or "proceeded"
+    if (session.status !== "ready") return null;
+
+    await ctx.db.patch(sessionId, {
+      status: "active",
+      currentStep: "upload",
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
 
 /**
  * Create an agent session from the backend (no auth check).
@@ -519,6 +627,79 @@ export const setCompanyLanes = internalMutation({
   returns: v.null(),
   handler: async (ctx, { sessionId, companyLanes }) => {
     await ctx.db.patch(sessionId, { companyLanes, updatedAt: Date.now() });
+    return null;
+  },
+});
+
+/**
+ * Toggle lane selection by the user.
+ * Called from the multi-company lane UI when a user checks/unchecks a lane.
+ */
+export const toggleLaneSelection = mutation({
+  args: {
+    sessionId: v.id("agentSessions"),
+    laneIndex: v.number(),
+    isSelected: v.boolean(),
+    workosUserId: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Agent session not found");
+
+    await requireCompanyAccess(ctx, session.companyId, args.workosUserId);
+
+    if (!session.companyLanes || args.laneIndex >= session.companyLanes.length) {
+      throw new Error(`Invalid lane index: ${args.laneIndex}`);
+    }
+
+    // Clone lanes and update the target lane's selection
+    const updatedLanes = session.companyLanes.map((lane, idx) =>
+      idx === args.laneIndex ? { ...lane, isSelected: args.isSelected } : lane,
+    );
+
+    await ctx.db.patch(args.sessionId, {
+      companyLanes: updatedLanes,
+      updatedAt: Date.now(),
+    });
+
+    return null;
+  },
+});
+
+/**
+ * Set selection state for all lanes in a single mutation.
+ * Avoids N concurrent mutations when the user clicks "Select All" / "Selected Company Only".
+ *
+ * @param mode - "all" selects every lane; "primary_only" selects only lanes with a companyId match
+ */
+export const setAllLanesSelection = mutation({
+  args: {
+    sessionId: v.id("agentSessions"),
+    mode: v.union(v.literal("all"), v.literal("primary_only")),
+    workosUserId: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Agent session not found");
+
+    await requireCompanyAccess(ctx, session.companyId, args.workosUserId);
+
+    if (!session.companyLanes || session.companyLanes.length === 0) {
+      return null;
+    }
+
+    const updatedLanes = session.companyLanes.map((lane) => ({
+      ...lane,
+      isSelected: args.mode === "all" ? true : !!lane.companyId,
+    }));
+
+    await ctx.db.patch(args.sessionId, {
+      companyLanes: updatedLanes,
+      updatedAt: Date.now(),
+    });
+
     return null;
   },
 });

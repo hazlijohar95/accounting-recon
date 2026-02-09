@@ -12,7 +12,7 @@
  */
 
 import { v } from "convex/values";
-import { query, internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { query, internalAction, internalMutation, internalQuery, ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { verifyQueryCompanyAccess } from "./lib/auth";
@@ -22,6 +22,7 @@ import { generateText } from "ai";
 // Import pure analysis functions
 import { runRulesLayer } from "./lib/agentRules";
 import type { AgentFinding, AgentFindingType, DocumentInfo, TransactionInfo, AccrualDocInfo } from "./lib/agentUtils";
+import { normalizeCompanyName } from "./lib/agentUtils";
 import { runCrossRefLayer } from "./lib/agentCrossRef";
 import { resolveEntityNames, generateAgentSummary } from "./lib/agentLlm";
 import type { AgentStats } from "./lib/agentLlm";
@@ -252,6 +253,8 @@ export const updateFindingStatus = internalMutation({
  * Atomically check-and-set session to "analyzing" status.
  * Returns true if the transition succeeded, false if session is not in a startable state.
  * This prevents duplicate concurrent analyses.
+ *
+ * Accepts "active" (initial analysis) or "active" from reset (re-analysis after adding files).
  */
 export const tryStartAnalysis = internalMutation({
   args: {
@@ -275,17 +278,32 @@ export const tryStartAnalysis = internalMutation({
   },
 });
 
+/**
+ * Clear all findings for a session before re-analysis.
+ * Called when the user adds more files and the engine re-runs.
+ */
+export const clearFindings = internalMutation({
+  args: {
+    agentSessionId: v.id("agentSessions"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { agentSessionId }) => {
+    const findings = await ctx.db
+      .query("agentFindings")
+      .withIndex("by_session", (q) => q.eq("agentSessionId", agentSessionId))
+      .collect();
+
+    for (const finding of findings) {
+      await ctx.db.delete(finding._id);
+    }
+
+    return null;
+  },
+});
+
 // ============================================================================
 // Shared Analysis Pipeline
 // ============================================================================
-
-/**
- * Context type for action handlers that can run queries and mutations.
- * Uses `any` because Convex's ActionCtx type is not directly importable
- * from `_generated/server` for use in extracted helper functions.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ActionCtxLike = any;
 
 /**
  * Core analysis pipeline shared between action handlers.
@@ -295,7 +313,7 @@ type ActionCtxLike = any;
  * @throws on failure (caller handles error recovery)
  */
 async function executeAnalysisPipeline(
-  ctx: ActionCtxLike,
+  ctx: ActionCtx,
   agentSessionId: Id<"agentSessions">,
   session: { companyId: Id<"companies">; documentIds: Id<"documents">[] },
 ): Promise<{ findingCount: number; criticalCount: number; warningCount: number }> {
@@ -368,19 +386,28 @@ async function executeAnalysisPipeline(
   // Create Bedrock caller once for both LLM steps (entity resolution + summary)
   const bedrockCall = createBedrockCaller();
 
-  // Step 5: Check if entity resolution is needed
+  // Step 5: Check if entity resolution is needed + build company lanes
   const multiCompanyFinding = allFindings.find((f) => f.type === "multi_company_detected");
   if (multiCompanyFinding && multiCompanyFinding.details) {
-    const groups = (multiCompanyFinding.details as Record<string, unknown>).companyNames;
-    if (Array.isArray(groups) && groups.length >= 2 && groups.length <= 10) {
+    const detailsObj = multiCompanyFinding.details as Record<string, unknown>;
+    const companyNames = detailsObj.companyNames;
+    const detectedGroups = detailsObj.groups as Array<{
+      companyName: string;
+      normalizedName: string;
+      documentCount: number;
+      documentIds: string[];
+    }> | undefined;
+
+    if (Array.isArray(companyNames) && companyNames.length >= 2 && companyNames.length <= 10) {
       const entityResult = await resolveEntityNames(
-        groups as string[],
+        companyNames as string[],
         companyInfo.name,
         bedrockCall,
       );
 
       if (entityResult) {
-        if (entityResult.groups.length === 1 || entityResult.matchesCompany.length === groups.length) {
+        if (entityResult.groups.length === 1 || entityResult.matchesCompany.length === companyNames.length) {
+          // All names are variants of the same company — replace warning with verification
           allFindings = allFindings.filter((f) => f.type !== "multi_company_detected");
           allFindings.push({
             type: "company_verified",
@@ -392,12 +419,37 @@ async function executeAnalysisPipeline(
               matchesCompany: entityResult.matchesCompany,
             },
           });
+        } else if (detectedGroups && detectedGroups.length >= 2) {
+          // Genuinely different companies detected — build company lanes
+          // The primary company (matching the selected company) is auto-selected
+          const lanes = detectedGroups.map((group) => {
+            const isSelectedCompany = entityResult.matchesCompany.some(
+              (name) => normalizeCompanyName(name) === group.normalizedName,
+            );
+            return {
+              detectedCompanyName: group.companyName,
+              companyId: isSelectedCompany ? session.companyId : undefined,
+              documentIds: group.documentIds.map((id) => id as Id<"documents">),
+              isSelected: isSelectedCompany,
+            };
+          });
+
+          // Persist lanes on the session (fire-and-forget, non-blocking)
+          try {
+            await ctx.runMutation(internal.agentSession.setCompanyLanes, {
+              sessionId: agentSessionId,
+              companyLanes: lanes,
+            });
+          } catch (laneError) {
+            console.warn("[AgentEngine] Failed to set company lanes:", laneError);
+            // Non-fatal — the multi_company_detected finding still surfaces the info
+          }
         }
       }
     }
   }
 
-  // Step 6: Generate summary (one LLM call)
+  // Step 5b: Compute stats for summary generation
   const stats: AgentStats = {
     totalDocuments: documentInfos.length,
     bankStatements: documentInfos.filter((d) => d.documentType === "bank_statement").length,
@@ -463,7 +515,7 @@ async function executeAnalysisPipeline(
  * then marks the session as "ready" so the user can still proceed.
  */
 async function handleAnalysisError(
-  ctx: ActionCtxLike,
+  ctx: ActionCtx,
   agentSessionId: Id<"agentSessions">,
   companyId: Id<"companies">,
   error: unknown,
@@ -514,6 +566,7 @@ async function handleAnalysisError(
  *
  * Uses atomic check-and-set to prevent duplicate concurrent analyses.
  * On failure, stores an error finding and marks session ready.
+ * Supports re-analysis: clears old findings before running the pipeline.
  */
 export const runAgentAnalysisInternal = internalAction({
   args: {
@@ -539,6 +592,11 @@ export const runAgentAnalysisInternal = internalAction({
     }
 
     try {
+      // Clear old findings before re-analysis (safe for first run too — no-op if empty)
+      await ctx.runMutation(internal.agentEngine.clearFindings, {
+        agentSessionId,
+      });
+
       const result = await executeAnalysisPipeline(ctx, agentSessionId, session);
 
       console.log(

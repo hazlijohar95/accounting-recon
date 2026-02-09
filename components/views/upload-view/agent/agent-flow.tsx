@@ -19,9 +19,11 @@ import { useToast } from '@/components/ui/toast'
 import { AgentStep } from './agent-step'
 import { AgentUploadAck } from './agent-upload-ack'
 import { AgentProgressView } from './agent-progress-view'
+import { AgentCompanyLanes } from './agent-company-lanes'
 import { FindingsSummary } from './findings-summary'
 import type { UseAgentSessionReturn } from '@/hooks/useAgentSession'
 import type { UploadedFile } from '@/hooks/useFileUploadState'
+import type { Id } from '@/convex/_generated/dataModel'
 
 // ============================================================================
 // Types
@@ -32,6 +34,8 @@ interface AgentFlowProps {
   files: UploadedFile[]
   extractionProgress: { completed: number; total: number; failed: number } | null
   onProceed: (reconciliationSessionId: string) => void
+  onAddMoreFiles?: () => void
+  onRetryExtraction?: (documentIds: Id<'documents'>[]) => void
 }
 
 // ============================================================================
@@ -57,7 +61,7 @@ function resolveStepState(
 // Component
 // ============================================================================
 
-export function AgentFlow({ agent, files, extractionProgress, onProceed }: AgentFlowProps) {
+export function AgentFlow({ agent, files, extractionProgress, onProceed, onAddMoreFiles, onRetryExtraction }: AgentFlowProps) {
   const toast = useToast()
   const [isProceeding, setIsProceeding] = useState(false)
 
@@ -66,6 +70,11 @@ export function AgentFlow({ agent, files, extractionProgress, onProceed }: Agent
 
   const currentStep = agent.session.currentStep
   const documentCount = agent.session.documentIds.length
+
+  // Detect if this is a resumed session (session has findings but UI just loaded)
+  // The session is considered "resumed" if it's already in ready/validate state
+  // when we first render (the analyze step was completed in a previous page visit)
+  const isResumedSession = agent.isReady && agent.findings.length > 0 && currentStep === 'validate'
 
   // Build step summaries for collapsed state
   const uploadSummary = `${documentCount} file${documentCount !== 1 ? 's' : ''} uploaded`
@@ -107,6 +116,11 @@ export function AgentFlow({ agent, files, extractionProgress, onProceed }: Agent
           <span className="text-xs text-muted-foreground">
             Upload Assistant
           </span>
+          {isResumedSession && (
+            <span className="text-[10px] text-muted-foreground/60">
+              (resumed)
+            </span>
+          )}
         </div>
         {!agent.hasProceeded && (
           <button
@@ -163,11 +177,45 @@ export function AgentFlow({ agent, files, extractionProgress, onProceed }: Agent
         }
         state={resolveStepState('validate', currentStep)}
       >
-        <FindingsSummary
-          findings={agent.findings}
-          summary={agent.session.summary}
-          onRespond={agent.respondToFinding}
-        />
+        <div className="space-y-4">
+          {/* Multi-company lanes — shown when multiple companies detected */}
+          {agent.session.companyLanes && agent.session.companyLanes.length >= 2 && (
+            <AgentCompanyLanes
+              lanes={agent.session.companyLanes}
+              onToggleLane={agent.toggleLaneSelection}
+              onSetAllLanes={agent.setAllLanesSelection}
+            />
+          )}
+
+          {/* Findings */}
+          <FindingsSummary
+            findings={agent.findings}
+            summary={agent.session.summary}
+            onRespond={agent.respondToFinding}
+            onRetryExtraction={onRetryExtraction}
+            onRemoveDocuments={(documentIds) => {
+              // documentIds are Id<"documents">[] from finding.relatedDocumentIds
+              agent.removeDocuments(documentIds).catch((err) => {
+                toast.addToast({
+                  type: 'error',
+                  title: 'Could not remove documents',
+                  description: err instanceof Error ? err.message : 'An error occurred',
+                })
+              })
+            }}
+          />
+
+          {/* Add more files option */}
+          {onAddMoreFiles && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors focus-ring"
+              onClick={onAddMoreFiles}
+            >
+              + Add more files
+            </button>
+          )}
+        </div>
       </AgentStep>
 
       {/* Step 4: Proceed */}

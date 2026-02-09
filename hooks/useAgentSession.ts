@@ -81,12 +81,16 @@ export interface UseAgentSessionReturn {
 
   // Actions
   addDocuments: (documentIds: Id<"documents">[]) => Promise<void>;
+  removeDocuments: (documentIds: Id<"documents">[]) => Promise<void>;
+  requestReanalysis: () => Promise<void>;
   updateStep: (step: AgentStep) => Promise<void>;
   respondToFinding: (
     findingId: Id<"agentFindings">,
     status: "acknowledged" | "resolved" | "dismissed",
     userResponse?: string,
   ) => Promise<void>;
+  toggleLaneSelection: (laneIndex: number, isSelected: boolean) => Promise<void>;
+  setAllLanesSelection: (mode: "all" | "primary_only") => Promise<void>;
   proceed: () => Promise<Id<"reconciliationSessions">>;
   dismiss: () => Promise<void>;
 }
@@ -124,9 +128,13 @@ export function useAgentSession({
   // --------------------------------------------------------------------------
 
   const addDocumentsMutation = useMutation(api.agentSession.addDocuments);
+  const removeDocumentsMutation = useMutation(api.agentSession.removeDocuments);
   const updateStepMutation = useMutation(api.agentSession.updateStep);
   const respondToFindingMutation = useMutation(api.agentSession.respondToFinding);
+  const toggleLaneMutation = useMutation(api.agentSession.toggleLaneSelection);
+  const setAllLanesMutation = useMutation(api.agentSession.setAllLanesSelection);
   const proceedAction = useAction(api.agentSession.proceed);
+  const triggerReanalysisAction = useAction(api.agentSession.triggerReanalysis);
   const dismissMutation = useMutation(api.agentSession.dismiss);
 
   // --------------------------------------------------------------------------
@@ -200,6 +208,31 @@ export function useAgentSession({
     [sessionId, addDocumentsMutation, workosUserId],
   );
 
+  const removeDocuments = useCallback(
+    async (documentIds: Id<"documents">[]) => {
+      if (!sessionId) throw new Error("No active agent session");
+      await removeDocumentsMutation({ sessionId, documentIds, workosUserId });
+    },
+    [sessionId, removeDocumentsMutation, workosUserId],
+  );
+
+  /**
+   * Request a re-analysis of the current document set.
+   * Called when the user adds more files after analysis completed.
+   *
+   * Calls the triggerReanalysis action which:
+   * 1. Resets the session to "active" if it's in "ready" state
+   * 2. Schedules runAgentAnalysisInternal to re-run the full pipeline
+   * 3. CAS in tryStartAnalysis prevents duplicate concurrent analyses
+   */
+  const requestReanalysis = useCallback(
+    async () => {
+      if (!sessionId) throw new Error("No active agent session");
+      await triggerReanalysisAction({ sessionId, workosUserId });
+    },
+    [sessionId, triggerReanalysisAction, workosUserId],
+  );
+
   const updateStep = useCallback(
     async (step: AgentStep) => {
       if (!sessionId) throw new Error("No active agent session");
@@ -222,6 +255,22 @@ export function useAgentSession({
       });
     },
     [respondToFindingMutation, workosUserId],
+  );
+
+  const toggleLaneSelection = useCallback(
+    async (laneIndex: number, isSelected: boolean) => {
+      if (!sessionId) throw new Error("No active agent session");
+      await toggleLaneMutation({ sessionId, laneIndex, isSelected, workosUserId });
+    },
+    [sessionId, toggleLaneMutation, workosUserId],
+  );
+
+  const setAllLanesSelection = useCallback(
+    async (mode: "all" | "primary_only") => {
+      if (!sessionId) throw new Error("No active agent session");
+      await setAllLanesMutation({ sessionId, mode, workosUserId });
+    },
+    [sessionId, setAllLanesMutation, workosUserId],
   );
 
   const proceed = useCallback(async () => {
@@ -250,8 +299,12 @@ export function useAgentSession({
     isReady,
     hasProceeded,
     addDocuments,
+    removeDocuments,
+    requestReanalysis,
     updateStep,
     respondToFinding,
+    toggleLaneSelection,
+    setAllLanesSelection,
     proceed,
     dismiss,
   };

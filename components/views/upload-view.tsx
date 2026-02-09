@@ -420,6 +420,13 @@ function UploadViewContent() {
         // Remove tracked IDs so they can be retried
         newDocIds.forEach((id) => state.trackedDocIds.delete(id))
       })
+
+      // Also add to agent session (if active) so re-analysis covers new files
+      if (agentSession.sessionId) {
+        agentSession.addDocuments(newDocIds as Id<"documents">[]).catch((err) => {
+          console.error('[UploadView] Failed to add documents to agent session:', err)
+        })
+      }
     }
   }, [fileState.files, isDemo, selectedCompanyId, uploadAnalysis])
 
@@ -546,6 +553,26 @@ function UploadViewContent() {
           setTimeout(() => {
             router.push(`/reconcile?sessionId=${reconciliationSessionId}`)
           }, 500)
+        }}
+        onAddMoreFiles={() => {
+          setActiveTab('upload')
+          // Focus the upload zone after tab switch
+          setTimeout(() => {
+            dropZoneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            dropZoneRef.current?.focus()
+          }, 100)
+        }}
+        onRetryExtraction={(documentIds) => {
+          for (const docId of documentIds) {
+            triggerExtraction(docId).catch((err) => {
+              console.error('[UploadView] Failed to retry extraction:', err)
+              toast.addToast({
+                type: 'error',
+                title: 'Retry failed',
+                description: `Could not retry extraction for document.`,
+              })
+            })
+          }
         }}
       />
 

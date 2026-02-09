@@ -25,7 +25,7 @@
  * @module components/views/reconcile-view
  */
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   useAppStore,
@@ -72,6 +72,8 @@ import { PartialMatchGroup } from './reconcile-view/partial-match-group'
 import { SkeletonMatchRow } from './reconcile-view/skeleton-match-row'
 import { TabEmptyState } from './reconcile-view/tab-empty-state'
 import { HistoryList } from './reconcile-view/history-list'
+import { AgentFindingsBanner } from './reconcile-view/agent-findings-banner'
+import { useAgentFindingsForReconciliation, type AgentReconciliationContext } from '@/hooks/useAgentFindingsForReconciliation'
 
 /**
  * Main reconciliation workspace with match review and approval workflow.
@@ -150,6 +152,10 @@ function ReconcileViewContent() {
     isDemo,
     counts,
   } = useReconcileData(convexSessionId, workosUserId)
+
+  // Agent findings context — shows upload agent analysis on the reconcile page
+  const agentContext = useAgentFindingsForReconciliation(convexSessionId, workosUserId)
+  const [agentBannerDismissed, setAgentBannerDismissed] = useState(false)
 
   // Actions from store (they operate on current mode's data)
   const { showCelebration, setShowCelebration } = useAppStore()
@@ -833,6 +839,17 @@ function ReconcileViewContent() {
           onClearFilters={clearFilters}
         />
 
+        {/* Agent Findings Banner — shows pre-upload analysis context */}
+        {agentContext.hasAgentContext && !agentBannerDismissed && agentContext.findingCounts.total > 0 && (
+          <AgentFindingsBanner
+            findings={agentContext.findings}
+            summary={agentContext.agentSession?.summary}
+            findingCounts={agentContext.findingCounts}
+            highestSeverity={agentContext.highestSeverity}
+            onDismiss={() => setAgentBannerDismissed(true)}
+          />
+        )}
+
         {/* Matching Result Banner */}
         {matchingResult && (
           <div className="px-4 py-3 bg-success/10 border-b border-success/20 flex items-center justify-between">
@@ -1002,6 +1019,11 @@ function ReconcileViewContent() {
           {/* Suspense Items */}
           {!(dataIsLoading) && activeTab === 'suspense' && (
             <>
+              {/* Agent findings relevant to suspense — explains why items may be unmatched */}
+              <SuspenseAgentContext
+                suspenseItems={suspenseItems}
+                agentContext={agentContext}
+              />
               {suspenseItems.map((item) => (
                 <SuspenseRow key={item.id} item={item} onFindMatch={handleFindMatch} />
               ))}
@@ -1025,6 +1047,7 @@ function ReconcileViewContent() {
             className="assistant-container--in-reconcile"
             sessionId={sessionId}
             companyName={sessionName}
+            agentSummary={agentContext.agentSession?.summary}
           />
         )}
       </div>
@@ -1060,4 +1083,54 @@ function ReconcileViewContent() {
   )
 }
 
+// ============================================================================
+// Sub-components
+// ============================================================================
 
+/** Finding types that are relevant to understanding why items landed in suspense */
+const SUSPENSE_RELEVANT_TYPES = new Set([
+  'extraction_errors',
+  'low_confidence_extractions',
+  'unusual_amounts',
+  'duplicate_transactions',
+  'orphaned_documents',
+  'basis_inconsistency',
+])
+
+/**
+ * Contextual strip for the suspense tab that shows relevant agent findings
+ * which may explain why items could not be matched.
+ */
+function SuspenseAgentContext({
+  suspenseItems,
+  agentContext,
+}: {
+  suspenseItems: Transaction[]
+  agentContext: AgentReconciliationContext
+}) {
+  const relevant = useMemo(
+    () => agentContext.findings.filter((f) => SUSPENSE_RELEVANT_TYPES.has(f.type)),
+    [agentContext.findings],
+  )
+
+  if (suspenseItems.length === 0 || !agentContext.hasAgentContext || relevant.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="px-4 py-2 bg-warning/5 border-b border-warning/20 text-xs text-muted-foreground flex items-start gap-2">
+      <IconWarningCircle size={12} className="text-warning mt-0.5 shrink-0" />
+      <div>
+        <span className="font-medium text-warning">
+          Agent found issues that may explain unmatched items:{' '}
+        </span>
+        {relevant.map((f, i) => (
+          <span key={f._id}>
+            {f.title}
+            {i < relevant.length - 1 ? ', ' : ''}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}

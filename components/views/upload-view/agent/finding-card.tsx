@@ -25,6 +25,7 @@ import {
   IconX,
 } from '@/components/brand/icons'
 import type { AgentFindingData, FindingSeverity } from '@/hooks/useAgentSession'
+import type { Id } from '@/convex/_generated/dataModel'
 
 // ============================================================================
 // Types
@@ -37,6 +38,8 @@ interface FindingCardProps {
     status: 'acknowledged' | 'resolved' | 'dismissed',
     userResponse?: string,
   ) => Promise<void>
+  onRetryExtraction?: (documentIds: Id<'documents'>[]) => void
+  onRemoveDocuments?: (documentIds: Id<'documents'>[]) => void
 }
 
 // ============================================================================
@@ -84,7 +87,7 @@ const SEVERITY_CONFIG: Record<
 // Component
 // ============================================================================
 
-export function FindingCard({ finding, onRespond }: FindingCardProps) {
+export function FindingCard({ finding, onRespond, onRetryExtraction, onRemoveDocuments }: FindingCardProps) {
   const [isExpanded, setIsExpanded] = useState(finding.severity === 'critical')
   const [isResponding, setIsResponding] = useState(false)
   const [responseText, setResponseText] = useState('')
@@ -100,10 +103,10 @@ export function FindingCard({ finding, onRespond }: FindingCardProps) {
     [finding.details],
   )
 
-  async function handleRespond(status: 'acknowledged' | 'resolved' | 'dismissed') {
+  async function handleRespond(status: 'acknowledged' | 'resolved' | 'dismissed', overrideResponse?: string) {
     setIsResponding(true)
     try {
-      await onRespond(finding._id, status, responseText || undefined)
+      await onRespond(finding._id, status, overrideResponse || responseText || undefined)
       setResponseText('')
     } catch {
       // Error handling is delegated to the onRespond caller (e.g. toast).
@@ -168,7 +171,8 @@ export function FindingCard({ finding, onRespond }: FindingCardProps) {
             {/* Structured details */}
             {parsedDetails && (
               <div className="pl-5 space-y-1">
-                {Object.entries(parsedDetails).map(([key, value]) => (
+                {/* Scalar key-value pairs */}
+                {parsedDetails.scalars && Object.entries(parsedDetails.scalars).map(([key, value]) => (
                   <div key={key} className="flex gap-2 text-xs">
                     <span className="text-muted-foreground shrink-0">
                       {formatDetailKey(key)}:
@@ -178,6 +182,32 @@ export function FindingCard({ finding, onRespond }: FindingCardProps) {
                     </span>
                   </div>
                 ))}
+
+                {/* Mismatched documents list (accrual_company_mismatch) */}
+                {parsedDetails.mismatched && parsedDetails.mismatched.length > 0 && (
+                  <div className="space-y-1 mt-1.5">
+                    {parsedDetails.mismatched.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="text-xs border-l border-border pl-2 ml-1 space-y-0.5"
+                      >
+                        {item.sourceFileName && (
+                          <span className="text-foreground/80">{String(item.sourceFileName)}</span>
+                        )}
+                        {item.docNumber && (
+                          <span className="text-muted-foreground ml-2">#{String(item.docNumber)}</span>
+                        )}
+                        {(item.issuerName || item.counterpartyName) && (
+                          <div className="text-muted-foreground">
+                            {item.issuerName && <span>From: {String(item.issuerName)}</span>}
+                            {item.issuerName && item.counterpartyName && <span> / </span>}
+                            {item.counterpartyName && <span>To: {String(item.counterpartyName)}</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -190,8 +220,48 @@ export function FindingCard({ finding, onRespond }: FindingCardProps) {
 
             {/* Action buttons — only for open/acknowledged findings */}
             {!isResolved && (
-              <div className="pl-5 flex items-center gap-2 pt-1">
-                {finding.severity === 'critical' ? (
+              <div className="pl-5 flex items-center gap-2 pt-1 flex-wrap">
+                {finding.type === 'extraction_errors' || finding.type === 'low_confidence_extractions' ? (
+                  /* Specialized actions for extraction issues */
+                  <>
+                    {onRetryExtraction && finding.relatedDocumentIds && finding.relatedDocumentIds.length > 0 && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 px-2 py-1 text-xs border border-border bg-background hover:bg-secondary transition-colors focus-ring disabled:opacity-50"
+                        onClick={() => {
+                          onRetryExtraction(finding.relatedDocumentIds!)
+                          handleRespond('resolved', 'Retrying extraction')
+                        }}
+                        disabled={isResponding}
+                      >
+                        Retry Extraction
+                      </button>
+                    )}
+                    {onRemoveDocuments && finding.relatedDocumentIds && finding.relatedDocumentIds.length > 0 && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors focus-ring disabled:opacity-50"
+                        onClick={() => {
+                          onRemoveDocuments(finding.relatedDocumentIds!)
+                          handleRespond('dismissed', 'Removed from session')
+                        }}
+                        disabled={isResponding}
+                      >
+                        <IconX size={10} />
+                        Remove
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors focus-ring disabled:opacity-50"
+                      onClick={() => handleRespond(finding.severity === 'critical' ? 'resolved' : 'acknowledged', 'Ignoring extraction issue')}
+                      disabled={isResponding}
+                    >
+                      <IconCheck size={10} />
+                      Skip
+                    </button>
+                  </>
+                ) : finding.severity === 'critical' ? (
                   <>
                     <button
                       type="button"
@@ -214,6 +284,28 @@ export function FindingCard({ finding, onRespond }: FindingCardProps) {
                         if (e.key === 'Enter') handleRespond('resolved')
                       }}
                     />
+                  </>
+                ) : finding.type === 'accrual_company_mismatch' ? (
+                  /* Specialized actions for accrual company mismatch */
+                  <>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 px-2 py-1 text-xs border border-border bg-background hover:bg-secondary transition-colors focus-ring disabled:opacity-50"
+                      onClick={() => handleRespond('acknowledged', 'Keeping documents as-is')}
+                      disabled={isResponding}
+                    >
+                      <IconCheck size={10} />
+                      Keep Anyway
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors focus-ring disabled:opacity-50"
+                      onClick={() => handleRespond('dismissed', 'User chose to ignore mismatch')}
+                      disabled={isResponding}
+                    >
+                      <IconX size={10} />
+                      Dismiss
+                    </button>
                   </>
                 ) : finding.severity === 'warning' ? (
                   <>
@@ -260,18 +352,38 @@ export function FindingCard({ finding, onRespond }: FindingCardProps) {
 // Helpers
 // ============================================================================
 
-function tryParseDetails(details: string): Record<string, unknown> | null {
+interface ParsedDetails {
+  scalars: Record<string, string | number | boolean>
+  mismatched?: Array<Record<string, string | number | boolean | undefined>>
+}
+
+function tryParseDetails(details: string): ParsedDetails | null {
   try {
     const parsed = JSON.parse(details)
     if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-      // Filter out internal/complex nested objects for display
-      const display: Record<string, unknown> = {}
+      const scalars: Record<string, string | number | boolean> = {}
+      let mismatched: Array<Record<string, string | number | boolean | undefined>> | undefined
+
       for (const [key, value] of Object.entries(parsed)) {
         if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-          display[key] = value
+          scalars[key] = value
+        } else if (key === 'mismatched' && Array.isArray(value)) {
+          // Special handling for accrual_company_mismatch findings
+          mismatched = value.slice(0, 5).map((item: Record<string, unknown>) => {
+            const flat: Record<string, string | number | boolean | undefined> = {}
+            for (const [k, v] of Object.entries(item)) {
+              if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                flat[k] = v
+              }
+            }
+            return flat
+          })
         }
       }
-      return Object.keys(display).length > 0 ? display : null
+
+      if (Object.keys(scalars).length > 0 || mismatched) {
+        return { scalars, mismatched }
+      }
     }
   } catch {
     // Not valid JSON, skip

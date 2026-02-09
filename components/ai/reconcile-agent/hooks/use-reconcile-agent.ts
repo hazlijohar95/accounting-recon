@@ -6,6 +6,8 @@ import { DefaultChatTransport, isToolUIPart } from 'ai'
 interface UseReconcileAgentOptions {
   sessionId: string
   companyName?: string
+  /** Agent-generated summary from pre-upload analysis */
+  agentSummary?: string
 }
 
 /**
@@ -17,7 +19,7 @@ interface UseReconcileAgentOptions {
  * - `addToolOutput` to resume after confirmation
  * - `sendAutomaticallyWhen` auto-sends when user provides tool output
  */
-export function useReconcileAgent({ sessionId, companyName }: UseReconcileAgentOptions) {
+export function useReconcileAgent({ sessionId, companyName, agentSummary }: UseReconcileAgentOptions) {
   const {
     messages,
     sendMessage,
@@ -30,7 +32,7 @@ export function useReconcileAgent({ sessionId, companyName }: UseReconcileAgentO
     id: `reconcile-agent-${sessionId}`,
     transport: new DefaultChatTransport({
       api: '/api/chat/assistant',
-      body: { context: { sessionId, companyName } },
+      body: { context: { sessionId, companyName, agentSummary } },
     }),
     // Auto-send when user provides tool output (confirms/denies via askForConfirmation)
     sendAutomaticallyWhen: ({ messages: msgs }) => {

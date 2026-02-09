@@ -18,6 +18,8 @@ import { useAppStore, useIsDemo } from '@/lib/store'
 interface ReconcileAgentProps {
   sessionId: string
   companyName?: string
+  /** Agent-generated summary from pre-upload analysis */
+  agentSummary?: string
   className?: string
 }
 
@@ -43,7 +45,7 @@ function AIIcon({ className, animate = false }: { className?: string; animate?: 
   )
 }
 
-export function ReconcileAgent({ sessionId, companyName, className }: ReconcileAgentProps) {
+export function ReconcileAgent({ sessionId, companyName, agentSummary, className }: ReconcileAgentProps) {
   const isDemo = useIsDemo()
   const { setShowPaywall } = useAppStore()
 
@@ -58,7 +60,7 @@ export function ReconcileAgent({ sessionId, companyName, className }: ReconcileA
     addToolOutput,
     setMessages,
     isLoading,
-  } = useReconcileAgent({ sessionId, companyName })
+  } = useReconcileAgent({ sessionId, companyName, agentSummary })
 
   // Chat persistence
   useChatPersistence({ sessionId, messages, setMessages })

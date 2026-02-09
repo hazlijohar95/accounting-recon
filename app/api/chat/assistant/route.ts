@@ -44,6 +44,8 @@ function checkMutationRateLimit(sessionKey: string): { allowed: boolean; retryAf
 interface AssistantContext {
   sessionId?: string
   companyName?: string
+  /** Agent-generated summary from pre-upload analysis (injected into system prompt) */
+  agentSummary?: string
 }
 
 /**
@@ -151,6 +153,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Inject agent pre-match analysis summary if available
+    if (context?.agentSummary) {
+      systemPrompt += `\n\n--- Pre-Match Agent Analysis ---`
+      systemPrompt += `\nThe upload agent analyzed the documents before reconciliation began. Here is its summary:`
+      systemPrompt += `\n${sanitizeForPrompt(context.agentSummary)}`
+      systemPrompt += `\nYou can use the getAgentFindings tool to retrieve detailed findings from this analysis.`
+    }
+
     const convex = await getAuthedConvexClient()
     const workosUserId = session.workosId
 
@@ -161,7 +171,7 @@ export async function POST(req: NextRequest) {
       stopWhen: stepCountIs(10),
       tools: {
         // ================================================================
-        // Category A: Server-Side Query Tools (8)
+        // Category A: Server-Side Query Tools (9)
         // ================================================================
 
         getMatchExplanation: {
@@ -724,6 +734,63 @@ export async function POST(req: NextRequest) {
             } catch (error) {
               console.error('Error listing suspense items:', error instanceof Error ? error.message : 'Unknown error')
               return { error: 'Failed to list suspense items', items: [] }
+            }
+          },
+        },
+
+        getAgentFindings: {
+          description: 'Get pre-upload agent analysis findings for this reconciliation session. Call this when the user asks about document issues, upload warnings, pre-match analysis, or data quality concerns that were detected before reconciliation began.',
+          inputSchema: z.object({
+            sessionId: z.string().optional().describe('The reconciliation session ID. Falls back to the current session context if not provided.'),
+          }),
+          execute: async ({ sessionId: inputSessionId }) => {
+            try {
+              // Use explicit input if provided, fall back to context
+              const sessionIdStr = inputSessionId || context?.sessionId
+              if (!sessionIdStr || !isValidConvexId(sessionIdStr)) {
+                return { error: 'No session context available', findings: [] }
+              }
+
+              const sid = sessionIdStr as Id<'reconciliationSessions'>
+
+              // Get the linked agent session
+              const agentSession = await convex.query(api.agentSession.getForReconciliation, {
+                reconciliationSessionId: sid,
+                workosUserId,
+              })
+
+              if (!agentSession) {
+                return {
+                  hasAgentContext: false,
+                  message: 'No upload agent analysis is linked to this reconciliation session.',
+                  findings: [],
+                }
+              }
+
+              // Get unresolved findings
+              const findings = await convex.query(api.agentEngine.getFindingsForReconciliation, {
+                reconciliationSessionId: sid,
+                workosUserId,
+              })
+
+              return {
+                hasAgentContext: true,
+                sessionStatus: agentSession.status,
+                summary: agentSession.summary || null,
+                totalFindings: findings.length,
+                findings: findings.map((f: Record<string, unknown>) => ({
+                  type: f.type,
+                  severity: f.severity,
+                  title: f.title,
+                  description: f.description,
+                  status: f.status,
+                  relatedDocumentIds: f.relatedDocumentIds || [],
+                  relatedTransactionIds: f.relatedTransactionIds || [],
+                })),
+              }
+            } catch (error) {
+              console.error('getAgentFindings error:', error)
+              return { error: 'Failed to retrieve agent findings', findings: [] }
             }
           },
         },
