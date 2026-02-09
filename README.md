@@ -1,37 +1,72 @@
-# Reconciled
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/brand/social/readme-banner-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="public/brand/social/readme-banner-light.svg">
+    <img alt="Reconcile" src="public/brand/social/readme-banner-dark.svg" width="100%">
+  </picture>
+</p>
 
-**Your accountant's accountant.** Automated cash-accrual reconciliation that actually works.
+<p align="center">
+  <code>Automated cash-accrual reconciliation with 5-layer AI matching</code>
+</p>
 
-Bank says one thing. Invoices say another. Reconciled figures out who's lying (spoiler: it's usually the dates).
+<p align="center">
+  <a href="#the-matching-engine"><code>Engine</code></a>&nbsp;&nbsp;&nbsp;
+  <a href="#tech-stack"><code>Stack</code></a>&nbsp;&nbsp;&nbsp;
+  <a href="#getting-started"><code>Setup</code></a>&nbsp;&nbsp;&nbsp;
+  <a href="#architecture"><code>Architecture</code></a>&nbsp;&nbsp;&nbsp;
+  <a href="#project-structure"><code>Structure</code></a>&nbsp;&nbsp;&nbsp;
+  <a href="#documentation"><code>Docs</code></a>
+</p>
 
-## What Is This
+<br>
 
-A SaaS app that matches bank transactions (cash) against invoices and receipts (accrual) using a 5-layer matching engine. Layer 1 is basic arithmetic. Layer 5 is an LLM reading your transactions like a forensic auditor who had too much coffee.
+---
+
+Bank says one thing. Invoices say another. Reconcile figures out who's lying.
+
+> Spoiler: it's usually the dates.
+
+---
+
+<br>
+
+## The Matching Engine
+
+Reconcile matches bank transactions (cash basis) against invoices and receipts (accrual basis) through a pipeline of increasingly intelligent layers. Unmatched items cascade down.
+
+<p align="center">
+  <img src="public/brand/social/readme-matching-layers.svg" alt="Matching Engine Layers" width="100%">
+</p>
+
+> Layer 6 is you doing it manually. We don't talk about Layer 6.
+
+**Confidence scoring** determines what happens next:
 
 ```
-Layer 1: Exact Match     → "These are literally the same number"
-Layer 2: Window Match     → "Same amount, close enough date"
-Layer 3: Reference Match  → "Found your invoice number hiding in the description"
-Layer 4: Fuzzy Match      → "This looks close enough, I'm 78% sure"
-Layer 5: LLM Semantic     → "I read both descriptions and they're definitely the same vendor"
-Layer 7: Partial Match    → "Three invoices add up to one payment, you're welcome"
+>=90%   auto-approved     the engine is certain
+70-89%  suggested         human reviews
+<70%    suspense          needs investigation
 ```
 
-Yes, we skipped Layer 6. Layer 6 is you doing it manually. We don't talk about Layer 6.
+Race condition protection is built in. Two matches can't claim the same transaction.
+
+<br>
 
 ## Tech Stack
 
-No Rust. I know the old docs said Rust. The old docs were aspirational. We're over it.
+```
+Frontend        Next.js 16 + React 19 + TypeScript      Turbopack, server components
+Backend         Convex 1.31                              Real-time sync, matching engine, zero SQL
+AI/LLM          AWS Bedrock + Vertex AI                  Claude Sonnet 4, Opus 4.5, Gemini
+OCR             Python FastAPI + Mistral                 PDF extraction, deployed on Fly.io
+PDF Reports     Python + ReportLab                       Branded financial reports
+Auth            WorkOS                                   Enterprise SSO via AuthKit
+Styling         Tailwind CSS v4                          Utility-first, sharp edges, no radius
+Docs            Fumadocs                                 User-facing documentation
+```
 
-| What | Tech | Why |
-|------|------|-----|
-| Frontend | Next.js 16 + React 19 | Because server components are the future and the future is now |
-| Backend | Convex | Real-time, serverless, zero SQL. The matching engine runs here. In TypeScript. It's fast enough. |
-| AI/LLM | AWS Bedrock + Vercel AI SDK | Claude does the thinking. We do the plumbing. |
-| OCR | Python FastAPI + Mistral | Reads PDFs so you don't have to |
-| PDF Reports | Python + ReportLab | Makes PDFs so your clients think you're fancy |
-| Auth | WorkOS | Enterprise SSO without enterprise pain |
-| Styling | Tailwind v4 | `className` goes brrr |
+<br>
 
 ## Getting Started
 
@@ -39,74 +74,140 @@ No Rust. I know the old docs said Rust. The old docs were aspirational. We're ov
 # Install dependencies
 pnpm install
 
-# Start the frontend (terminal 1)
+# Terminal 1: frontend
 pnpm dev
 
-# Start the backend (terminal 2)
+# Terminal 2: backend
 npx convex dev
-
-# That's it. Two terminals. No Docker. No Kubernetes. No YAML files.
-# You're welcome.
 ```
+
+Two terminals. No Docker. No Kubernetes. No YAML files.
+
+Copy `.env.example` to `.env.local` and fill in the blanks. Don't commit your secrets.
+
+<br>
 
 ## Running Tests
 
 ```bash
-pnpm test              # Vitest - the fast one
-pnpm test:coverage     # With coverage - the judgemental one
-pnpm test:e2e          # Playwright - the slow but thorough one
-cd ml && pytest        # Python - the other one
+pnpm test              # Vitest
+pnpm test:coverage     # With coverage report
+pnpm test:e2e          # Playwright E2E
+cd ml && pytest        # Python ML service
 ```
 
-Coverage thresholds: 80% statements, 75% branches, 80% functions, 80% lines. Not negotiable.
+Coverage thresholds: **80%** statements, **75%** branches, **80%** functions, **80%** lines.
+
+<br>
+
+## Architecture
+
+**2-tier architecture** -- browser + Convex serverless, supplemented by Next.js API routes and a Python ML microservice.
+
+```
+                           +-------------------+
+                           |     Browser       |
+                           |  React 19 + Zustand|
+                           +--------+----------+
+                                    |
+                    +---------------+---------------+
+                    |                               |
+           +--------v--------+           +---------v---------+
+           |   Convex 1.31   |           | Next.js API Routes|
+           |                 |           |                   |
+           | - Data layer    |           | - AI chat (SSE)   |
+           | - Matching      |           | - Auth callbacks  |
+           | - Extraction    |           | - CSV import      |
+           | - Cron jobs     |           | - Matching stream |
+           | - Auth verify   |           |                   |
+           +---------+-------+           +---------+---------+
+                     |                             |
+                     |                    +--------v--------+
+                     |                    | Python FastAPI  |
+                     |                    | (Fly.io)        |
+                     |                    |                 |
+                     |                    | - OCR (Mistral) |
+                     |                    | - PDF generation|
+                     +--------------------+-----------------+
+```
+
+<br>
 
 ## Project Structure
 
 ```
-app/                    # Next.js App Router
-  (app)/                # Authenticated routes (dashboard, upload, reconcile, reports)
-  api/                  # API routes (AI chat, matching stream, auth, import)
+app/
+  (app)/                  Authenticated routes (dashboard, upload, reconcile, reports)
+  (main)/design/          Design system showcase
+  api/                    API routes (AI chat, matching stream, auth, import)
 
-components/             # React components
-  brand/                # 20+ branded UI components (we went hard on the design)
-  views/                # Page-level view components
-  ai/                   # AI assistant components
-  spreadsheet/          # Agentic spreadsheet (yes, we built a spreadsheet)
+components/
+  brand/                  20+ branded UI components, pixel icon system, 3D logo
+  views/                  Page-level view components
+  ai/                     AI assistant components
+  spreadsheet/            Agentic spreadsheet
 
-convex/                 # The actual backend
-  matching/             # 5-layer matching engine
-    engine.ts           # Orchestrator
-    layers/             # Each layer is its own file because we're civilized
-  lib/                  # Auth, validators, errors, audit logging
-  schema.ts             # 30+ tables. It grew. We're not sorry.
+convex/
+  matching/
+    engine.ts             Orchestrator
+    layers/               Each layer is its own module
+  lib/                    Auth, validators, errors, audit logging
+  schema.ts               30+ tables
 
-lib/                    # Frontend utilities
-  ai/                   # Bedrock provider, prompts, input sanitization
-  store.ts              # Zustand. One store. Multiple slices. No Redux.
+lib/
+  ai/                     Bedrock provider, prompts, input sanitization
+  store.ts                Zustand -- one store, multiple slices
 
-ml/                     # Python ML service (deployed on Fly.io)
-  services/             # OCR, PDF generation, bank parsers
+ml/                       Python ML service (Fly.io)
+  services/               OCR, PDF generation, bank parsers
 ```
 
-## The Matching Engine
+<br>
 
-Lives in `convex/matching/`. Layers 1-4 are pure TypeScript functions -- no I/O, deterministic, testable, fast. Layer 5 calls Bedrock and hopes for the best (with a smart fallback when Bedrock decides to take a nap).
+## The Design System
 
-Confidence scoring: >=90% gets auto-approved. 70-89% gets suggested. <70% goes to suspense (the accounting kind, not the movie kind).
+Reconcile ships with a comprehensive design system built on geometric absolutism. Every visual element -- from the logo to the 150+ pixel-art icon set -- is constructed exclusively from rectangles.
 
-Race condition protection built in. Two matches can't claim the same transaction. We learned that one the hard way.
+```
+Radius:         0rem (sharp edges only)
+Palette:        Monochromatic with semantic accents
+Typography:     Inter (400, 500) + system monospace
+Icons:          150+ custom pixel-art, 16x16 grid, rectangles only
+Mode:           Dark-first
+Animations:     Rectangle reveals, venetian-blind transitions
+```
 
-## Docs
+Explore the live design system at `/design`.
 
-- `agent_docs/` - Internal architecture docs (for AI agents and devs who read)
-- `docs/` - User-facing docs (Fumadocs, looks pretty)
-- `CLAUDE.md` - Instructions for AI coding agents
-- `Reconciled-PRD.md` - The original vision doc (read it for vibes, not for accuracy)
+<br>
 
-## Environment Variables
+## Documentation
 
-Copy `.env.example` to `.env.local`. Fill in the blanks. Don't commit your secrets. You know the drill.
+| Resource | Description |
+|----------|-------------|
+| `agent_docs/` | Internal architecture docs |
+| `docs/` | User-facing docs (Fumadocs) |
+| `CLAUDE.md` | AI agent instructions |
+| `Reconciled-PRD.md` | Original product vision |
+
+<br>
 
 ## License
 
-Proprietary. Don't steal our reconciliation engine. Build your own Layer 7. I dare you.
+Proprietary.
+
+<br>
+
+---
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/brand/logos/logo-with-text-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="public/brand/logos/logo-with-text-light.svg">
+    <img alt="Reconcile" src="public/brand/logos/logo-with-text-dark.svg" height="32">
+  </picture>
+</p>
+
+<p align="center">
+  <sub>Numbers that agree.</sub>
+</p>

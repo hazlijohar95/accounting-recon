@@ -1,0 +1,71 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="300" fill="#0a0a0a"/>
+
+  <!-- Subtle grid pattern -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <rect width="40" height="40" fill="none"/>
+      <rect x="0" y="0" width="1" height="40" fill="#1a1a1a"/>
+      <rect x="0" y="0" width="40" height="1" fill="#1a1a1a"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="300" fill="url(#grid)"/>
+
+  <!-- R Mark (scaled 1.5x, centered at ~490, 100) -->
+  <g transform="translate(470, 80)">
+    <rect x="0" y="0" width="12" height="48" fill="#fafafa"/>
+    <rect x="12" y="0" width="24" height="12" fill="#fafafa"/>
+    <rect x="36" y="0" width="12" height="18" fill="#fafafa"/>
+    <rect x="12" y="18" width="24" height="12" fill="#fafafa"/>
+    <rect x="24" y="30" width="12" height="6" fill="#fafafa"/>
+    <rect x="36" y="36" width="12" height="12" fill="#fafafa"/>
+  </g>
+
+  <!-- Wordmark "econcile" -->
+  <g transform="translate(530, 80)">
+    <!-- "e" -->
+    <rect x="0" y="8" width="15" height="5" fill="#fafafa"/>
+    <rect x="0" y="8" width="5" height="24" fill="#fafafa"/>
+    <rect x="5" y="18" width="10" height="5" fill="#fafafa"/>
+    <rect x="0" y="27" width="15" height="5" fill="#fafafa"/>
+    <!-- "c" -->
+    <rect x="18" y="8" width="15" height="5" fill="#fafafa"/>
+    <rect x="18" y="8" width="5" height="24" fill="#fafafa"/>
+    <rect x="18" y="27" width="15" height="5" fill="#fafafa"/>
+    <!-- "o" -->
+    <rect x="36" y="8" width="15" height="5" fill="#fafafa"/>
+    <rect x="36" y="8" width="5" height="24" fill="#fafafa"/>
+    <rect x="46" y="8" width="5" height="24" fill="#fafafa"/>
+    <rect x="36" y="27" width="15" height="5" fill="#fafafa"/>
+    <!-- "n" -->
+    <rect x="54" y="8" width="15" height="5" fill="#fafafa"/>
+    <rect x="54" y="8" width="5" height="24" fill="#fafafa"/>
+    <rect x="64" y="8" width="5" height="24" fill="#fafafa"/>
+    <!-- "c" -->
+    <rect x="72" y="8" width="15" height="5" fill="#fafafa"/>
+    <rect x="72" y="8" width="5" height="24" fill="#fafafa"/>
+    <rect x="72" y="27" width="15" height="5" fill="#fafafa"/>
+    <!-- "i" -->
+    <rect x="90" y="0" width="5" height="5" fill="#fafafa"/>
+    <rect x="90" y="8" width="5" height="24" fill="#fafafa"/>
+    <!-- "l" -->
+    <rect x="98" y="0" width="5" height="32" fill="#fafafa"/>
+    <!-- "e" -->
+    <rect x="106" y="8" width="15" height="5" fill="#fafafa"/>
+    <rect x="106" y="8" width="5" height="24" fill="#fafafa"/>
+    <rect x="111" y="18" width="10" height="5" fill="#fafafa"/>
+    <rect x="106" y="27" width="15" height="5" fill="#fafafa"/>
+  </g>
+
+  <!-- Tagline -->
+  <text x="600" y="175" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace" font-size="14" fill="#717171" text-anchor="middle" letter-spacing="0.1em">CHANGE THE WAY YOU RECONCILE</text>
+
+  <!-- Bottom accent line -->
+  <rect x="0" y="292" width="1200" height="8" fill="#fafafa"/>
+
+  <!-- Corner accents (rectangle brand language) -->
+  <rect x="32" y="32" width="4" height="16" fill="#333333"/>
+  <rect x="32" y="32" width="16" height="4" fill="#333333"/>
+  <rect x="1152" y="32" width="16" height="4" fill="#333333"/>
+  <rect x="1164" y="32" width="4" height="16" fill="#333333"/>
+</svg>
