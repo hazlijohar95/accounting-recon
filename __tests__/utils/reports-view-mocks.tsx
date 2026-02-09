@@ -79,11 +79,38 @@ vi.mock('@/components/brand', () => ({
   IconSuspense: () => <span data-testid="icon-suspense" />,
   MatchLayerBadge: ({ layer }: { layer: number }) => <span>{layer}</span>,
   BrandedEmptyState: ({ title }: { title: string }) => <div>{title}</div>,
+  ErrorAnimation: () => <span data-testid="error-animation" />,
 }))
 
+// Mutable state for controlling per-query return values in tests.
+// Tests can set e.g. `mockQueryState.exportJobStatus = { status: 'completed', ... }`
+// to simulate Convex reactive query updates.
+export const mockQueryState: {
+  exportJobStatus: unknown
+  pdfJobStatus: unknown
+} = {
+  exportJobStatus: null,
+  pdfJobStatus: null,
+}
+
 vi.mock('convex/react', () => ({
-  useAction: () => mockGenerateExport,
-  useQuery: () => null,
+  useAction: (actionRef: string) => {
+    // The api mock maps action names to string stubs.
+    // Return the matching mock function for each action.
+    if (actionRef === 'generateAccountingExport') return mockGenerateAccountingExport
+    if (actionRef === 'generatePDFExport') return mockGeneratePDFExport
+    // Default: generateExport (also covers any unknown refs)
+    return mockGenerateExport
+  },
+  useQuery: (queryRef: string, args?: unknown) => {
+    // 'skip' means the query is disabled -- return undefined (Convex convention)
+    if (args === 'skip') return undefined
+    if (queryRef === 'getExportJobStatus') return mockQueryState.exportJobStatus
+    if (queryRef === 'getPDFJobStatus') return mockQueryState.pdfJobStatus
+    // listByCompany -- return empty array so the component doesn't break
+    if (queryRef === 'listByCompany') return []
+    return null
+  },
 }))
 
 vi.mock('@/lib/convex-hooks', () => ({
@@ -98,6 +125,18 @@ vi.mock('@/lib/convex-hooks', () => ({
       status: 'matched',
     },
   ],
+}))
+
+vi.mock('@/lib/convex-hooks/companies', () => ({
+  useCompany: () => ({
+    _id: 'company-1',
+    name: 'Test Company',
+    currency: 'MYR',
+  }),
+}))
+
+vi.mock('@/lib/convex-hooks/shared', () => ({
+  useWorkosUserId: () => 'wos_user_1',
 }))
 
 vi.mock('@/components/ui', async (importOriginal) => {
@@ -121,10 +160,14 @@ vi.mock('@/convex/_generated/api', () => ({
         generateAccountingExport: 'generateAccountingExport',
         generatePDFExport: 'generatePDFExport',
         getPDFJobStatus: 'getPDFJobStatus',
+        getExportJobStatus: 'getExportJobStatus',
       },
     },
     sessions: {
       listByCompany: 'listByCompany',
+    },
+    companies: {
+      get: 'companies.get',
     },
   },
 }))
@@ -151,6 +194,7 @@ vi.mock('@/components/onboarding', () => ({
     totalSteps: 5,
     progress: 100,
     isComplete: true,
+    completeItem: vi.fn(),
   }),
   OnboardingTour: () => null,
   OnboardingChecklist: () => null,

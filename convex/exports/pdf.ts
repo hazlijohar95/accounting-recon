@@ -3,19 +3,9 @@ import { v } from "convex/values";
 import { action, internalMutation, internalQuery, query } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { Id, Doc } from "../_generated/dataModel";
-
-// Type for enriched match from getExportData
-type EnrichedMatch = {
-  _id: Id<"matchedPairs">;
-  confidence: "high" | "medium" | "low";
-  confidenceScore: number;
-  matchLayer: 1 | 2 | 3 | 4 | 5 | 6;
-  matchReason?: string;
-  status: "pending" | "approved" | "rejected";
-  cashTransaction: Doc<"transactions"> | null;
-  accrualDocument: Doc<"accrualDocuments"> | null;
-  accrualTransaction: Doc<"transactions"> | null;
-};
+import { authKit } from "../auth";
+import type { EnrichedMatch } from "./types";
+import { getMatchLayerDescription, formatSuspenseReason } from "./types";
 
 // Return validator for PDF export
 const pdfExportResultValidator = v.object({
@@ -270,11 +260,17 @@ export const generatePDFExport = action({
 
     // Call ML service to generate PDF
     try {
+      const mlApiKey = process.env.ML_SERVICE_API_KEY;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (mlApiKey) {
+        headers["Authorization"] = `Bearer ${mlApiKey}`;
+      }
+
       const response = await fetch(`${mlServiceUrl}/generate-pdf`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(mlPayload),
       });
 
@@ -324,7 +320,8 @@ export const generatePDFExport = action({
 });
 
 /**
- * Get the status of a PDF export job
+ * Get the status of a PDF export job.
+ * SECURITY: Verifies the authenticated user owns the job before returning status.
  */
 export const getPDFJobStatus = query({
   args: {
@@ -332,13 +329,29 @@ export const getPDFJobStatus = query({
   },
   returns: v.union(jobStatusValidator, v.null()),
   handler: async (ctx, args) => {
-    // Find job by ID (jobId is stored as the Convex ID string)
-    const job = await ctx.db
-      .query("pdfExportJobs")
-      .filter((q) => q.eq(q.field("_id"), args.jobId as Id<"pdfExportJobs">))
-      .first();
+    // SECURITY: Verify authenticated user
+    const authUser = await authKit.getAuthUser(ctx);
+    if (!authUser) {
+      return null;
+    }
 
+    // Get user from database
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_workos", (q) => q.eq("workosId", authUser.id))
+      .first();
+    if (!user) {
+      return null;
+    }
+
+    // Find job by ID
+    const job = await ctx.db.get(args.jobId as Id<"pdfExportJobs">);
     if (!job) {
+      return null;
+    }
+
+    // SECURITY: Verify the authenticated user owns this job
+    if (job.userId !== user._id) {
       return null;
     }
 
@@ -508,7 +521,8 @@ export const cleanupStalePDFJobs = internalMutation({
 });
 
 /**
- * Retry a failed PDF export job
+ * Retry a failed PDF export job.
+ * SECURITY: Verifies the user has access to the session before retrying.
  */
 export const retryPDFExport = action({
   args: {
@@ -535,7 +549,7 @@ export const retryPDFExport = action({
       };
     }
 
-    // Re-trigger the PDF export with the same parameters
+    // SECURITY: Verify user has access to the session (auth check happens inside generatePDFExport)
     const result = await ctx.runAction(api.exports.index.generatePDFExport, {
       sessionId: job.sessionId,
       reportType: job.reportType,
@@ -560,24 +574,5 @@ export const getJobById = internalQuery({
 
 // Helper functions
 function getMatchTypeDescription(layer: number): string {
-  const descriptions: Record<number, string> = {
-    1: "Exact",
-    2: "Window",
-    3: "Reference",
-    4: "Fuzzy",
-    5: "Semantic",
-    6: "Manual",
-  };
-  return descriptions[layer] || "Unknown";
-}
-
-function formatSuspenseReason(reason: string): string {
-  const reasons: Record<string, string> = {
-    no_match: "No matching document found",
-    amount_mismatch: "Amount does not match",
-    date_outside_range: "Date outside reconciliation period",
-    duplicate: "Possible duplicate entry",
-    partial_match: "Partial match found",
-  };
-  return reasons[reason] || reason;
+  return getMatchLayerDescription(layer);
 }

@@ -514,6 +514,47 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  exportJobs: {
+    document: {
+      completedAt?: number;
+      createdAt: number;
+      errorMessage?: string;
+      expiresAt?: number;
+      exportType: "csv" | "xlsx" | "accounting";
+      fileName?: string;
+      mimeType?: string;
+      reportType?: string;
+      sessionId: Id<"reconciliationSessions">;
+      status: "processing" | "completed" | "failed";
+      storageId?: Id<"_storage">;
+      userId: Id<"users">;
+      _id: Id<"exportJobs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "completedAt"
+      | "createdAt"
+      | "errorMessage"
+      | "expiresAt"
+      | "exportType"
+      | "fileName"
+      | "mimeType"
+      | "reportType"
+      | "sessionId"
+      | "status"
+      | "storageId"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_status: ["status", "_creationTime"];
+      by_user: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   extractionQueue: {
     document: {
       avgProcessingTimeMs?: number;

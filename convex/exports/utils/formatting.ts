@@ -73,17 +73,8 @@ export function generateFileName(
     : `${baseName}_${timestamp}.${extension}`;
 }
 
-// Map suspense reason to human-readable text
-export function formatSuspenseReason(reason: string): string {
-  const reasonMap: Record<string, string> = {
-    no_match: "No matching document found",
-    amount_mismatch: "Amount does not match",
-    date_outside_range: "Transaction date outside reconciliation period",
-    duplicate_detected: "Possible duplicate transaction",
-    partial_match: "Partial match - review required",
-  };
-  return reasonMap[reason] || reason;
-}
+// Map suspense reason to human-readable text -- delegates to shared types for single source of truth
+export { formatSuspenseReason } from "../types";
 
 // Map status to display text
 export function formatStatus(status: string): string {

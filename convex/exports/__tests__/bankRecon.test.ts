@@ -67,7 +67,7 @@ describe("bank reconciliation export", () => {
     expect(csv.split("\n")[0]).toBe(
       "Date,Bank Description,Bank Amount,Invoice #,Counterparty,Invoice Amount,Difference,Match Type,Confidence %"
     );
-    expect(csv).toContain("Date Window Match (+/- 7 days)");
+    expect(csv).toContain("Date Window Match");
     expect(result.fileName).toBe("Bank_Reconciliation_Main_Session_2024-02-10.csv");
   });
 

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   useAppStore,
@@ -10,9 +10,11 @@ import {
 import { useAction, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useRecentActivity } from '@/lib/convex-hooks'
+import { useCompany } from '@/lib/convex-hooks/companies'
 import { useOnboardingState } from '@/components/onboarding'
 import { useWorkosUserId } from '@/lib/convex-hooks/shared'
 import { useReconcileData } from '@/lib/use-reconcile-data'
+import { formatCurrency, getCurrencySymbol } from '@/lib/format'
 import {
   IconDownload,
   IconCaretDown,
@@ -86,6 +88,13 @@ function ReportsViewContent() {
   const { setShowPaywall, isDemo, selectedCompanyId } = useAppStore()
   const [selectedReport, setSelectedReport] = useState<ReportType>('summary')
 
+  // Fetch company data for currency
+  const company = useCompany(
+    !isDemo && selectedCompanyId ? selectedCompanyId as Id<"companies"> : undefined
+  )
+  const currency = company?.currency || 'USD'
+  const currencySymbol = getCurrencySymbol(currency)
+
   // Fetch sessions for the company (to get most recent if no URL param)
   const workosUserId = useWorkosUserId()
   const companySessions = useQuery(
@@ -133,6 +142,8 @@ function ReportsViewContent() {
   const [exportLoading, setExportLoading] = useState<'csv' | 'xlsx' | 'accounting' | 'pdf' | null>(null)
   const [showAccountingMenu, setShowAccountingMenu] = useState(false)
   const [pdfJobId, setPdfJobId] = useState<string | null>(null)
+  const [exportJobId, setExportJobId] = useState<string | null>(null)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
 
   // Toast notifications
   const toast = useToastHelpers()
@@ -149,6 +160,12 @@ function ReportsViewContent() {
   const pdfJobStatus = useQuery(
     api.exports.index.getPDFJobStatus,
     pdfJobId ? { jobId: pdfJobId } : 'skip'
+  )
+
+  // File export job status query (CSV/XLSX/Accounting - reactive via Convex subscription)
+  const exportJobStatus = useQuery(
+    api.exports.index.getExportJobStatus,
+    exportJobId ? { jobId: exportJobId } : 'skip'
   )
 
   // Fetch real activity data from backend
@@ -186,13 +203,42 @@ function ReportsViewContent() {
     }
   }, [pdfJobStatus, pdfJobId, toast])
 
+  // Handle file export job completion (CSV/XLSX/Accounting)
+  useEffect(() => {
+    if (!exportJobStatus || !exportJobId) return
+
+    if (exportJobStatus.status === 'completed' && exportJobStatus.downloadUrl) {
+      const link = document.createElement('a')
+      link.href = exportJobStatus.downloadUrl
+      link.download = exportJobStatus.fileName || 'export'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast.success('Export ready', 'Your file is downloading')
+      completeItem('export')
+      setExportJobId(null)
+      setExportLoading(null)
+    } else if (exportJobStatus.status === 'failed') {
+      toast.error(
+        'Export failed',
+        exportJobStatus.errorMessage || 'Unknown error. Try again?'
+      )
+      setExportJobId(null)
+      setExportLoading(null)
+    }
+  }, [exportJobStatus, exportJobId, toast, completeItem])
+
   // Close accounting menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = () => setShowAccountingMenu(false)
-    if (showAccountingMenu) {
-      document.addEventListener('click', handleClickOutside)
-      return () => document.removeEventListener('click', handleClickOutside)
+    if (!showAccountingMenu) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowAccountingMenu(false)
+      }
     }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showAccountingMenu])
 
   const matchedCount = matches.filter(m => m.approved).length
@@ -208,7 +254,7 @@ function ReportsViewContent() {
   const pendingPct = totalTransactions > 0 ? (pendingCount / totalTransactions) * 100 : 0
   const reviewPct = totalTransactions > 0 ? (suspenseCount / totalTransactions) * 100 : 0
 
-  // Download file from data URL
+  // Download file from URL (used by PDF export which uses external R2 presigned URLs)
   const downloadFile = useCallback((dataUrl: string, fileName: string) => {
     const link = document.createElement('a')
     link.href = dataUrl
@@ -246,20 +292,19 @@ function ReportsViewContent() {
         },
       })
 
-      if (result.success && result.fileUrl && result.fileName) {
-        downloadFile(result.fileUrl, result.fileName)
-        toast.success(`${format.toUpperCase()} export ready`, 'Your file is downloading')
-        // Mark onboarding export step as complete
-        completeItem('export')
+      if (result.success && result.jobId) {
+        // Start polling for job status (reactive via Convex subscription)
+        setExportJobId(result.jobId)
+        toast.info('Generating export...', 'This will download automatically')
       } else {
         toast.error('Export failed', result.error || 'Unknown error')
+        setExportLoading(null)
       }
     } catch (err) {
       toast.error('Export failed', err instanceof Error ? err.message : 'Unknown error')
-    } finally {
       setExportLoading(null)
     }
-  }, [isDemo, activeSession, selectedReport, generateExport, setShowPaywall, downloadFile, toast, completeItem])
+  }, [isDemo, activeSession, selectedReport, generateExport, setShowPaywall, toast])
 
   const handleAccountingExport = useCallback(async (software: AccountingSoftware) => {
     if (isDemo) {
@@ -284,21 +329,20 @@ function ReportsViewContent() {
         },
       })
 
-      if (result.success && result.fileUrl && result.fileName) {
-        downloadFile(result.fileUrl, result.fileName)
+      if (result.success && result.jobId) {
+        // Start polling for job status (reactive via Convex subscription)
+        setExportJobId(result.jobId)
         const softwareName = accountingSoftwareOptions.find(o => o.id === software)?.name || software
-        toast.success(`${softwareName} export ready`, 'Your file is downloading')
-        // Mark onboarding export step as complete
-        completeItem('export')
+        toast.info(`Generating ${softwareName} export...`, 'This will download automatically')
       } else {
         toast.error('Export failed', result.error || 'Unknown error')
+        setExportLoading(null)
       }
     } catch (err) {
       toast.error('Export failed', err instanceof Error ? err.message : 'Unknown error')
-    } finally {
       setExportLoading(null)
     }
-  }, [isDemo, activeSession, generateAccountingExport, setShowPaywall, downloadFile, toast])
+  }, [isDemo, activeSession, generateAccountingExport, setShowPaywall, toast])
 
   const handlePDFExport = useCallback(async () => {
     if (isDemo) {
@@ -370,16 +414,13 @@ function ReportsViewContent() {
         </div>
         <div className="flex items-center gap-2">
           {/* Export Dropdown */}
-          <div className="relative">
+          <div className="relative" ref={exportMenuRef}>
             <ButtonPrimary
               size="sm"
               icon={<IconDownload size={12} />}
               loading={exportLoading !== null}
               disabled={exportLoading !== null}
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowAccountingMenu(!showAccountingMenu)
-              }}
+              onClick={() => setShowAccountingMenu(!showAccountingMenu)}
             >
               Export
               <IconCaretDown size={12} className="ml-1" />
@@ -391,28 +432,19 @@ function ReportsViewContent() {
                   Download
                 </div>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleExport('csv')
-                  }}
+                  onClick={() => handleExport('csv')}
                   className="w-full px-3 py-2 text-xs text-left hover:bg-secondary transition-colors"
                 >
                   CSV export
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleExport('xlsx')
-                  }}
+                  onClick={() => handleExport('xlsx')}
                   className="w-full px-3 py-2 text-xs text-left hover:bg-secondary transition-colors"
                 >
                   Excel export
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handlePDFExport()
-                  }}
+                  onClick={() => handlePDFExport()}
                   disabled={exportLoading === 'pdf'}
                   className="w-full px-3 py-2 text-xs text-left hover:bg-secondary transition-colors flex items-center gap-2"
                 >
@@ -431,10 +463,7 @@ function ReportsViewContent() {
                 {accountingSoftwareOptions.map((option) => (
                   <button
                     key={option.id}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleAccountingExport(option.id)
-                    }}
+                    onClick={() => handleAccountingExport(option.id)}
                     className="w-full px-3 py-2 text-xs text-left hover:bg-secondary transition-colors"
                   >
                     {option.name}
@@ -590,7 +619,7 @@ function ReportsViewContent() {
                 <StatCard
                   label="Bank Total"
                   value={Math.abs(totalCash)}
-                  prefix="$"
+                  prefix={currencySymbol}
                   decimals={2}
                   animate
                 />
@@ -599,7 +628,7 @@ function ReportsViewContent() {
                 <StatCard
                   label="Books Total"
                   value={Math.abs(totalAccrual)}
-                  prefix="$"
+                  prefix={currencySymbol}
                   decimals={2}
                   animate
                 />
@@ -608,7 +637,7 @@ function ReportsViewContent() {
                 <StatCard
                   label="Difference"
                   value={Math.abs(variance)}
-                  prefix={variance < 0 ? "-$" : "$"}
+                  prefix={variance < 0 ? `-${currencySymbol}` : currencySymbol}
                   decimals={2}
                   trend={variance === 0 ? 'neutral' : variance > 0 ? 'up' : 'down'}
                   trendValue={variance === 0 ? 'Balanced' : undefined}
@@ -644,7 +673,7 @@ function ReportsViewContent() {
                           <div className="text-xs text-muted-foreground">{tx.date}</div>
                         </div>
                         <div className="text-sm font-medium tabular-nums">
-                          ${Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {formatCurrency(Math.abs(tx.amount), { currency })}
                         </div>
                       </div>
                     ))}
@@ -694,7 +723,7 @@ function ReportsViewContent() {
                         <div role="cell" className="col-span-3 truncate pr-2">{match.cashTransaction.description}</div>
                         <div role="cell" className="col-span-3 truncate pr-2">{match.accrualTransaction.description}</div>
                         <div role="cell" className="col-span-2 text-right font-medium tabular-nums">
-                          ${Math.abs(match.cashTransaction.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {formatCurrency(Math.abs(match.cashTransaction.amount), { currency })}
                         </div>
                         <div role="cell" className="col-span-2 flex justify-center">
                           <MatchLayerBadge layer={match.matchLayer as MatchLayer} />
@@ -758,7 +787,7 @@ function ReportsViewContent() {
                               ? 'Inflow recorded'
                               : 'Outflow recorded'
                       }
-                      detail={`${activity.description} - $${Math.abs(activity.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                      detail={`${activity.description} - ${formatCurrency(Math.abs(activity.amount), { currency })}`}
                       time={activity.time}
                       delay={i * 50}
                     />

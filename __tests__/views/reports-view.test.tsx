@@ -14,22 +14,40 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 
-import { mockGenerateExport } from '../utils/reports-view-mocks'
+import {
+  mockGenerateExport,
+  mockGenerateAccountingExport,
+  mockGeneratePDFExport,
+  mockQueryState,
+} from '../utils/reports-view-mocks'
 
 import { ReportsView } from '@/components/views/reports-view'
 
 describe('ReportsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // New API contract: actions return { success, jobId }
     mockGenerateExport.mockResolvedValue({
       success: true,
-      fileUrl: 'data:text/csv;base64,abc123',
-      fileName: 'report.csv',
+      jobId: 'job-csv-123',
     })
+    mockGenerateAccountingExport.mockResolvedValue({
+      success: true,
+      jobId: 'job-acct-456',
+    })
+    mockGeneratePDFExport.mockResolvedValue({
+      success: true,
+      jobId: 'job-pdf-789',
+    })
+    // Reset query statuses
+    mockQueryState.exportJobStatus = null
+    mockQueryState.pdfJobStatus = null
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+    mockQueryState.exportJobStatus = null
+    mockQueryState.pdfJobStatus = null
   })
 
   describe('Tab Navigation', () => {
@@ -369,6 +387,165 @@ describe('ReportsView', () => {
       render(<ReportsView />)
 
       expect(screen.getByRole('tabpanel')).toBeInTheDocument()
+    })
+  })
+
+  describe('Export Flow', () => {
+    it('calls generateExport with correct args when CSV is clicked', async () => {
+      const user = userEvent.setup()
+      render(<ReportsView />)
+
+      // Open export menu
+      await user.click(screen.getByRole('button', { name: /export/i }))
+      await waitFor(() => {
+        expect(screen.getByText('CSV export')).toBeInTheDocument()
+      })
+
+      // Click CSV
+      await user.click(screen.getByText('CSV export'))
+
+      await waitFor(() => {
+        expect(mockGenerateExport).toHaveBeenCalledWith(
+          expect.objectContaining({
+            format: 'csv',
+            reportType: 'bank_recon',
+            options: expect.objectContaining({
+              includeMatched: true,
+              includePending: true,
+              includeSuspense: true,
+            }),
+          })
+        )
+      })
+    })
+
+    it('calls generateExport with xlsx format when Excel is clicked', async () => {
+      const user = userEvent.setup()
+      render(<ReportsView />)
+
+      // Open export menu
+      await user.click(screen.getByRole('button', { name: /export/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Excel export')).toBeInTheDocument()
+      })
+
+      // Click Excel
+      await user.click(screen.getByText('Excel export'))
+
+      await waitFor(() => {
+        expect(mockGenerateExport).toHaveBeenCalledWith(
+          expect.objectContaining({
+            format: 'xlsx',
+          })
+        )
+      })
+    })
+
+    it('calls generateAccountingExport when SQL Accounting is clicked', async () => {
+      const user = userEvent.setup()
+      render(<ReportsView />)
+
+      // Open export menu
+      await user.click(screen.getByRole('button', { name: /export/i }))
+      await waitFor(() => {
+        expect(screen.getByText('SQL Accounting')).toBeInTheDocument()
+      })
+
+      // Click SQL Accounting
+      await user.click(screen.getByText('SQL Accounting'))
+
+      await waitFor(() => {
+        expect(mockGenerateAccountingExport).toHaveBeenCalledWith(
+          expect.objectContaining({
+            software: 'sql_accounting',
+          })
+        )
+      })
+    })
+
+    it('calls generatePDFExport when PDF report is clicked', async () => {
+      const user = userEvent.setup()
+      render(<ReportsView />)
+
+      // Open export menu
+      await user.click(screen.getByRole('button', { name: /export/i }))
+      await waitFor(() => {
+        expect(screen.getByText('PDF report')).toBeInTheDocument()
+      })
+
+      // Click PDF
+      await user.click(screen.getByText('PDF report'))
+
+      await waitFor(() => {
+        expect(mockGeneratePDFExport).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reportType: 'bank_recon',
+            options: expect.objectContaining({
+              includeMatched: true,
+              includeSuspense: true,
+              includeJournal: true,
+            }),
+          })
+        )
+      })
+    })
+
+    it('returns jobId from export action (new API contract)', async () => {
+      const user = userEvent.setup()
+      render(<ReportsView />)
+
+      // Open export menu and trigger CSV export
+      await user.click(screen.getByRole('button', { name: /export/i }))
+      await waitFor(() => {
+        expect(screen.getByText('CSV export')).toBeInTheDocument()
+      })
+      await user.click(screen.getByText('CSV export'))
+
+      // Verify the action was called and returns the new format
+      await waitFor(() => {
+        expect(mockGenerateExport).toHaveBeenCalled()
+      })
+
+      // The mock returns { success: true, jobId: 'job-csv-123' }
+      const result = await mockGenerateExport.mock.results[0].value
+      expect(result).toEqual({ success: true, jobId: 'job-csv-123' })
+    })
+
+    it('handles export action failure gracefully', async () => {
+      mockGenerateExport.mockResolvedValueOnce({
+        success: false,
+        error: 'Session not found',
+      })
+
+      const user = userEvent.setup()
+      render(<ReportsView />)
+
+      await user.click(screen.getByRole('button', { name: /export/i }))
+      await waitFor(() => {
+        expect(screen.getByText('CSV export')).toBeInTheDocument()
+      })
+      await user.click(screen.getByText('CSV export'))
+
+      await waitFor(() => {
+        expect(mockGenerateExport).toHaveBeenCalled()
+      })
+    })
+
+    it('handles export action exception gracefully', async () => {
+      mockGenerateExport.mockRejectedValueOnce(new Error('Network error'))
+
+      const user = userEvent.setup()
+      render(<ReportsView />)
+
+      await user.click(screen.getByRole('button', { name: /export/i }))
+      await waitFor(() => {
+        expect(screen.getByText('CSV export')).toBeInTheDocument()
+      })
+      await user.click(screen.getByText('CSV export'))
+
+      await waitFor(() => {
+        expect(mockGenerateExport).toHaveBeenCalled()
+      })
     })
   })
 })

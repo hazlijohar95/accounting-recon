@@ -112,17 +112,8 @@ export function workbookToBuffer(wb: XLSX.WorkBook): ArrayBuffer {
   return wbout;
 }
 
-// Get match layer description
-export function getMatchLayerDescription(layer: number): string {
-  const descriptions: Record<number, string> = {
-    1: "Exact Match",
-    2: "Date Window Match (+/- 7 days)",
-    3: "Reference Match",
-    4: "Fuzzy Match",
-    5: "LLM Semantic Match",
-  };
-  return descriptions[layer] || `Layer ${layer}`;
-}
+// Get match layer description -- delegates to shared types for single source of truth
+export { getMatchLayerDescription } from "../types";
 
 // Get confidence level color (for conditional formatting notes)
 export function getConfidenceColor(score: number): string {

@@ -356,6 +356,32 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_status", ["status"]),
 
+  // File Export Jobs - tracks CSV/XLSX/accounting exports stored in Convex storage
+  exportJobs: defineTable({
+    sessionId: v.id("reconciliationSessions"),
+    userId: v.id("users"),
+    exportType: v.union(
+      v.literal("csv"),
+      v.literal("xlsx"),
+      v.literal("accounting")
+    ),
+    reportType: v.optional(v.string()), // "bank_recon", "client_query", etc.
+    status: v.union(
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    storageId: v.optional(v.id("_storage")),
+    fileName: v.optional(v.string()),
+    mimeType: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
   // Onboarding progress - persists multi-step onboarding state
   onboardingProgress: defineTable({
     userId: v.id("users"),

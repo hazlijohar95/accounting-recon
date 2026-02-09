@@ -68,7 +68,7 @@ describe("export excel utilities", () => {
 
   it("describes match layers and confidence colors", () => {
     expect(getMatchLayerDescription(1)).toBe("Exact Match");
-    expect(getMatchLayerDescription(7)).toBe("Layer 7");
+    expect(getMatchLayerDescription(7)).toBe("Partial Match");
     expect(getConfidenceColor(95)).toBe("green");
     expect(getConfidenceColor(70)).toBe("yellow");
     expect(getConfidenceColor(50)).toBe("red");

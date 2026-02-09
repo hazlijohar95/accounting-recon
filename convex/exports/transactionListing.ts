@@ -1,5 +1,4 @@
 // Transaction Listing CSV Export
-import * as XLSX from "xlsx";
 import { createWorksheet, createWorkbook, workbookToBase64, formatDate } from "./utils/excel";
 import {
   objectsToCSV,
@@ -8,34 +7,12 @@ import {
   generateFileName,
   formatStatus,
 } from "./utils/formatting";
-import type { Doc, Id } from "../_generated/dataModel";
-
-interface ExportData {
-  session: Doc<"reconciliationSessions">;
-  company: Doc<"companies">;
-  matches: Array<{
-    _id: Id<"matchedPairs">;
-    confidence: "high" | "medium" | "low";
-    confidenceScore: number;
-    matchLayer: 1 | 2 | 3 | 4 | 5;
-    status: "pending" | "approved" | "rejected";
-    cashTransaction: Doc<"transactions"> | null;
-    accrualDocument: Doc<"accrualDocuments"> | null;
-    accrualTransaction: Doc<"transactions"> | null;
-  }>;
-  transactions: Doc<"transactions">[];
-  accrualDocuments: Doc<"accrualDocuments">[];
-  suspenseItems: Doc<"suspenseItems">[];
-}
-
-interface ExportOptions {
-  includeMatched: boolean;
-  includePending: boolean;
-  includeSuspense: boolean;
-}
+import type { ExportData, ExportOptions } from "./types";
+import type { Doc } from "../_generated/dataModel";
 
 interface TransactionRow {
   date: string;
+  rawDate: string; // ISO date for reliable sorting
   type: string;
   description: string;
   reference: string;
@@ -65,6 +42,7 @@ export function generateTransactionListingExport(
 
     allTransactions.push({
       date: formatDate(txn.date),
+      rawDate: txn.date,
       type: "Cash (Bank)",
       description: cleanDescription(txn.description),
       reference: txn.reference || "",
@@ -85,6 +63,7 @@ export function generateTransactionListingExport(
 
     allTransactions.push({
       date: formatDate(doc.docDate),
+      rawDate: doc.docDate,
       type: `Accrual (${docTypeLabel})`,
       description: doc.description
         ? cleanDescription(doc.description)
@@ -96,10 +75,8 @@ export function generateTransactionListingExport(
     });
   }
 
-  // Sort by date
-  allTransactions.sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
+  // Sort by raw ISO date (reliable string comparison for YYYY-MM-DD format)
+  allTransactions.sort((a, b) => a.rawDate.localeCompare(b.rawDate));
 
   if (format === "csv") {
     return generateTransactionListingCSV(allTransactions, session);

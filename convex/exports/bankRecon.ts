@@ -1,5 +1,4 @@
 // Bank Reconciliation Excel Export
-import * as XLSX from "xlsx";
 import {
   createWorksheet,
   createSummaryWorksheet,
@@ -7,7 +6,6 @@ import {
   workbookToBase64,
   formatDate,
   formatCurrency,
-  getMatchLayerDescription,
 } from "./utils/excel";
 import {
   objectsToCSV,
@@ -15,34 +13,9 @@ import {
   cleanDescription,
   generateFileName,
   formatStatus,
-  formatSuspenseReason,
 } from "./utils/formatting";
-import type { Doc, Id } from "../_generated/dataModel";
-
-interface ExportData {
-  session: Doc<"reconciliationSessions">;
-  company: Doc<"companies">;
-  matches: Array<{
-    _id: Id<"matchedPairs">;
-    confidence: "high" | "medium" | "low";
-    confidenceScore: number;
-    matchLayer: 1 | 2 | 3 | 4 | 5;
-    matchReason?: string;
-    status: "pending" | "approved" | "rejected";
-    cashTransaction: Doc<"transactions"> | null;
-    accrualDocument: Doc<"accrualDocuments"> | null;
-    accrualTransaction: Doc<"transactions"> | null;
-  }>;
-  transactions: Doc<"transactions">[];
-  accrualDocuments: Doc<"accrualDocuments">[];
-  suspenseItems: Doc<"suspenseItems">[];
-}
-
-interface ExportOptions {
-  includeMatched: boolean;
-  includePending: boolean;
-  includeSuspense: boolean;
-}
+import type { ExportData, ExportOptions } from "./types";
+import { getMatchLayerDescription, formatSuspenseReason } from "./types";
 
 export function generateBankReconExport(
   data: ExportData,

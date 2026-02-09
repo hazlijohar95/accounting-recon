@@ -880,13 +880,7 @@ export declare const api: {
             | "quickbooks_iif"
             | "xero_csv";
         },
-        {
-          error?: string;
-          expiresAt?: number;
-          fileName?: string;
-          fileUrl?: string;
-          success: boolean;
-        }
+        { error?: string; jobId?: string; success: boolean }
       >;
       generateExport: FunctionReference<
         "action",
@@ -901,13 +895,7 @@ export declare const api: {
           reportType: "bank_recon" | "client_query" | "transaction_listing";
           sessionId: Id<"reconciliationSessions">;
         },
-        {
-          error?: string;
-          expiresAt?: number;
-          fileName?: string;
-          fileUrl?: string;
-          success: boolean;
-        }
+        { error?: string; jobId?: string; success: boolean }
       >;
       generatePDFExport: FunctionReference<
         "action",
@@ -922,6 +910,17 @@ export declare const api: {
           sessionId: Id<"reconciliationSessions">;
         },
         { error?: string; jobId?: string; success: boolean }
+      >;
+      getExportJobStatus: FunctionReference<
+        "query",
+        "public",
+        { jobId: string },
+        {
+          downloadUrl?: string;
+          errorMessage?: string;
+          fileName?: string;
+          status: "processing" | "completed" | "failed";
+        } | null
       >;
       getPDFJobStatus: FunctionReference<
         "query",
@@ -3665,6 +3664,40 @@ export declare const internal: {
   };
   exports: {
     index: {
+      cleanupExpiredExportJobs: FunctionReference<
+        "mutation",
+        "internal",
+        {},
+        any
+      >;
+      completeExportJob: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          fileName: string;
+          jobId: Id<"exportJobs">;
+          mimeType: string;
+          storageId: Id<"_storage">;
+        },
+        any
+      >;
+      createExportJob: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          exportType: "csv" | "xlsx" | "accounting";
+          reportType?: string;
+          sessionId: Id<"reconciliationSessions">;
+          userId: Id<"users">;
+        },
+        Id<"exportJobs">
+      >;
+      failExportJob: FunctionReference<
+        "mutation",
+        "internal",
+        { errorMessage: string; jobId: Id<"exportJobs"> },
+        any
+      >;
       getExportData: FunctionReference<
         "query",
         "internal",

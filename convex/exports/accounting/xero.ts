@@ -1,36 +1,7 @@
 // Xero CSV Bank Statement Import Format
 import { formatDate } from "../utils/excel";
 import { escapeCSVField, cleanDescription, generateFileName } from "../utils/formatting";
-import type { Doc, Id } from "../../_generated/dataModel";
-
-interface ExportData {
-  session: Doc<"reconciliationSessions">;
-  company: Doc<"companies">;
-  matches: Array<{
-    _id: Id<"matchedPairs">;
-    confidence: "high" | "medium" | "low";
-    confidenceScore: number;
-    matchLayer: 1 | 2 | 3 | 4 | 5;
-    status: "pending" | "approved" | "rejected";
-    cashTransaction: Doc<"transactions"> | null;
-    accrualDocument: Doc<"accrualDocuments"> | null;
-    accrualTransaction: Doc<"transactions"> | null;
-  }>;
-  transactions: Doc<"transactions">[];
-  accrualDocuments: Doc<"accrualDocuments">[];
-  suspenseItems: Doc<"suspenseItems">[];
-}
-
-interface AccountingOptions {
-  accountCodes?: {
-    bankAccount?: string;
-    receivables?: string;
-    payables?: string;
-    revenue?: string;
-    expenses?: string;
-  };
-  includeJournalEntries?: boolean;
-}
+import type { ExportData, AccountingOptions } from "../types";
 
 /**
  * Xero Bank Statement CSV Import Format

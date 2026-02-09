@@ -34,6 +34,14 @@ crons.interval(
   internal.exports.pdf.cleanupStalePDFJobs
 );
 
+// Clean up expired file export jobs every 5 minutes
+// Deletes stored files from Convex storage after 1 hour, removes stale job records
+crons.interval(
+  "cleanup-expired-export-jobs",
+  { minutes: 5 },
+  internal.exports.index.cleanupExpiredExportJobs
+);
+
 // Clean up expired reconciliation chat messages every hour
 // Messages older than 24 hours are deleted to manage storage
 crons.interval(
