@@ -18,6 +18,9 @@ const ALLOWED_CONTENT_TYPES = [
 // Max file size (50MB) - validated post-upload
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
+/** Documents stuck in "processing" for longer than this are considered stale */
+const STALE_EXTRACTION_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
 /**
  * SECURITY: Sanitize filename to prevent path traversal and injection attacks
  * Server-side validation (defense in depth - client also validates)
@@ -490,5 +493,53 @@ export const remove = mutation({
     // 5. Delete the document record
     await ctx.db.delete(args.id);
     return null;
+  },
+});
+
+// ============ SCHEDULED JOBS ============
+
+/**
+ * Clean up stale extraction jobs.
+ *
+ * Documents stuck in "processing" for more than 15 minutes are reset to "failed"
+ * with a descriptive error message. This acts as a safety net when the frontend
+ * navigates away mid-extraction or when an extraction action silently crashes.
+ *
+ * Called by a cron job every 2 minutes.
+ */
+export const cleanupStaleExtractions = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - STALE_EXTRACTION_TIMEOUT_MS;
+
+    // Find all documents stuck in "processing"
+    const processingDocs = await ctx.db
+      .query("documents")
+      .withIndex("by_status", (q) => q.eq("extractionStatus", "processing"))
+      .collect();
+
+    let resetCount = 0;
+
+    for (const doc of processingDocs) {
+      // Check if the document has been processing for too long
+      // Use uploadedAt as a proxy (extractionPhase updates would be more precise,
+      // but uploadedAt is always set and is conservative enough)
+      const lastActivity = doc.processedAt ?? doc.uploadedAt;
+      if (lastActivity && lastActivity < cutoff) {
+        await ctx.db.patch(doc._id, {
+          extractionStatus: "failed",
+          errorMessage: "Extraction timed out. The document was stuck processing for over 15 minutes. Please retry.",
+          processedAt: Date.now(),
+        });
+        resetCount++;
+        console.log(
+          `[StaleExtraction] Reset document ${doc._id} (${doc.fileName}) — stuck since ${new Date(lastActivity).toISOString()}`
+        );
+      }
+    }
+
+    if (resetCount > 0) {
+      console.log(`[StaleExtraction] Reset ${resetCount} stale document(s) to failed`);
+    }
   },
 });

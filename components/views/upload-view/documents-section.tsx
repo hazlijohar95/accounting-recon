@@ -31,6 +31,9 @@ export function DocumentsSection({
 }) {
   const [filterType, setFilterType] = useState<string>('all')
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DocumentItem | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(25)
   const deleteDocument = useDeleteDocument()
   const resetExtraction = useResetExtraction()
   const triggerExtraction = useTriggerExtraction()
@@ -78,13 +81,25 @@ export function DocumentsSection({
       ? documents
       : documents.filter((d) => d.documentType === filterType)
 
-  const handleDelete = async (docId: Id<"documents">) => {
+  // Paginate: show up to visibleCount
+  const visibleDocuments = filteredDocuments.slice(0, visibleCount)
+  const hasMore = filteredDocuments.length > visibleCount
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
     try {
-      await deleteDocument(docId)
+      await deleteDocument(deleteTarget._id)
       toast.addToast({
         type: 'success',
         title: 'Document deleted',
+        description: `${deleteTarget.fileName} and its extracted data have been removed`,
       })
+      setDeleteTarget(null)
+      // Close detail modal if it was showing this document
+      if (selectedDoc?._id === deleteTarget._id) {
+        setSelectedDoc(null)
+      }
     } catch (error) {
       console.error('Failed to delete document:', error)
       toast.addToast({
@@ -92,6 +107,8 @@ export function DocumentsSection({
         title: 'Failed to delete',
         description: error instanceof Error ? error.message : 'Unknown error',
       })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -126,7 +143,10 @@ export function DocumentsSection({
         <select
           id="doc-type-filter"
           value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
+          onChange={(e) => {
+              setFilterType(e.target.value)
+              setVisibleCount(25) // Reset pagination on filter change
+            }}
           className="text-sm bg-background border border-border px-2 py-1 focus-ring"
         >
           <option value="all">All Types</option>
@@ -142,16 +162,28 @@ export function DocumentsSection({
 
       {/* Document list */}
       <ul className="border border-border divide-y divide-border" role="list">
-        {filteredDocuments.map((doc) => (
+        {visibleDocuments.map((doc) => (
           <DocumentListItem
             key={doc._id}
             document={doc}
             onSelect={() => setSelectedDoc(doc)}
-            onDelete={() => handleDelete(doc._id)}
+            onDelete={() => setDeleteTarget(doc)}
             onRetry={() => handleRetryExtraction(doc._id)}
           />
         ))}
       </ul>
+
+      {/* Show more */}
+      {hasMore && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => setVisibleCount((prev) => prev + 25)}
+            className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground border border-border hover:bg-secondary transition-colors focus-ring"
+          >
+            Show more ({filteredDocuments.length - visibleCount} remaining)
+          </button>
+        </div>
+      )}
 
       {/* Detail modal */}
       {selectedDoc && (
@@ -159,10 +191,56 @@ export function DocumentsSection({
           document={selectedDoc}
           onClose={() => setSelectedDoc(null)}
           onDelete={() => {
-            handleDelete(selectedDoc._id)
+            setDeleteTarget(selectedDoc)
             setSelectedDoc(null)
           }}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <Modal
+          isOpen
+          onClose={() => !isDeleting && setDeleteTarget(null)}
+          title="Delete Document"
+          size="sm"
+        >
+          <div className="space-y-4">
+            <p className="text-sm">
+              Are you sure you want to delete{' '}
+              <span className="font-medium">{deleteTarget.fileName}</span>?
+            </p>
+            <div className="bg-error/5 border border-error/20 px-3 py-2">
+              <p className="text-xs text-error/90">
+                This will permanently remove the document and all its extracted data,
+                including transactions, matches, and accrual records. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-xs border border-border hover:bg-secondary transition-colors focus-ring disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-xs bg-error text-white hover:bg-error/90 transition-colors focus-ring disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 border border-white/40 border-t-white animate-spin" />
+                    Deleting...
+                  </span>
+                ) : (
+                  'Delete Permanently'
+                )}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )

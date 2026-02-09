@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Id } from '@/convex/_generated/dataModel'
 import { CompanyVerificationCard } from './company-verification-card'
@@ -80,6 +81,11 @@ export function UploadAnalysisPanel({
     const basis = d.userOverride?.basisType ?? d.basisType
     return basis === 'accrual'
   })
+
+  // Mismatch gate: require explicit acknowledgement before proceeding
+  const hasMismatch = detectedCompany?.matchStatus === 'mismatch'
+  const [mismatchAcknowledged, setMismatchAcknowledged] = useState(false)
+  const canProceed = !hasMismatch || mismatchAcknowledged
 
   return (
     <div className="space-y-4 animate-fade-in" style={{ animationDuration: '300ms' }}>
@@ -229,6 +235,26 @@ export function UploadAnalysisPanel({
             </div>
           )}
 
+          {/* Mismatch acknowledgement gate */}
+          {hasMismatch && (
+            <div className="border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={mismatchAcknowledged}
+                  onChange={(e) => setMismatchAcknowledged(e.target.checked)}
+                  className="mt-0.5 accent-amber-600"
+                />
+                <span className="text-xs text-amber-800 dark:text-amber-200">
+                  I confirm these documents should be processed under{' '}
+                  <span className="font-medium">{currentCompanyName}</span>, even though
+                  the AI detected they may belong to{' '}
+                  <span className="font-medium">{detectedCompany?.name}</span>.
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex items-center justify-between pt-2">
             <button
@@ -240,7 +266,7 @@ export function UploadAnalysisPanel({
             </button>
             <button
               onClick={onProceed}
-              disabled={isApproving || phase === 'approved'}
+              disabled={isApproving || phase === 'approved' || !canProceed}
               className={cn(
                 'px-6 py-2.5 text-sm font-medium transition-colors',
                 'bg-foreground text-background',

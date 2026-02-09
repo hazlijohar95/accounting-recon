@@ -11,6 +11,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   FILE_STATUS,
   MAX_FILE_SIZE,
+  MAX_FILES_PER_BATCH,
   ALLOWED_EXTENSIONS,
   ALLOWED_CONTENT_TYPES,
   type FileStatus,
@@ -34,6 +35,8 @@ interface FileValidationResult {
 interface UseFileUploadStateOptions {
   /** Default document type for new files, or 'auto' to detect from filename */
   defaultDocType?: DocumentType | 'auto'
+  /** Optional lower file size limit for PDFs (e.g. Gemini's 20MB limit) */
+  maxPdfSize?: number
 }
 
 interface UseFileUploadStateReturn {
@@ -77,7 +80,7 @@ interface UseFileUploadStateReturn {
 export function useFileUploadState(
   options: UseFileUploadStateOptions = {}
 ): UseFileUploadStateReturn {
-  const { defaultDocType = 'auto' } = options
+  const { defaultDocType = 'auto', maxPdfSize } = options
 
   const [files, setFiles] = useState<UploadedFile[]>([])
   const xhrMapRef = useRef<Map<string, XMLHttpRequest>>(new Map())
@@ -104,12 +107,39 @@ export function useFileUploadState(
 
       // Build a Set of existing files for deduplication (name + size)
       const existingFileKeys = new Set<string>()
+      let currentFileCount = 0
       setFiles((prev) => {
         prev.forEach((f) => existingFileKeys.add(`${f.name}:${f.size}`))
+        currentFileCount = prev.length
         return prev // Don't modify state, just read it
       })
 
-      Array.from(fileList).forEach((file) => {
+      // Enforce batch file count limit
+      const remainingSlots = Math.max(0, MAX_FILES_PER_BATCH - currentFileCount)
+      const filesToProcess = Array.from(fileList)
+
+      if (filesToProcess.length > remainingSlots) {
+        const excessCount = filesToProcess.length - remainingSlots
+        // Only process files up to the limit
+        const excessFiles = filesToProcess.splice(remainingSlots)
+        for (const excessFile of excessFiles) {
+          rejected.push({
+            name: excessFile.name,
+            reason: `Batch limit reached (max ${MAX_FILES_PER_BATCH} files). Upload in multiple batches.`,
+          })
+        }
+      }
+
+      filesToProcess.forEach((file) => {
+        // Validate empty files
+        if (file.size === 0) {
+          rejected.push({
+            name: file.name,
+            reason: 'File is empty (0 bytes)',
+          })
+          return
+        }
+
         // Validate file size
         if (file.size > MAX_FILE_SIZE) {
           rejected.push({
@@ -125,6 +155,15 @@ export function useFileUploadState(
           rejected.push({
             name: file.name,
             reason: `Invalid file type (.${extension})`,
+          })
+          return
+        }
+
+        // For PDFs with a provider-specific size limit (e.g. Gemini 20MB)
+        if (maxPdfSize && extension === 'pdf' && file.size > maxPdfSize) {
+          rejected.push({
+            name: file.name,
+            reason: `PDF exceeds ${Math.round(maxPdfSize / 1024 / 1024)}MB limit for current extraction provider`,
           })
           return
         }
@@ -180,7 +219,7 @@ export function useFileUploadState(
 
       return { valid, rejected }
     },
-    [defaultDocType]
+    [defaultDocType, maxPdfSize]
   )
 
   // Update a single file by ID

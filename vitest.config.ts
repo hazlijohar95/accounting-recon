@@ -69,8 +69,6 @@ export default defineConfig({
         'lib/exports/**',
         // PDF renderer (browser-only canvas rendering)
         'lib/pdf-renderer.ts',
-        // Upload handlers (integration with Convex)
-        'lib/uploadHandlers.ts',
         // Mono component (font loading)
         'lib/mono.tsx',
         // Filter persistence (URL state, needs router)

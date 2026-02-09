@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useRef, useEffect } from 'react'
+import Link from 'next/link'
 import {
   IconFileText,
   IconWarningCircle,
@@ -111,7 +112,7 @@ export function FileItem({
               onClick={onUpload}
               className="px-3 py-1.5 text-xs border border-border hover:bg-secondary transition-colors focus-ring"
             >
-              Upload
+              Process
             </button>
             <button
               onClick={onRemove}
@@ -166,6 +167,14 @@ export function FileItem({
               <span className="text-xs text-muted-foreground">
                 {Math.round(document.extractionConfidence)}%
               </span>
+            )}
+            {file.documentId && (
+              <Link
+                href={file.type === 'bank_statement' ? '/reconcile' : '/upload?tab=documents'}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors ml-1"
+              >
+                View
+              </Link>
             )}
           </div>
         )}

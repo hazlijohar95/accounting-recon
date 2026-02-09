@@ -36,6 +36,13 @@ export const STATUS_COLORS = {
 export const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 export const MAX_FILE_SIZE_MB = 50
 
+/** Gemini extraction provider has a lower limit for inline data */
+export const GEMINI_MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
+export const GEMINI_MAX_FILE_SIZE_MB = 20
+
+/** Maximum files per upload batch to prevent browser overload */
+export const MAX_FILES_PER_BATCH = 50
+
 export const ALLOWED_CONTENT_TYPES = [
   'application/pdf',
   'image/jpeg',

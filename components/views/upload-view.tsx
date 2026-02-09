@@ -22,7 +22,7 @@ import { useGeminiExtraction } from '@/hooks/useGeminiExtraction'
 import { useUploadAnalysis } from '@/hooks/useUploadAnalysis'
 import { useFileUploadState } from '@/hooks/useFileUploadState'
 import { UploadAnalysisPanel } from './upload-view/upload-analysis-panel'
-import { mapErrorMessage } from '@/lib/constants/upload'
+import { mapErrorMessage, GEMINI_MAX_FILE_SIZE } from '@/lib/constants/upload'
 
 const EXTRACTION_PROVIDER = process.env.NEXT_PUBLIC_EXTRACTION_PROVIDER || 'bedrock'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
@@ -53,7 +53,9 @@ function UploadViewContent() {
   const setShowPaywall = useSetShowPaywall()
 
   // Centralized file state management (validation, deduplication, XHR tracking, memory cleanup)
-  const fileState = useFileUploadState()
+  const fileState = useFileUploadState({
+    maxPdfSize: EXTRACTION_PROVIDER === 'gemini' ? GEMINI_MAX_FILE_SIZE : undefined,
+  })
 
   const [isDragging, setIsDragging] = useState(false)
   const [activeTab, setActiveTab] = useState<UploadTab>('upload')
@@ -428,6 +430,60 @@ function UploadViewContent() {
     return () => setProcessingDocumentsCount(0)
   }, [fileState.stats.active, setProcessingDocumentsCount])
 
+  // Warn users before navigating away during active uploads
+  useEffect(() => {
+    const hasActiveWork = fileState.stats.active > 0
+    if (!hasActiveWork) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      // Modern browsers show a generic message; custom strings are ignored
+      e.returnValue = 'You have uploads in progress. Are you sure you want to leave?'
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [fileState.stats.active])
+
+  // Show batch completion summary when all files finish processing
+  const prevActiveRef = useRef(0)
+  useEffect(() => {
+    const { active, complete, failed, total } = fileState.stats
+    const prevActive = prevActiveRef.current
+    prevActiveRef.current = active
+
+    // Detect transition from active > 0 to active === 0, with multiple files processed
+    if (prevActive > 0 && active === 0 && total >= 2 && (complete > 0 || failed > 0)) {
+      // Count total extracted transactions from documents
+      const totalTxns = fileState.files
+        .filter((f) => f.status === 'complete')
+        .reduce((sum, f) => sum + (f.documentId ? 1 : 0), 0)
+
+      if (failed > 0 && complete > 0) {
+        toast.addToast({
+          type: 'info',
+          title: 'Batch processing complete',
+          description: `${complete} file${complete !== 1 ? 's' : ''} processed, ${failed} failed. Check failed files and retry.`,
+          duration: 10000,
+        })
+      } else if (failed > 0) {
+        toast.addToast({
+          type: 'error',
+          title: 'Batch processing failed',
+          description: `All ${failed} file${failed !== 1 ? 's' : ''} failed. Check errors and retry.`,
+          duration: 10000,
+        })
+      } else {
+        toast.addToast({
+          type: 'success',
+          title: 'All files processed',
+          description: `${complete} file${complete !== 1 ? 's' : ''} successfully extracted.`,
+          duration: 8000,
+        })
+      }
+    }
+  }, [fileState.stats, fileState.files, toast])
+
   // Compute pending file count for tab badge
   const pendingFilesCount = fileState.stats.pending
 
@@ -522,7 +578,7 @@ function UploadViewContent() {
           {isDragging ? 'Drop files to upload' : 'Drag and drop files here'}
         </p>
         <p className="mt-1 text-xs text-muted-foreground relative">
-          PDF, CSV, XLS, or images up to 50MB
+          PDF, CSV, XLS, or images up to {EXTRACTION_PROVIDER === 'gemini' ? '20' : '50'}MB
         </p>
 
         <div className="mt-4 relative">

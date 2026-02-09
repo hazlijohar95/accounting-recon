@@ -50,4 +50,21 @@ crons.interval(
   internal.reconciliationChat.deleteExpired
 );
 
+// Reset stale document extractions every 2 minutes
+// Documents stuck in "processing" for >15 minutes are marked as failed
+// so users can see the failure and retry, instead of being stuck forever
+crons.interval(
+  "cleanup-stale-extractions",
+  { minutes: 2 },
+  internal.documents.cleanupStaleExtractions
+);
+
+// Process retryable extraction queue items every 30 seconds
+// Items with exponential backoff whose retry time has arrived get requeued
+crons.interval(
+  "process-queue-retries",
+  { seconds: 30 },
+  internal.extractionQueue.processRetryableItems
+);
+
 export default crons;

@@ -12,6 +12,39 @@ import { Id } from "./_generated/dataModel";
 import { authKit } from "./auth";
 import { AuthErrors, ResourceErrors, ValidationErrors, BusinessErrors } from "./lib/errors";
 
+// ============ HELPERS ============
+
+/**
+ * Validate a date string is both in YYYY-MM-DD format AND represents a real date.
+ * Prevents invalid dates like 2025-02-31 or 2025-13-01 from being imported.
+ */
+function isValidDate(dateStr: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+
+  const [yearStr, monthStr, dayStr] = dateStr.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const day = parseInt(dayStr, 10);
+
+  if (month < 1 || month > 12) return false;
+  if (day < 1) return false;
+
+  // Days in each month (non-leap year)
+  const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  // Adjust February for leap year
+  if ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0) {
+    daysInMonth[1] = 29;
+  }
+
+  if (day > daysInMonth[month - 1]) return false;
+
+  // Reasonable year range for financial records
+  if (year < 1900 || year > 2100) return false;
+
+  return true;
+}
+
 // ============ VALIDATORS ============
 
 const cashRecordValidator = v.object({
@@ -123,9 +156,9 @@ export const importCashTransactions = mutation({
         continue;
       }
 
-      // Validate date format (YYYY-MM-DD)
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(record.date)) {
-        errors.push(`Row ${i + 1}: Invalid date format. Use YYYY-MM-DD`);
+      // Validate date format (YYYY-MM-DD) and actual validity
+      if (!isValidDate(record.date)) {
+        errors.push(`Row ${i + 1}: Invalid date "${record.date}". Use YYYY-MM-DD with a valid calendar date`);
         continue;
       }
 
@@ -249,9 +282,9 @@ export const importAccrualDocuments = mutation({
         continue;
       }
 
-      // Validate date format (YYYY-MM-DD)
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(record.date)) {
-        errors.push(`Row ${i + 1}: Invalid date format. Use YYYY-MM-DD`);
+      // Validate date format (YYYY-MM-DD) and actual validity
+      if (!isValidDate(record.date)) {
+        errors.push(`Row ${i + 1}: Invalid date "${record.date}". Use YYYY-MM-DD with a valid calendar date`);
         continue;
       }
 
