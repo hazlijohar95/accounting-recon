@@ -264,6 +264,7 @@ export async function POST(req: NextRequest) {
 
               const suspenseItem = await convex.query(api.suspenseItems.get, {
                 id: suspenseItemId as Id<'suspenseItems'>,
+                workosUserId,
               })
 
               if (!suspenseItem) {
@@ -283,6 +284,7 @@ export async function POST(req: NextRequest) {
                 const unmatched = await convex.query(api.accrualDocuments.listBySession, {
                   sessionId: suspenseItem.sessionId,
                   status: 'pending',
+                  workosUserId,
                 })
 
                 potentialMatches = unmatched
@@ -325,6 +327,7 @@ export async function POST(req: NextRequest) {
                 const allCashTxns = await convex.query(api.transactions.listBySession, {
                   sessionId: suspenseItem.sessionId,
                   type: 'cash',
+                  workosUserId,
                 })
                 const unmatched = allCashTxns.filter(txn => txn.status === 'pending')
 
@@ -394,12 +397,14 @@ export async function POST(req: NextRequest) {
               const cashTxns = await convex.query(api.transactions.listBySession, {
                 sessionId: sessionId as Id<'reconciliationSessions'>,
                 type: 'cash',
+                workosUserId,
               })
               const pendingCash = cashTxns.filter(t => t.status === 'pending').slice(0, limit)
 
               const accrualDocs = await convex.query(api.accrualDocuments.listBySession, {
                 sessionId: sessionId as Id<'reconciliationSessions'>,
                 status: 'pending',
+                workosUserId,
               })
               const pendingAccrual = accrualDocs.slice(0, limit)
 
@@ -490,6 +495,7 @@ export async function POST(req: NextRequest) {
               const transactions = await convex.query(api.transactions.listBySession, {
                 sessionId: sessionId as Id<'reconciliationSessions'>,
                 type: 'cash',
+                workosUserId,
               })
 
               let filtered = transactions
@@ -608,6 +614,7 @@ export async function POST(req: NextRequest) {
                 const cashTxns = await convex.query(api.transactions.listBySession, {
                   sessionId: sid,
                   type: 'cash',
+                  workosUserId,
                 })
                 for (const t of cashTxns) {
                   results.push({
@@ -626,6 +633,7 @@ export async function POST(req: NextRequest) {
               if (!type || type === 'accrual') {
                 const accrualDocs = await convex.query(api.accrualDocuments.listBySession, {
                   sessionId: sid,
+                  workosUserId,
                 })
                 for (const d of accrualDocs) {
                   results.push({
@@ -696,6 +704,7 @@ export async function POST(req: NextRequest) {
               const items = await convex.query(api.suspenseItems.listBySession, {
                 sessionId: sessionId as Id<'reconciliationSessions'>,
                 status: status as 'open' | 'queried' | 'resolved' | undefined,
+                workosUserId,
               })
 
               return {
@@ -735,6 +744,7 @@ export async function POST(req: NextRequest) {
               // Fetch session details
               const sessionData = await convex.query(api.sessions.get, {
                 id: sid,
+                workosUserId,
               })
 
               if (!sessionData) {
@@ -744,20 +754,24 @@ export async function POST(req: NextRequest) {
               // Fetch match counts
               const matchCounts = await convex.query(api.matches.getCounts, {
                 sessionId: sid,
+                workosUserId,
               })
 
               // Fetch suspense counts
               const suspenseCounts = await convex.query(api.suspenseItems.getCounts, {
                 sessionId: sid,
+                workosUserId,
               })
 
               // Fetch transaction totals
               const cashTxns = await convex.query(api.transactions.listBySession, {
                 sessionId: sid,
                 type: 'cash',
+                workosUserId,
               })
               const accrualDocs = await convex.query(api.accrualDocuments.listBySession, {
                 sessionId: sid,
+                workosUserId,
               })
 
               const totalCashAmount = cashTxns.reduce((sum, t) => sum + t.amount, 0)
@@ -909,6 +923,7 @@ export async function POST(req: NextRequest) {
 
               await convex.mutation(api.matches.approve, {
                 id: matchId as Id<'matchedPairs'>,
+                workosUserId,
               })
               return {
                 success: true,
@@ -946,6 +961,7 @@ export async function POST(req: NextRequest) {
 
               await convex.mutation(api.matches.reject, {
                 id: matchId as Id<'matchedPairs'>,
+                workosUserId,
               })
               return {
                 success: true,
@@ -993,6 +1009,7 @@ export async function POST(req: NextRequest) {
                 confidenceScore: confidence === 'high' ? 95 : confidence === 'medium' ? 75 : 55,
                 matchLayer: 6 as const,
                 matchReason: reason || 'AI-assisted manual match',
+                workosUserId,
               })
               return {
                 success: true,
@@ -1030,6 +1047,7 @@ export async function POST(req: NextRequest) {
 
               const result = await convex.mutation(api.matches.approveHighConfidence, {
                 sessionId: sessionId as Id<'reconciliationSessions'>,
+                workosUserId,
               })
               return {
                 success: true,

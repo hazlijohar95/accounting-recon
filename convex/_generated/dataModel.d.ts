@@ -384,6 +384,8 @@ export type DataModel = {
   };
   documents: {
     document: {
+      accountHolderName?: string;
+      accountNumber?: string;
       aiBasisType?: "cash" | "accrual";
       aiClassification?: string;
       aiClassificationConfidence?: number;
@@ -425,6 +427,8 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "accountHolderName"
+      | "accountNumber"
       | "aiBasisType"
       | "aiClassification"
       | "aiClassificationConfidence"

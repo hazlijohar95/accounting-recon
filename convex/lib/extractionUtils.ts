@@ -36,6 +36,8 @@ export interface ExtractionResult {
     lineItems?: string;
   };
   bankName?: string;
+  accountHolderName?: string;
+  accountNumber?: string;
   periodStart?: string;
   periodEnd?: string;
   errorMessage?: string;
@@ -76,6 +78,8 @@ For each transaction, extract:
 - Reference number (if visible)
 
 Also extract if visible:
+- Account holder name (the company or person who owns the bank account)
+- Account number
 - Bank name
 - Statement period (start and end dates)
 
@@ -89,6 +93,8 @@ Return ONLY valid JSON in this exact format:
       "reference": "REF123"
     }
   ],
+  "accountHolderName": "ABC Sdn Bhd",
+  "accountNumber": "5123456789",
   "bankName": "Maybank",
   "statementPeriod": {"start": "2025-01-01", "end": "2025-01-31"}
 }
@@ -169,6 +175,8 @@ Return:
   "transactions": [
     {"date": "2025-01-15", "description": "PAYMENT ABC COMPANY", "amount": -1500.00, "reference": "REF123"}
   ],
+  "accountHolderName": "ABC Sdn Bhd",
+  "accountNumber": "5123456789",
   "bankName": "Bank Name",
   "statementPeriod": {"start": "2025-01-01", "end": "2025-01-31"}
 }
@@ -275,7 +283,7 @@ export function parseExtractionResult(text: string, documentType: string): Extra
 
     const data = JSON.parse(jsonObjMatch[0]);
 
-    // Route based on response shape: if Gemini returned transactions, treat as bank statement
+    // Route based on response shape: if the model returned transactions, treat as bank statement
     // regardless of what the document was classified as. The two schemas (transactions vs invoice)
     // have zero overlapping keys, so presence of transactions is unambiguous.
     const hasTransactions = Array.isArray(data.transactions) && data.transactions.length > 0;
@@ -308,7 +316,9 @@ export function parseExtractionResult(text: string, documentType: string): Extra
         success: transactions.length > 0,
         confidence: transactions.length > 0 ? 80 : 0,
         transactions,
-        bankName: data.bankName,
+        bankName: typeof data.bankName === "string" ? data.bankName : undefined,
+        accountHolderName: typeof data.accountHolderName === "string" ? data.accountHolderName : undefined,
+        accountNumber: typeof data.accountNumber === "string" ? String(data.accountNumber) : typeof data.accountNumber === "number" ? String(data.accountNumber) : undefined,
         periodStart: data.statementPeriod?.start ? normalizeDate(data.statementPeriod.start) || undefined : undefined,
         periodEnd: data.statementPeriod?.end ? normalizeDate(data.statementPeriod.end) || undefined : undefined,
       };
@@ -354,9 +364,67 @@ export function parseExtractionResult(text: string, documentType: string): Extra
 // ============================================================================
 
 /**
+ * Validate date components are within valid ranges.
+ * Accounts for days in month and leap years.
+ */
+export function isValidDateComponents(year: string, month: string, day: string): boolean {
+  const y = parseInt(year);
+  const m = parseInt(month);
+  const d = parseInt(day);
+
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return false;
+  if (y < 1900 || y > 2100) return false;
+  if (m < 1 || m > 12) return false;
+  if (d < 1 || d > 31) return false;
+
+  const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  // Adjust for leap year
+  if (m === 2 && ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0)) {
+    if (d > 29) return false;
+  } else {
+    if (d > daysInMonth[m - 1]) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Check if a date is reasonable for financial records.
+ * - Not more than 10 years in the past
+ * - Not more than 1 year in the future (allows for future-dated invoices)
+ */
+export function isReasonableDate(dateStr: string): boolean {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+
+    if (isNaN(date.getTime())) return false;
+
+    const tenYearsAgo = new Date(now);
+    tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+
+    const oneYearFromNow = new Date(now);
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+
+    return date >= tenYearsAgo && date <= oneYearFromNow;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Normalize date string to YYYY-MM-DD format.
- * Handles various formats: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, etc.
- * Defaults to DD/MM/YYYY (Malaysian format) for ambiguous dates.
+ *
+ * Handles various formats:
+ * - YYYY-MM-DD (ISO, returned as-is after validation)
+ * - DD/MM/YYYY (Malaysian default for ambiguous dates)
+ * - MM/DD/YYYY (when month > 12 indicates day)
+ * - DD/MM/YY (2-digit year: 00-30 = 2000-2030, 31-99 = 1931-1999)
+ * - Native Date-parseable strings (ISO, etc.)
+ *
+ * Validates date components to prevent invalid dates like 2025-02-31.
+ * Returns null if the date cannot be parsed.
  */
 export function normalizeDate(dateStr: string): string | null {
   if (!dateStr || typeof dateStr !== "string") return null;
@@ -364,24 +432,38 @@ export function normalizeDate(dateStr: string): string | null {
   const str = String(dateStr).trim();
   if (!str) return null;
 
-  // Already in YYYY-MM-DD format
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  // Already in YYYY-MM-DD format — validate it
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    if (isValidDateComponents(str.slice(0, 4), str.slice(5, 7), str.slice(8, 10))) {
+      return str;
+    }
+    return null;
+  }
 
-  // Try common formats
+  // Try to parse various formats
   const parts = str.split(/[\/\-\.]/);
   if (parts.length === 3) {
     let day: string, month: string, year: string;
 
     if (parts[0].length === 4) {
+      // YYYY-MM-DD or YYYY/MM/DD
       [year, month, day] = parts;
     } else if (parts[2].length === 4) {
-      // Assume DD/MM/YYYY for Malaysian format
+      // DD/MM/YYYY or MM/DD/YYYY
       if (parseInt(parts[0]) > 12) {
         [day, month, year] = parts;
       } else if (parseInt(parts[1]) > 12) {
         [month, day, year] = parts;
       } else {
+        // Ambiguous: default to DD/MM/YYYY (Malaysian format)
         [day, month, year] = parts;
+      }
+    } else if (parts[2].length === 2) {
+      // DD/MM/YY — convert 2-digit year
+      [day, month, year] = parts;
+      const yearNum = parseInt(year);
+      if (yearNum >= 0 && yearNum <= 99) {
+        year = yearNum <= 30 ? `20${year.padStart(2, "0")}` : `19${year}`;
       }
     } else {
       return null;
@@ -390,17 +472,25 @@ export function normalizeDate(dateStr: string): string | null {
     day = day.padStart(2, "0");
     month = month.padStart(2, "0");
 
+    // Validate the components
+    if (!isValidDateComponents(year, month, day)) {
+      return null;
+    }
+
     return `${year}-${month}-${day}`;
   }
 
-  // Try native Date parsing
+  // Fallback: try native Date parsing (handles ISO strings, etc.)
   try {
     const date = new Date(str);
     if (!isNaN(date.getTime())) {
-      return date.toISOString().split("T")[0];
+      const result = date.toISOString().split("T")[0];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(result)) {
+        return result;
+      }
     }
   } catch {
-    // Ignore
+    // Ignore parse errors
   }
 
   return null;

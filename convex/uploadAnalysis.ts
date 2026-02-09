@@ -19,6 +19,8 @@ import { query, mutation, action, internalMutation, internalQuery } from "./_gen
 import { internal, api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireCompanyAccess, verifyQueryCompanyAccess } from "./lib/auth";
+import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
+import { generateText } from "ai";
 import {
   buildAnalysisPrompt,
   parseAnalysisResponse,
@@ -430,7 +432,7 @@ export const getCompanyForAnalysis = internalQuery({
 /**
  * Run AI analysis on a batch of documents.
  *
- * Gathers extracted text + company context, calls Haiku for
+ * Gathers extracted text + company context, calls Bedrock for
  * classification + company verification, stores results.
  */
 export const runAnalysis = action({
@@ -478,6 +480,8 @@ export const runAnalysis = action({
         documentType: doc.documentType,
         extractedText: doc.extractedText ?? undefined,
         bankType: doc.bankType ?? undefined,
+        accountHolderName: doc.accountHolderName ?? undefined,
+        accountNumber: doc.accountNumber ?? undefined,
         periodStart: doc.periodStart ?? undefined,
         periodEnd: doc.periodEnd ?? undefined,
         transactionCount: doc.extractedTransactionCount ?? undefined,
@@ -495,50 +499,31 @@ export const runAnalysis = action({
       // Process chunks (for small batches this is just one call)
       let combinedResponse: ReturnType<typeof parseAnalysisResponse> | null = null;
 
+      // Set up Bedrock client once (reused across chunks)
+      const region = process.env.AWS_REGION || "us-east-1";
+      const analysisModelId = process.env.ANALYSIS_MODEL_ID || process.env.EXTRACTION_MODEL_ID || "anthropic.claude-3-haiku-20240307-v1:0";
+      const bedrock = createAmazonBedrock({
+        region,
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        sessionToken: process.env.AWS_SESSION_TOKEN,
+      });
+
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         const prompt = buildAnalysisPrompt(companyCtx, chunk);
 
-        // Call Gemini (same model pipeline as extraction — already configured for Vertex AI)
-        const modelId = process.env.GEMINI_PRIMARY_MODEL || "gemini-2.5-flash";
-        let getGeminiEndpoint: (modelId: string) => string;
-        try {
-          const vertexModule = await import("./lib/vertexAuth");
-          getGeminiEndpoint = vertexModule.getGeminiEndpoint;
-        } catch (importError) {
-          throw new Error(
-            `Failed to load Vertex AI module: ${importError instanceof Error ? importError.message : "Unknown import error"}`
-          );
-        }
-        const endpoint = getGeminiEndpoint(modelId);
-
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
+        const { text: rawText } = await generateText({
+          model: bedrock(analysisModelId),
+          messages: [
+            {
               role: "user",
-              parts: [{ text: prompt }],
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 4096,
+              content: prompt,
             },
-          }),
+          ],
+          temperature: 0.1,
+          maxOutputTokens: 4096,
         });
-
-        if (!response.ok) {
-          const errorBody = await response.text().catch(() => "");
-          throw new Error(`AI analysis API error ${response.status}: ${errorBody.slice(0, 300)}`);
-        }
-
-        const data = await response.json() as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ text?: string }> };
-          }>;
-        };
-
-        const rawText = data.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
 
         const chunkDocIds = chunk.map((d) => d.documentId);
         const chunkResult = parseAnalysisResponse(rawText, chunkDocIds);

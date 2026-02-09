@@ -541,10 +541,12 @@ export const extractWithGemini = action({
       }
 
       // Update document metadata
-      if (extractionResult.bankName || extractionResult.periodStart) {
+      if (extractionResult.bankName || extractionResult.periodStart || extractionResult.accountHolderName) {
         await ctx.runMutation(internal.nativePdfExtraction.updateDocumentMetadata, {
           documentId,
           bankName: extractionResult.bankName,
+          accountHolderName: extractionResult.accountHolderName,
+          accountNumber: extractionResult.accountNumber,
           periodStart: extractionResult.periodStart,
           periodEnd: extractionResult.periodEnd,
           confidence: extractionResult.confidence,
@@ -824,10 +826,15 @@ export const reExtractDocument = action({
 
 /**
  * Convert ArrayBuffer to base64 string.
- * Uses Buffer.from() for efficient conversion in the Convex Node.js runtime.
+ * Uses a pure JS approach compatible with Convex's V8 runtime (no Node.js Buffer).
  */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  return Buffer.from(buffer).toString("base64");
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 /**

@@ -143,6 +143,8 @@ export default defineSchema({
     extractionConfidence: v.optional(v.number()), // 0-100 overall confidence
     // Bank statement specific fields
     bankType: v.optional(v.string()), // "maybank", "cimb", "public_bank", etc.
+    accountHolderName: v.optional(v.string()), // Account holder / company name from bank statement
+    accountNumber: v.optional(v.string()), // Bank account number
     periodStart: v.optional(v.string()), // Statement period start date
     periodEnd: v.optional(v.string()), // Statement period end date
     // Extraction stats

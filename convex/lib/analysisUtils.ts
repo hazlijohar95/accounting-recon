@@ -2,13 +2,10 @@
  * Upload Analysis Utilities
  *
  * Prompt builder and response parser for the AI upload analysis feature.
- * Uses Gemini Flash via Vertex AI for document classification and company verification
- * (same model pipeline as extraction — already configured server-side).
+ * Uses Bedrock (same provider as extraction) for document classification and company verification.
  *
  * @module convex/lib/analysisUtils
  */
-
-import { Doc } from "../_generated/dataModel";
 
 // ============================================================================
 // Types
@@ -28,6 +25,8 @@ export interface DocumentContext {
   documentType: string;
   extractedText?: string;
   bankType?: string;
+  accountHolderName?: string;
+  accountNumber?: string;
   periodStart?: string;
   periodEnd?: string;
   transactionCount?: number;
@@ -90,7 +89,7 @@ export function getBasisType(classification: string): "cash" | "accrual" {
 // ============================================================================
 
 /**
- * Build the analysis prompt for Haiku.
+ * Build the analysis prompt for Bedrock.
  *
  * @param company - Company context (name, bank, registration)
  * @param documents - Array of document contexts with extracted text
@@ -112,6 +111,8 @@ export function buildAnalysisPrompt(
     const metadata = [
       doc.documentType !== "other" ? `currentType=${doc.documentType}` : null,
       doc.bankType ? `bank=${doc.bankType}` : null,
+      doc.accountHolderName ? `accountHolder=${doc.accountHolderName}` : null,
+      doc.accountNumber ? `accountNumber=${doc.accountNumber}` : null,
       doc.transactionCount ? `transactions=${doc.transactionCount}` : null,
       doc.periodStart ? `period=${doc.periodStart} to ${doc.periodEnd || "?"}` : null,
     ].filter(Boolean).join(", ");

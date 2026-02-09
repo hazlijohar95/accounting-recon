@@ -1091,36 +1091,6 @@ export declare const api: {
         totalQueued: number;
       }
     >;
-    pauseQueue: FunctionReference<
-      "mutation",
-      "public",
-      { queueId: Id<"extractionQueue"> },
-      boolean
-    >;
-    processNextQueueItem: FunctionReference<
-      "action",
-      "public",
-      { queueId: Id<"extractionQueue"> },
-      { documentId?: Id<"documents">; hasMore: boolean; processed: boolean }
-    >;
-    resumeQueue: FunctionReference<
-      "mutation",
-      "public",
-      { queueId: Id<"extractionQueue"> },
-      boolean
-    >;
-    retryFailedItem: FunctionReference<
-      "mutation",
-      "public",
-      { itemId: Id<"extractionQueueItems"> },
-      boolean
-    >;
-    startQueueProcessing: FunctionReference<
-      "action",
-      "public",
-      { queueId: Id<"extractionQueue"> },
-      boolean
-    >;
   };
   geminiExtraction: {
     extractWithGemini: FunctionReference<
@@ -1818,6 +1788,9 @@ export declare const api: {
         any
       >;
     };
+    "004_clear_all_data": {
+      clearAll: FunctionReference<"mutation", "public", {}, any>;
+    };
   };
   nativePdfExtraction: {
     cleanupPageImages: FunctionReference<
@@ -2061,7 +2034,7 @@ export declare const api: {
     previewMatching: FunctionReference<
       "action",
       "public",
-      { sessionId: Id<"reconciliationSessions"> },
+      { sessionId: Id<"reconciliationSessions">; workosUserId?: string },
       any
     >;
     remove: FunctionReference<
@@ -2087,7 +2060,11 @@ export declare const api: {
     runMatching: FunctionReference<
       "action",
       "public",
-      { sessionId: Id<"reconciliationSessions">; useLLM?: boolean },
+      {
+        sessionId: Id<"reconciliationSessions">;
+        useLLM?: boolean;
+        workosUserId?: string;
+      },
       any
     >;
     updateProgress: FunctionReference<
@@ -3608,6 +3585,7 @@ export declare const internal: {
     >;
   };
   documents: {
+    cleanupStaleExtractions: FunctionReference<"mutation", "internal", {}, any>;
     getPendingExtraction: FunctionReference<
       "query",
       "internal",
@@ -3845,42 +3823,6 @@ export declare const internal: {
     >;
   };
   extractionQueue: {
-    claimNextQueueItem: FunctionReference<
-      "mutation",
-      "internal",
-      { queueId: Id<"extractionQueue"> },
-      {
-        _id: Id<"extractionQueueItems">;
-        documentId: Id<"documents">;
-        position: number;
-      } | null
-    >;
-    completeQueue: FunctionReference<
-      "mutation",
-      "internal",
-      { queueId: Id<"extractionQueue">; status: "completed" | "failed" },
-      null
-    >;
-    getNextPendingQueue: FunctionReference<
-      "query",
-      "internal",
-      {},
-      {
-        _id: Id<"extractionQueue">;
-        companyId: Id<"companies">;
-        userId: Id<"users">;
-      } | null
-    >;
-    getNextQueueItem: FunctionReference<
-      "query",
-      "internal",
-      { queueId: Id<"extractionQueue"> },
-      {
-        _id: Id<"extractionQueueItems">;
-        documentId: Id<"documents">;
-        position: number;
-      } | null
-    >;
     getRetryableItems: FunctionReference<
       "query",
       "internal",
@@ -3891,41 +3833,7 @@ export declare const internal: {
         queueId: Id<"extractionQueue">;
       }>
     >;
-    scheduleRetry: FunctionReference<
-      "mutation",
-      "internal",
-      { errorMessage: string; itemId: Id<"extractionQueueItems"> },
-      { isDLQ: boolean; nextRetryAt?: number; scheduled: boolean }
-    >;
-    startQueue: FunctionReference<
-      "mutation",
-      "internal",
-      { queueId: Id<"extractionQueue"> },
-      null
-    >;
-    updateQueueItemStatus: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        errorMessage?: string;
-        itemId: Id<"extractionQueueItems">;
-        processingTimeMs?: number;
-        status: "pending" | "processing" | "completed" | "failed" | "skipped";
-      },
-      null
-    >;
-    updateQueueProgress: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        avgProcessingTimeMs?: number;
-        completedCount: number;
-        currentPosition: number;
-        failedCount: number;
-        queueId: Id<"extractionQueue">;
-      },
-      null
-    >;
+    processRetryableItems: FunctionReference<"mutation", "internal", {}, any>;
   };
   geminiExtraction: {
     clearDocumentExtractions: FunctionReference<
@@ -4463,6 +4371,8 @@ export declare const internal: {
       "mutation",
       "internal",
       {
+        accountHolderName?: string;
+        accountNumber?: string;
         bankName?: string;
         confidence?: number;
         documentId: Id<"documents">;

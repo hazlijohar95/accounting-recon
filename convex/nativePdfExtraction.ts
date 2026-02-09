@@ -309,10 +309,12 @@ export const extractPageWithBedrock = action({
       }
 
       // Update document with metadata from first page
-      if (pageNumber === 1 && (extractionResult.bankName || extractionResult.periodStart)) {
+      if (pageNumber === 1 && (extractionResult.bankName || extractionResult.periodStart || extractionResult.accountHolderName)) {
         await ctx.runMutation(internal.nativePdfExtraction.updateDocumentMetadata, {
           documentId,
           bankName: extractionResult.bankName,
+          accountHolderName: extractionResult.accountHolderName,
+          accountNumber: extractionResult.accountNumber,
           periodStart: extractionResult.periodStart,
           periodEnd: extractionResult.periodEnd,
           confidence: extractionResult.confidence,
@@ -688,17 +690,21 @@ export const updateDocumentMetadata = internalMutation({
   args: {
     documentId: v.id("documents"),
     bankName: v.optional(v.string()),
+    accountHolderName: v.optional(v.string()),
+    accountNumber: v.optional(v.string()),
     periodStart: v.optional(v.string()),
     periodEnd: v.optional(v.string()),
     confidence: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, { documentId, bankName, periodStart, periodEnd, confidence }) => {
+  handler: async (ctx, { documentId, bankName, accountHolderName, accountNumber, periodStart, periodEnd, confidence }) => {
     const updateData: Record<string, unknown> = {};
 
     if (bankName) {
       updateData.bankType = bankName.toLowerCase().replace(/\s+/g, "_");
     }
+    if (accountHolderName) updateData.accountHolderName = accountHolderName;
+    if (accountNumber) updateData.accountNumber = accountNumber;
     if (periodStart) updateData.periodStart = periodStart;
     if (periodEnd) updateData.periodEnd = periodEnd;
     if (confidence !== undefined) updateData.extractionConfidence = confidence;

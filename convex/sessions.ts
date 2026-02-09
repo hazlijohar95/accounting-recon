@@ -671,11 +671,12 @@ export const runMatching = action({
   args: {
     sessionId: v.id("reconciliationSessions"),
     useLLM: v.optional(v.boolean()),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify session ownership before triggering expensive matching
     // Without this check, anyone who guesses a session ID could trigger matching (DoS vector)
-    const session = await ctx.runQuery(api.sessions.get, { id: args.sessionId });
+    const session = await ctx.runQuery(api.sessions.get, { id: args.sessionId, workosUserId: args.workosUserId });
     if (!session) {
       throw new Error("Session not found or access denied");
     }
@@ -694,10 +695,11 @@ export const runMatching = action({
 export const previewMatching = action({
   args: {
     sessionId: v.id("reconciliationSessions"),
+    workosUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // SECURITY: Verify session ownership before allowing preview
-    const session = await ctx.runQuery(api.sessions.get, { id: args.sessionId });
+    const session = await ctx.runQuery(api.sessions.get, { id: args.sessionId, workosUserId: args.workosUserId });
     if (!session) {
       throw new Error("Session not found or access denied");
     }

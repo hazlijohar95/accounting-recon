@@ -78,8 +78,9 @@ describe("normalizeDate", () => {
     expect(normalizeDate("1/2/2025")).toBe("2025-02-01");
   });
 
-  it("returns null for two-digit year", () => {
-    expect(normalizeDate("15/01/25")).toBeNull();
+  it("handles two-digit year (DD/MM/YY)", () => {
+    // 00-30 maps to 2000-2030, so 25 -> 2025
+    expect(normalizeDate("15/01/25")).toBe("2025-01-15");
   });
 
   it("falls back to native Date parsing for named months", () => {
@@ -88,13 +89,9 @@ describe("normalizeDate", () => {
     expect(result).toMatch(/^2025-01-1[45]$/);
   });
 
-  it("returns garbage for non-numeric parts (no calendar validation)", () => {
-    // normalizeDate does NOT validate calendar correctness - it only does format transformation
-    // "not-a-date" splits to ["not", "a", "date"] → "date" is 4 chars → treated as year
-    // "abc/def/ghij" splits to ["abc", "def", "ghij"] → "ghij" is 4 chars → treated as year
-    // This is a known limitation - the function transforms format, doesn't validate
-    const result = normalizeDate("abc/def/ghij");
-    expect(typeof result).toBe("string"); // Returns a string (not null)
+  it("returns null for non-numeric parts", () => {
+    // The upgraded normalizeDate validates date components, so garbage is rejected
+    expect(normalizeDate("abc/def/ghij")).toBeNull();
   });
 });
 
