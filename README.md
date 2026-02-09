@@ -96,7 +96,7 @@ pnpm test:e2e          # Playwright E2E
 cd ml && pytest        # Python ML service
 ```
 
-Coverage thresholds: **80%** statements, **75%** branches, **80%** functions, **80%** lines.
+Coverage thresholds: **65%** statements, **55%** branches, **65%** functions, **65%** lines.
 
 <br>
 
@@ -156,7 +156,7 @@ convex/
 
 lib/
   ai/                     Bedrock provider, prompts, input sanitization
-  store.ts                Zustand -- one store, multiple slices
+  store/                  Zustand -- single store, domain-grouped selectors
 
 ml/                       Python ML service (Fly.io)
   services/               OCR, PDF generation, bank parsers
