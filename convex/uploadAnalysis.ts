@@ -585,6 +585,33 @@ export const runAnalysis = action({
         documentClassifications: finalClassifications,
       });
 
+      // ================================================================
+      // Trigger Agent Intelligence Engine (fire-and-forget)
+      // Creates an agent session and schedules analysis asynchronously.
+      // Failures here do NOT block the upload analysis flow.
+      // ================================================================
+      try {
+        const agentSessionId = await ctx.runMutation(internal.agentSession.createInternal, {
+          companyId: analysis.companyId,
+          userId: analysis.userId,
+          documentIds: analysis.documentIds,
+          uploadAnalysisId: analysisId,
+        });
+
+        await ctx.scheduler.runAfter(0, internal.agentEngine.runAgentAnalysisInternal, {
+          agentSessionId,
+        });
+
+        console.log(
+          `[UploadAnalysis] Agent engine triggered: session=${agentSessionId} for analysis=${analysisId}`,
+        );
+      } catch (agentError) {
+        console.warn(
+          "[UploadAnalysis] Agent engine trigger failed (non-blocking):",
+          agentError instanceof Error ? agentError.message : agentError,
+        );
+      }
+
       return { success: true };
     } catch (error) {
       console.error("[UploadAnalysis] AI analysis failed:", error);

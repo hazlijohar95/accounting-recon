@@ -167,6 +167,10 @@ export default defineSchema({
     aiBasisType: v.optional(v.union(v.literal("cash"), v.literal("accrual"))),
     aiClassificationConfidence: v.optional(v.number()), // 0-100
     uploadAnalysisId: v.optional(v.id("uploadAnalyses")),
+    // Agent enrichment fields (populated during extraction for agent intelligence)
+    extractedCompanyName: v.optional(v.string()),            // Company/entity name as printed on document
+    extractedCounterparties: v.optional(v.array(v.string())), // All counterparty/payee names mentioned
+    extractedCurrency: v.optional(v.string()),                // Detected currency (MYR, USD, SGD, etc.)
   })
     .index("by_company", ["companyId"])
     .index("by_status", ["extractionStatus"])
@@ -853,6 +857,127 @@ export default defineSchema({
   })
     .index("by_company", ["companyId"])
     .index("by_company_status", ["companyId", "status"]),
+
+  // ============================================================================
+  // Agent Intelligence — Agentic upload analysis engine
+  // ============================================================================
+
+  // Agent sessions — orchestrator linking upload → analysis → reconciliation
+  // Each upload batch creates one agent session that tracks the agent's lifecycle
+  agentSessions: defineTable({
+    companyId: v.id("companies"),
+    userId: v.id("users"),
+
+    // Lifecycle
+    status: v.union(
+      v.literal("active"),       // In progress on /upload
+      v.literal("analyzing"),    // Intelligence engine running
+      v.literal("ready"),        // Analysis complete, awaiting user action
+      v.literal("proceeded"),    // User proceeded, reconciliation session created
+      v.literal("dismissed"),    // User dismissed the agent
+      v.literal("expired")      // Timed out (24h)
+    ),
+
+    // Step tracking (4-step flow)
+    currentStep: v.union(
+      v.literal("upload"),      // Files being uploaded/processed
+      v.literal("analyze"),     // Post-extraction analysis running
+      v.literal("validate"),    // User reviewing findings
+      v.literal("proceed")      // Ready to proceed to reconciliation
+    ),
+
+    // Document tracking
+    documentIds: v.array(v.id("documents")),
+
+    // Multi-company lanes (populated by agent engine when multiple companies detected)
+    companyLanes: v.optional(v.array(v.object({
+      detectedCompanyName: v.string(),
+      companyId: v.optional(v.id("companies")),   // Matched company, null if unmatched
+      documentIds: v.array(v.id("documents")),
+      isSelected: v.boolean(),                     // User chose to process this lane
+    }))),
+
+    // Links to other entities
+    uploadAnalysisId: v.optional(v.id("uploadAnalyses")),
+    reconciliationSessionId: v.optional(v.id("reconciliationSessions")),
+
+    // Agent-generated natural language summary (one LLM call at end of analysis)
+    summary: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_company", ["companyId"])
+    .index("by_user_status", ["userId", "status"])
+    .index("by_company_status", ["companyId", "status"])
+    .index("by_reconciliation_session", ["reconciliationSessionId"]),
+
+  // Agent findings — persisted intelligence from the analysis engine
+  // Carries across to the reconciliation page as context
+  agentFindings: defineTable({
+    agentSessionId: v.id("agentSessions"),
+    companyId: v.id("companies"),
+
+    // Finding classification
+    type: v.union(
+      // Company verification
+      v.literal("company_verified"),
+      v.literal("company_mismatch"),
+      v.literal("multi_company_detected"),
+
+      // Period analysis
+      v.literal("period_detected"),
+      v.literal("period_gap"),
+
+      // Data quality
+      v.literal("duplicate_transactions"),
+      v.literal("extraction_errors"),
+      v.literal("low_confidence_extractions"),
+      v.literal("unusual_amounts"),
+      v.literal("zero_transactions"),
+
+      // Accrual cross-checks
+      v.literal("accrual_company_mismatch"),
+      v.literal("orphaned_documents"),
+      v.literal("basis_inconsistency"),
+
+      // Summary findings
+      v.literal("cash_basis_summary"),
+      v.literal("accrual_basis_summary"),
+      v.literal("matching_preview")
+    ),
+
+    severity: v.union(
+      v.literal("critical"),    // Blocks proceeding (wrong company, no data)
+      v.literal("warning"),     // Should address (missing months, low confidence)
+      v.literal("info")         // FYI (stats, previews, suggestions)
+    ),
+
+    // Human-readable content (plain language, "calm explainer" tone)
+    title: v.string(),
+    description: v.string(),
+    details: v.optional(v.string()),  // JSON string for structured data (UI renders cards from this)
+
+    // Resolution tracking
+    status: v.union(
+      v.literal("open"),           // Needs attention
+      v.literal("acknowledged"),   // User saw it, moved on
+      v.literal("resolved"),       // User took action
+      v.literal("dismissed")       // User dismissed
+    ),
+    userResponse: v.optional(v.string()),  // User's text response if any
+
+    // Links for context (used on /reconcile page to highlight related items)
+    relatedDocumentIds: v.optional(v.array(v.id("documents"))),
+    relatedTransactionIds: v.optional(v.array(v.id("transactions"))),
+
+    createdAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+  })
+    .index("by_session", ["agentSessionId"])
+    .index("by_session_type", ["agentSessionId", "type"])
+    .index("by_session_severity", ["agentSessionId", "severity"])
+    .index("by_company", ["companyId"]),
 
   // Atomic counters for unique code generation (prevents race conditions)
   counters: defineTable({

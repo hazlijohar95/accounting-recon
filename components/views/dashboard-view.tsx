@@ -260,6 +260,13 @@ export function DashboardView() {
     router.push(href)
   }, [router])
 
+  // Sort recent transactions by date descending
+  // Must be above early returns to maintain consistent hook call order
+  const recentTransactions = useMemo(
+    () => [...cashTransactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
+    [cashTransactions]
+  )
+
   if (hasNoData) {
     return (
       <BrandedEmptyState
@@ -273,12 +280,6 @@ export function DashboardView() {
       />
     )
   }
-
-  // Sort recent transactions by date descending
-  const recentTransactions = useMemo(
-    () => [...cashTransactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
-    [cashTransactions]
-  )
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">

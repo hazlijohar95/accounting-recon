@@ -41,6 +41,10 @@ export interface ExtractionResult {
   periodStart?: string;
   periodEnd?: string;
   errorMessage?: string;
+  // Agent enrichment fields (populated for agent intelligence layer)
+  companyNameOnDocument?: string;        // Company/entity name as printed on the document
+  extractedCounterparties?: string[];    // All unique counterparty/payee names mentioned
+  currency?: string;                     // Detected currency (MYR, USD, SGD, etc.)
 }
 
 // ============================================================================
@@ -82,6 +86,9 @@ Also extract if visible:
 - Account number
 - Bank name
 - Statement period (start and end dates)
+- Company or entity name exactly as printed on the document header
+- Currency (e.g., MYR, USD, SGD)
+- All unique counterparty/payee names from transaction descriptions (list of names)
 
 Return ONLY valid JSON in this exact format:
 {
@@ -96,7 +103,10 @@ Return ONLY valid JSON in this exact format:
   "accountHolderName": "ABC Sdn Bhd",
   "accountNumber": "5123456789",
   "bankName": "Maybank",
-  "statementPeriod": {"start": "2025-01-01", "end": "2025-01-31"}
+  "statementPeriod": {"start": "2025-01-01", "end": "2025-01-31"},
+  "companyNameOnDocument": "ABC Sdn Bhd",
+  "currency": "MYR",
+  "counterparties": ["XYZ Trading", "DEF Holdings"]
 }
 
 IMPORTANT:
@@ -104,6 +114,7 @@ IMPORTANT:
 - Credits/deposits should be POSITIVE amounts
 - Use YYYY-MM-DD date format
 - If you cannot extract certain fields, omit them
+- counterparties should be unique names only (no duplicates)
 - Return ONLY the JSON, no explanations`;
 
     case "invoice":
@@ -117,8 +128,10 @@ Return ONLY valid JSON in this exact format:
   "docDate": "2025-01-15",
   "dueDate": "2025-02-15",
   "counterparty": "Vendor Company Name",
+  "issuingCompany": "Company Name That Created This Document",
   "amount": 1234.56,
   "taxAmount": 123.45,
+  "currency": "MYR",
   "description": "Office supplies",
   "lineItems": [
     {"description": "Item 1", "quantity": 2, "unitPrice": 500.00, "total": 1000.00}
@@ -128,6 +141,8 @@ Return ONLY valid JSON in this exact format:
 IMPORTANT:
 - Use YYYY-MM-DD date format
 - Amount should be the total including tax
+- counterparty is who the invoice is addressed to (recipient/buyer)
+- issuingCompany is who created/sent the invoice (seller/vendor)
 - If you cannot extract certain fields, omit them
 - Return ONLY the JSON, no explanations`;
 
@@ -140,8 +155,10 @@ Return ONLY valid JSON in this exact format:
   "docNumber": "RCP-001234",
   "docDate": "2025-01-15",
   "counterparty": "Store Name",
+  "issuingCompany": "Company Name That Issued This Receipt",
   "amount": 123.45,
   "taxAmount": 12.34,
+  "currency": "MYR",
   "description": "Purchase items",
   "lineItems": [
     {"description": "Item 1", "quantity": 1, "unitPrice": 50.00, "total": 50.00}
@@ -321,6 +338,12 @@ export function parseExtractionResult(text: string, documentType: string): Extra
         accountNumber: typeof data.accountNumber === "string" ? String(data.accountNumber) : typeof data.accountNumber === "number" ? String(data.accountNumber) : undefined,
         periodStart: data.statementPeriod?.start ? normalizeDate(data.statementPeriod.start) || undefined : undefined,
         periodEnd: data.statementPeriod?.end ? normalizeDate(data.statementPeriod.end) || undefined : undefined,
+        // Agent enrichment fields
+        companyNameOnDocument: typeof data.companyNameOnDocument === "string" ? data.companyNameOnDocument : undefined,
+        currency: typeof data.currency === "string" ? data.currency : undefined,
+        extractedCounterparties: Array.isArray(data.counterparties)
+          ? data.counterparties.filter((c: unknown) => typeof c === "string" && c.length > 0)
+          : undefined,
       };
     } else {
       // Invoice/receipt
@@ -347,6 +370,12 @@ export function parseExtractionResult(text: string, documentType: string): Extra
           description: data.description,
           lineItems: data.lineItems ? JSON.stringify(data.lineItems) : undefined,
         },
+        // Agent enrichment fields — for invoices, issuingCompany is the document's company
+        companyNameOnDocument: typeof data.issuingCompany === "string" ? data.issuingCompany : undefined,
+        currency: typeof data.currency === "string" ? data.currency : undefined,
+        extractedCounterparties: data.counterparty
+          ? [data.counterparty, ...(typeof data.issuingCompany === "string" ? [data.issuingCompany] : [])].filter(Boolean)
+          : undefined,
       };
     }
   } catch (error) {

@@ -14,3 +14,13 @@ export type { UseGenericSpreadsheetOptions, UseGenericSpreadsheetReturn } from '
 export { useUploadAnalysis } from './useUploadAnalysis'
 export type { AnalysisPhase, UseUploadAnalysisOptions, UseUploadAnalysisReturn } from './useUploadAnalysis'
 export { useSyncedFormState } from './useSyncedFormState'
+export { useAgentSession } from './useAgentSession'
+export type {
+  AgentStep,
+  AgentSessionStatus,
+  FindingSeverity,
+  FindingStatus,
+  AgentFindingData,
+  UseAgentSessionOptions,
+  UseAgentSessionReturn,
+} from './useAgentSession'

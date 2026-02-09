@@ -610,6 +610,82 @@
   transition: width var(--sidebar-transition);
 }
 
+/* Agent step expand/collapse — uses grid trick for smooth height animation */
+.agent-step-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.agent-step-content[data-expanded="true"] {
+  grid-template-rows: 1fr;
+}
+
+.agent-step-content > div {
+  overflow: hidden;
+}
+
+/* Agent finding card expand/collapse */
+.agent-finding-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.agent-finding-body[data-expanded="true"] {
+  grid-template-rows: 1fr;
+}
+
+.agent-finding-body > div {
+  overflow: hidden;
+}
+
+/* Agent finding card entrance animation */
+@keyframes agent-finding-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agent-finding-enter {
+  animation: agent-finding-enter 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Agent flow panel entrance */
+@keyframes agent-flow-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agent-flow-enter {
+  animation: agent-flow-enter 250ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .agent-step-content,
+  .agent-finding-body {
+    transition: none;
+  }
+  .agent-finding-enter,
+  .agent-flow-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .sidebar-label {
   transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1), transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;

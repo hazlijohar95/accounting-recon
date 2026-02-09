@@ -21,7 +21,9 @@ import { usePdfExtraction, isPdfFile } from '@/hooks/usePdfExtraction'
 import { useGeminiExtraction } from '@/hooks/useGeminiExtraction'
 import { useUploadAnalysis } from '@/hooks/useUploadAnalysis'
 import { useFileUploadState } from '@/hooks/useFileUploadState'
+import { useAgentSession } from '@/hooks/useAgentSession'
 import { UploadAnalysisPanel } from './upload-view/upload-analysis-panel'
+import { AgentFlow } from './upload-view/agent'
 import { mapErrorMessage, GEMINI_MAX_FILE_SIZE } from '@/lib/constants/upload'
 
 const EXTRACTION_PROVIDER = process.env.NEXT_PUBLIC_EXTRACTION_PROVIDER || 'bedrock'
@@ -77,6 +79,12 @@ function UploadViewContent() {
     enabled: !isDemo,
   })
   const [isApproving, setIsApproving] = useState(false)
+
+  // Agent session hook (intelligent upload assistant)
+  const agentSession = useAgentSession({
+    companyId: selectedCompanyId as Id<"companies"> | null,
+    enabled: !isDemo,
+  })
 
   // Toast notifications
   const toast = useToast()
@@ -523,6 +531,23 @@ function UploadViewContent() {
           <span className="font-medium">{activeSession?.name || 'None'}</span>
         </div>
       </div>
+
+      {/* Agent Flow — intelligent upload assistant (renders above tabs, self-gates on session) */}
+      <AgentFlow
+        agent={agentSession}
+        files={fileState.files}
+        extractionProgress={uploadAnalysis.extractionProgress}
+        onProceed={(reconciliationSessionId) => {
+          toast.addToast({
+            type: 'success',
+            title: 'Session created',
+            description: 'Redirecting to reconciliation...',
+          })
+          setTimeout(() => {
+            router.push(`/reconcile?sessionId=${reconciliationSessionId}`)
+          }, 500)
+        }}
+      />
 
       {/* Tab Navigation */}
       <TabNav

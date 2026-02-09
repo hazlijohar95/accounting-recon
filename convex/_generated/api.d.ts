@@ -265,6 +265,23 @@ export declare const api: {
       Id<"accrualDocuments">
     >;
   };
+  agentEngine: {
+    getFindingsForReconciliation: FunctionReference<
+      "query",
+      "public",
+      {
+        reconciliationSessionId: Id<"reconciliationSessions">;
+        workosUserId?: string;
+      },
+      any
+    >;
+    getFindingsForSession: FunctionReference<
+      "query",
+      "public",
+      { agentSessionId: Id<"agentSessions">; workosUserId?: string },
+      any
+    >;
+  };
   agents: {
     addCredits: FunctionReference<
       "mutation",
@@ -354,6 +371,82 @@ export declare const api: {
         worksheetId: Id<"worksheets">;
       },
       any
+    >;
+  };
+  agentSession: {
+    addDocuments: FunctionReference<
+      "mutation",
+      "public",
+      {
+        documentIds: Array<Id<"documents">>;
+        sessionId: Id<"agentSessions">;
+        workosUserId?: string;
+      },
+      null
+    >;
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        companyId: Id<"companies">;
+        documentIds: Array<Id<"documents">>;
+        workosUserId?: string;
+      },
+      Id<"agentSessions">
+    >;
+    dismiss: FunctionReference<
+      "mutation",
+      "public",
+      { sessionId: Id<"agentSessions">; workosUserId?: string },
+      null
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { id: Id<"agentSessions">; workosUserId?: string },
+      any
+    >;
+    getActiveForCompany: FunctionReference<
+      "query",
+      "public",
+      { companyId: Id<"companies">; workosUserId?: string },
+      any
+    >;
+    getForReconciliation: FunctionReference<
+      "query",
+      "public",
+      {
+        reconciliationSessionId: Id<"reconciliationSessions">;
+        workosUserId?: string;
+      },
+      any
+    >;
+    proceed: FunctionReference<
+      "action",
+      "public",
+      { sessionId: Id<"agentSessions">; workosUserId?: string },
+      { reconciliationSessionId: Id<"reconciliationSessions"> }
+    >;
+    respondToFinding: FunctionReference<
+      "mutation",
+      "public",
+      {
+        findingId: Id<"agentFindings">;
+        status: "acknowledged" | "resolved" | "dismissed";
+        userResponse?: string;
+        workosUserId?: string;
+      },
+      null
+    >;
+    updateStep: FunctionReference<
+      "mutation",
+      "public",
+      {
+        sessionId: Id<"agentSessions">;
+        step: "upload" | "analyze" | "validate" | "proceed";
+        workosUserId?: string;
+      },
+      null
     >;
   };
   analytics: {
@@ -3396,6 +3489,60 @@ export declare const api: {
  * ```
  */
 export declare const internal: {
+  agentEngine: {
+    getAnalysisData: FunctionReference<
+      "query",
+      "internal",
+      { documentIds: Array<Id<"documents">> },
+      any
+    >;
+    getCompanyInfo: FunctionReference<
+      "query",
+      "internal",
+      { companyId: Id<"companies"> },
+      any
+    >;
+    runAgentAnalysisInternal: FunctionReference<
+      "action",
+      "internal",
+      { agentSessionId: Id<"agentSessions"> },
+      any
+    >;
+    storeFindings: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        agentSessionId: Id<"agentSessions">;
+        companyId: Id<"companies">;
+        findings: Array<{
+          description: string;
+          details?: string;
+          relatedDocumentIds?: Array<Id<"documents">>;
+          relatedTransactionIds?: Array<Id<"transactions">>;
+          severity: "critical" | "warning" | "info";
+          title: string;
+          type: string;
+        }>;
+      },
+      null
+    >;
+    tryStartAnalysis: FunctionReference<
+      "mutation",
+      "internal",
+      { sessionId: Id<"agentSessions"> },
+      boolean
+    >;
+    updateFindingStatus: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        findingId: Id<"agentFindings">;
+        status: "open" | "acknowledged" | "resolved" | "dismissed";
+        userResponse?: string;
+      },
+      null
+    >;
+  };
   agents: {
     deductCredits: FunctionReference<
       "mutation",
@@ -3437,6 +3584,78 @@ export declare const internal: {
       "internal",
       { error: string; jobId: Id<"agentJobs">; retryCount: number },
       any
+    >;
+  };
+  agentSession: {
+    completeAnalysis: FunctionReference<
+      "mutation",
+      "internal",
+      { sessionId: Id<"agentSessions">; summary: string },
+      null
+    >;
+    createInternal: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        companyId: Id<"companies">;
+        documentIds: Array<Id<"documents">>;
+        uploadAnalysisId?: Id<"uploadAnalyses">;
+        userId: Id<"users">;
+      },
+      Id<"agentSessions">
+    >;
+    getInternal: FunctionReference<
+      "query",
+      "internal",
+      { sessionId: Id<"agentSessions"> },
+      any
+    >;
+    linkReconciliationSession: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        reconciliationSessionId: Id<"reconciliationSessions">;
+        sessionId: Id<"agentSessions">;
+      },
+      null
+    >;
+    setCompanyLanes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        companyLanes: Array<{
+          companyId?: Id<"companies">;
+          detectedCompanyName: string;
+          documentIds: Array<Id<"documents">>;
+          isSelected: boolean;
+        }>;
+        sessionId: Id<"agentSessions">;
+      },
+      null
+    >;
+    updateStatus: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        sessionId: Id<"agentSessions">;
+        status:
+          | "active"
+          | "analyzing"
+          | "ready"
+          | "proceeded"
+          | "dismissed"
+          | "expired";
+      },
+      null
+    >;
+    updateStepInternal: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        sessionId: Id<"agentSessions">;
+        step: "upload" | "analyze" | "validate" | "proceed";
+      },
+      null
     >;
   };
   auth: {
@@ -4376,6 +4595,9 @@ export declare const internal: {
         bankName?: string;
         confidence?: number;
         documentId: Id<"documents">;
+        extractedCompanyName?: string;
+        extractedCounterparties?: Array<string>;
+        extractedCurrency?: string;
         periodEnd?: string;
         periodStart?: string;
       },

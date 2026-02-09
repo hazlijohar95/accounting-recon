@@ -541,7 +541,7 @@ export const extractWithGemini = action({
       }
 
       // Update document metadata
-      if (extractionResult.bankName || extractionResult.periodStart || extractionResult.accountHolderName) {
+      if (extractionResult.bankName || extractionResult.periodStart || extractionResult.accountHolderName || extractionResult.companyNameOnDocument || extractionResult.currency) {
         await ctx.runMutation(internal.nativePdfExtraction.updateDocumentMetadata, {
           documentId,
           bankName: extractionResult.bankName,
@@ -550,6 +550,10 @@ export const extractWithGemini = action({
           periodStart: extractionResult.periodStart,
           periodEnd: extractionResult.periodEnd,
           confidence: extractionResult.confidence,
+          // Agent enrichment fields
+          extractedCompanyName: extractionResult.companyNameOnDocument,
+          extractedCounterparties: extractionResult.extractedCounterparties,
+          extractedCurrency: extractionResult.currency,
         });
       }
 

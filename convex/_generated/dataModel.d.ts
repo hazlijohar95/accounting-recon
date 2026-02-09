@@ -92,6 +92,67 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  agentFindings: {
+    document: {
+      agentSessionId: Id<"agentSessions">;
+      companyId: Id<"companies">;
+      createdAt: number;
+      description: string;
+      details?: string;
+      relatedDocumentIds?: Array<Id<"documents">>;
+      relatedTransactionIds?: Array<Id<"transactions">>;
+      resolvedAt?: number;
+      severity: "critical" | "warning" | "info";
+      status: "open" | "acknowledged" | "resolved" | "dismissed";
+      title: string;
+      type:
+        | "company_verified"
+        | "company_mismatch"
+        | "multi_company_detected"
+        | "period_detected"
+        | "period_gap"
+        | "duplicate_transactions"
+        | "extraction_errors"
+        | "low_confidence_extractions"
+        | "unusual_amounts"
+        | "zero_transactions"
+        | "accrual_company_mismatch"
+        | "orphaned_documents"
+        | "basis_inconsistency"
+        | "cash_basis_summary"
+        | "accrual_basis_summary"
+        | "matching_preview";
+      userResponse?: string;
+      _id: Id<"agentFindings">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "agentSessionId"
+      | "companyId"
+      | "createdAt"
+      | "description"
+      | "details"
+      | "relatedDocumentIds"
+      | "relatedTransactionIds"
+      | "resolvedAt"
+      | "severity"
+      | "status"
+      | "title"
+      | "type"
+      | "userResponse";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_company: ["companyId", "_creationTime"];
+      by_session: ["agentSessionId", "_creationTime"];
+      by_session_severity: ["agentSessionId", "severity", "_creationTime"];
+      by_session_type: ["agentSessionId", "type", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   agentJobs: {
     document: {
       columnId: Id<"worksheetColumns">;
@@ -134,6 +195,58 @@ export type DataModel = {
       by_status: ["status", "_creationTime"];
       by_worksheet: ["worksheetId", "_creationTime"];
       by_worksheet_status: ["worksheetId", "status", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  agentSessions: {
+    document: {
+      companyId: Id<"companies">;
+      companyLanes?: Array<{
+        companyId?: Id<"companies">;
+        detectedCompanyName: string;
+        documentIds: Array<Id<"documents">>;
+        isSelected: boolean;
+      }>;
+      createdAt: number;
+      currentStep: "upload" | "analyze" | "validate" | "proceed";
+      documentIds: Array<Id<"documents">>;
+      reconciliationSessionId?: Id<"reconciliationSessions">;
+      status:
+        | "active"
+        | "analyzing"
+        | "ready"
+        | "proceeded"
+        | "dismissed"
+        | "expired";
+      summary?: string;
+      updatedAt: number;
+      uploadAnalysisId?: Id<"uploadAnalyses">;
+      userId: Id<"users">;
+      _id: Id<"agentSessions">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "companyId"
+      | "companyLanes"
+      | "createdAt"
+      | "currentStep"
+      | "documentIds"
+      | "reconciliationSessionId"
+      | "status"
+      | "summary"
+      | "updatedAt"
+      | "uploadAnalysisId"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_company: ["companyId", "_creationTime"];
+      by_company_status: ["companyId", "status", "_creationTime"];
+      by_reconciliation_session: ["reconciliationSessionId", "_creationTime"];
+      by_user_status: ["userId", "status", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -393,6 +506,9 @@ export type DataModel = {
       companyId: Id<"companies">;
       documentType: "bank_statement" | "invoice" | "receipt" | "other";
       errorMessage?: string;
+      extractedCompanyName?: string;
+      extractedCounterparties?: Array<string>;
+      extractedCurrency?: string;
       extractedText?: string;
       extractedTransactionCount?: number;
       extractionConfidence?: number;
@@ -436,6 +552,9 @@ export type DataModel = {
       | "companyId"
       | "documentType"
       | "errorMessage"
+      | "extractedCompanyName"
+      | "extractedCounterparties"
+      | "extractedCurrency"
       | "extractedText"
       | "extractedTransactionCount"
       | "extractionConfidence"

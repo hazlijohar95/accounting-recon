@@ -309,7 +309,7 @@ export const extractPageWithBedrock = action({
       }
 
       // Update document with metadata from first page
-      if (pageNumber === 1 && (extractionResult.bankName || extractionResult.periodStart || extractionResult.accountHolderName)) {
+      if (pageNumber === 1 && (extractionResult.bankName || extractionResult.periodStart || extractionResult.accountHolderName || extractionResult.companyNameOnDocument || extractionResult.currency)) {
         await ctx.runMutation(internal.nativePdfExtraction.updateDocumentMetadata, {
           documentId,
           bankName: extractionResult.bankName,
@@ -318,6 +318,10 @@ export const extractPageWithBedrock = action({
           periodStart: extractionResult.periodStart,
           periodEnd: extractionResult.periodEnd,
           confidence: extractionResult.confidence,
+          // Agent enrichment fields
+          extractedCompanyName: extractionResult.companyNameOnDocument,
+          extractedCounterparties: extractionResult.extractedCounterparties,
+          extractedCurrency: extractionResult.currency,
         });
       }
 
@@ -695,9 +699,13 @@ export const updateDocumentMetadata = internalMutation({
     periodStart: v.optional(v.string()),
     periodEnd: v.optional(v.string()),
     confidence: v.optional(v.number()),
+    // Agent enrichment fields
+    extractedCompanyName: v.optional(v.string()),
+    extractedCounterparties: v.optional(v.array(v.string())),
+    extractedCurrency: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { documentId, bankName, accountHolderName, accountNumber, periodStart, periodEnd, confidence }) => {
+  handler: async (ctx, { documentId, bankName, accountHolderName, accountNumber, periodStart, periodEnd, confidence, extractedCompanyName, extractedCounterparties, extractedCurrency }) => {
     const updateData: Record<string, unknown> = {};
 
     if (bankName) {
@@ -708,6 +716,12 @@ export const updateDocumentMetadata = internalMutation({
     if (periodStart) updateData.periodStart = periodStart;
     if (periodEnd) updateData.periodEnd = periodEnd;
     if (confidence !== undefined) updateData.extractionConfidence = confidence;
+    // Agent enrichment
+    if (extractedCompanyName) updateData.extractedCompanyName = extractedCompanyName;
+    if (extractedCounterparties && extractedCounterparties.length > 0) {
+      updateData.extractedCounterparties = extractedCounterparties;
+    }
+    if (extractedCurrency) updateData.extractedCurrency = extractedCurrency;
 
     if (Object.keys(updateData).length > 0) {
       await ctx.db.patch(documentId, updateData);
