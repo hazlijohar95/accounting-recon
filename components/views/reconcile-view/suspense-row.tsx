@@ -36,7 +36,7 @@ export const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }
             <button
               onClick={() => onFindMatch(item)}
               aria-label={`Find match for ${item.description}`}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+              className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-colors opacity-70 hover:opacity-100 focus:opacity-100 focus:ring-1 focus:ring-foreground/50"
             >
               <IconSearch size={12} aria-hidden="true" />
               Find Match

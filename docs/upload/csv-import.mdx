@@ -150,42 +150,44 @@ Select the format that matches your CSV:
 
 ## Troubleshooting
 
-<Accordion title="Import fails with encoding error">
-  Your CSV may not be UTF-8 encoded.
+<Accordions>
+  <Accordion title="Import fails with encoding error">
+    Your CSV may not be UTF-8 encoded.
 
-  **Fix:**
-  1. Open the CSV in Excel or Google Sheets
-  2. Save As > CSV UTF-8
-  3. Re-upload the new file
-</Accordion>
+    **Fix:**
+    1. Open the CSV in Excel or Google Sheets
+    2. Save As > CSV UTF-8
+    3. Re-upload the new file
+  </Accordion>
 
-<Accordion title="Dates are parsing incorrectly">
-  The date format selection doesn't match your data.
+  <Accordion title="Dates are parsing incorrectly">
+    The date format selection doesn't match your data.
 
-  **Fix:**
-  1. Check your CSV dates
-  2. Select the correct format in options
-  3. Verify in the preview before importing
-</Accordion>
+    **Fix:**
+    1. Check your CSV dates
+    2. Select the correct format in options
+    3. Verify in the preview before importing
+  </Accordion>
 
-<Accordion title="Amounts show as zero">
-  Number format mismatch (decimal separator).
+  <Accordion title="Amounts show as zero">
+    Number format mismatch (decimal separator).
 
-  **Fix:**
-  1. Check if your CSV uses comma (1.000,00) or period (1,000.00)
-  2. Select the matching decimal separator
-  3. Preview to verify amounts parse correctly
-</Accordion>
+    **Fix:**
+    1. Check if your CSV uses comma (1.000,00) or period (1,000.00)
+    2. Select the matching decimal separator
+    3. Preview to verify amounts parse correctly
+  </Accordion>
 
-<Accordion title="Some rows are skipped">
-  Empty or malformed rows in your CSV.
+  <Accordion title="Some rows are skipped">
+    Empty or malformed rows in your CSV.
 
-  **Fix:**
-  1. Open CSV in spreadsheet software
-  2. Remove empty rows
-  3. Fix any cells with irregular formatting
-  4. Re-export and upload
-</Accordion>
+    **Fix:**
+    1. Open CSV in spreadsheet software
+    2. Remove empty rows
+    3. Fix any cells with irregular formatting
+    4. Re-export and upload
+  </Accordion>
+</Accordions>
 
 ## Example Import Scenarios
 

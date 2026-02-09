@@ -57,13 +57,71 @@ export function initErrorMonitor(client: ConvexReactClient): void {
 }
 
 /**
+ * Known non-critical error patterns to ignore
+ * These are typically library warnings that don't affect functionality
+ */
+const IGNORED_ERROR_PATTERNS = [
+  /SelectionRenderService/i,        // Univer internal warning on empty sheets
+  /should not receive null/i,       // Univer selection warning
+  /Cannot read properties of undefined.*worksheet/i, // Univer timing issue
+  /Cannot read properties of null/i, // Univer internal timing issues
+  /ResizeObserver loop/i,           // Common browser warning
+  /Loading chunk.*failed/i,         // Dynamic import retry (handled elsewhere)
+  /Script error/i,                  // Cross-origin script errors (no useful info)
+  /Univer.*initialization/i,        // Univer initialization warnings
+];
+
+/**
+ * Check if an error message should be ignored
+ */
+function shouldIgnoreError(message: string | undefined | null): boolean {
+  if (!message) return true;
+  return IGNORED_ERROR_PATTERNS.some(pattern => pattern.test(message));
+}
+
+/**
+ * Extract a meaningful message from an error object
+ */
+function extractErrorMessage(error: unknown): string | null {
+  if (!error) return null;
+  if (typeof error === 'string') return error || null;
+  if (error instanceof Error) return error.message || null;
+  if (typeof error === 'object') {
+    const err = error as Record<string, unknown>;
+    if (typeof err.message === 'string') return err.message || null;
+    // Try to stringify, but avoid "[object Object]"
+    try {
+      const str = String(error);
+      if (str && str !== '[object Object]' && str !== 'undefined' && str !== 'null') {
+        return str;
+      }
+    } catch {
+      // Ignore stringify errors
+    }
+  }
+  return null;
+}
+
+/**
  * Set up global error and rejection handlers.
  */
 function setupGlobalHandlers(): void {
   // Uncaught errors
   window.addEventListener("error", (event) => {
+    const message = event.message || extractErrorMessage(event.error);
+
+    // Skip if no meaningful message
+    if (!message) {
+      return;
+    }
+
+    // Skip ignored patterns
+    if (shouldIgnoreError(message)) {
+      return;
+    }
+
     logError({
-      message: event.message || "Unknown error",
+      message,
       stack: event.error?.stack,
       type: "uncaught",
       url: window.location.href,
@@ -79,8 +137,20 @@ function setupGlobalHandlers(): void {
   // Unhandled promise rejections
   window.addEventListener("unhandledrejection", (event) => {
     const error = event.reason;
+    const message = extractErrorMessage(error);
+
+    // Skip if no meaningful message
+    if (!message) {
+      return;
+    }
+
+    // Skip ignored patterns
+    if (shouldIgnoreError(message)) {
+      return;
+    }
+
     logError({
-      message: error?.message || String(error) || "Unhandled Promise Rejection",
+      message,
       stack: error?.stack,
       type: "promise",
       url: window.location.href,
@@ -94,6 +164,16 @@ function setupGlobalHandlers(): void {
  * Includes throttling and deduplication.
  */
 export async function logError(payload: ErrorLogPayload): Promise<void> {
+  // Skip empty or invalid payloads
+  if (!payload.message || payload.message.trim() === "") {
+    return;
+  }
+
+  // Skip ignored patterns
+  if (shouldIgnoreError(payload.message)) {
+    return;
+  }
+
   // Check if initialized
   if (!convexClient) {
     console.warn("[ErrorMonitor] Not initialized, error not logged:", payload.message);

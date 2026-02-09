@@ -34,4 +34,12 @@ crons.interval(
   internal.exports.pdf.cleanupStalePDFJobs
 );
 
+// Clean up expired reconciliation chat messages every hour
+// Messages older than 24 hours are deleted to manage storage
+crons.interval(
+  "cleanup-expired-chat",
+  { hours: 1 },
+  internal.reconciliationChat.deleteExpired
+);
+
 export default crons;

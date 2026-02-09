@@ -1,5 +1,6 @@
-import { useReducer, useCallback, useMemo } from 'react'
-import type { MatchPair } from '@/lib/store'
+import { useReducer, useCallback, useMemo, useEffect } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import type { MatchPair, MatchConfidence } from '@/lib/store'
 import {
   ReconcileState,
   ReconcileAction,
@@ -10,6 +11,136 @@ import {
   MatchingResult,
   initialFilterState,
 } from './types'
+
+// ============================================================================
+// URL Filter Persistence
+// ============================================================================
+
+const FILTER_PARAM_KEYS = {
+  search: 'q',
+  layers: 'layers',
+  confidence: 'conf',
+  minAmount: 'minAmt',
+  maxAmount: 'maxAmt',
+  dateFrom: 'from',
+  dateTo: 'to',
+  tab: 'tab',
+} as const
+
+/**
+ * Parse filters from URL search params
+ */
+function parseFiltersFromUrl(searchParams: URLSearchParams): Partial<FilterState> & { tab?: Tab } {
+  const filters: Partial<FilterState> & { tab?: Tab } = {}
+
+  // Search query
+  const search = searchParams.get(FILTER_PARAM_KEYS.search)
+  if (search) filters.searchQuery = search
+
+  // Match layers (comma-separated numbers)
+  const layers = searchParams.get(FILTER_PARAM_KEYS.layers)
+  if (layers) {
+    const parsed = layers.split(',').map(Number).filter(n => n >= 1 && n <= 7) as (1|2|3|4|5|6|7)[]
+    if (parsed.length > 0) filters.matchLayers = parsed
+  }
+
+  // Confidence levels (comma-separated)
+  const conf = searchParams.get(FILTER_PARAM_KEYS.confidence)
+  if (conf) {
+    const validLevels = ['high', 'medium', 'low'] as const
+    const parsed = conf.split(',').filter(c => validLevels.includes(c as MatchConfidence)) as MatchConfidence[]
+    if (parsed.length > 0) filters.confidenceLevels = parsed
+  }
+
+  // Amount range
+  const minAmt = searchParams.get(FILTER_PARAM_KEYS.minAmount)
+  if (minAmt) {
+    const num = parseFloat(minAmt)
+    if (!isNaN(num)) filters.minAmount = num
+  }
+
+  const maxAmt = searchParams.get(FILTER_PARAM_KEYS.maxAmount)
+  if (maxAmt) {
+    const num = parseFloat(maxAmt)
+    if (!isNaN(num)) filters.maxAmount = num
+  }
+
+  // Date range
+  const from = searchParams.get(FILTER_PARAM_KEYS.dateFrom)
+  if (from) filters.dateFrom = from
+
+  const to = searchParams.get(FILTER_PARAM_KEYS.dateTo)
+  if (to) filters.dateTo = to
+
+  // Tab
+  const tab = searchParams.get(FILTER_PARAM_KEYS.tab)
+  if (tab && ['pending', 'review', 'partial', 'matched', 'suspense'].includes(tab)) {
+    filters.tab = tab as Tab
+  }
+
+  return filters
+}
+
+/**
+ * Serialize filters to URL search params
+ */
+function serializeFiltersToUrl(
+  filters: FilterState,
+  tab: Tab,
+  existingParams: URLSearchParams
+): URLSearchParams {
+  const params = new URLSearchParams(existingParams)
+
+  // Preserve sessionId if present
+  const sessionId = params.get('sessionId')
+  params.delete(FILTER_PARAM_KEYS.search)
+  params.delete(FILTER_PARAM_KEYS.layers)
+  params.delete(FILTER_PARAM_KEYS.confidence)
+  params.delete(FILTER_PARAM_KEYS.minAmount)
+  params.delete(FILTER_PARAM_KEYS.maxAmount)
+  params.delete(FILTER_PARAM_KEYS.dateFrom)
+  params.delete(FILTER_PARAM_KEYS.dateTo)
+  params.delete(FILTER_PARAM_KEYS.tab)
+
+  if (sessionId) {
+    params.set('sessionId', sessionId)
+  }
+
+  // Add non-default values
+  if (filters.searchQuery) {
+    params.set(FILTER_PARAM_KEYS.search, filters.searchQuery)
+  }
+
+  if (filters.matchLayers.length > 0) {
+    params.set(FILTER_PARAM_KEYS.layers, filters.matchLayers.join(','))
+  }
+
+  if (filters.confidenceLevels.length > 0) {
+    params.set(FILTER_PARAM_KEYS.confidence, filters.confidenceLevels.join(','))
+  }
+
+  if (filters.minAmount !== null) {
+    params.set(FILTER_PARAM_KEYS.minAmount, String(filters.minAmount))
+  }
+
+  if (filters.maxAmount !== null) {
+    params.set(FILTER_PARAM_KEYS.maxAmount, String(filters.maxAmount))
+  }
+
+  if (filters.dateFrom) {
+    params.set(FILTER_PARAM_KEYS.dateFrom, filters.dateFrom)
+  }
+
+  if (filters.dateTo) {
+    params.set(FILTER_PARAM_KEYS.dateTo, filters.dateTo)
+  }
+
+  if (tab !== 'pending') {
+    params.set(FILTER_PARAM_KEYS.tab, tab)
+  }
+
+  return params
+}
 
 const MAX_UNDO_STACK = 10
 
@@ -59,14 +190,48 @@ function reconcileReducer(state: ReconcileState, action: ReconcileAction): Recon
  *
  * Consolidates 12+ useState calls into a single reducer for better
  * state management and debugging.
+ *
+ * Includes URL persistence for filters, enabling shareable filtered views.
  */
 export function useReconcileState() {
-  const [state, dispatch] = useReducer(reconcileReducer, initialReconcileState)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
 
-  // Action creators
+  // Parse initial state from URL
+  const urlFilters = useMemo(() => parseFiltersFromUrl(searchParams), [searchParams])
+
+  // Initialize with URL values merged into defaults
+  const initialState = useMemo((): ReconcileState => {
+    const { tab, ...filterValues } = urlFilters
+    return {
+      ...initialReconcileState,
+      activeTab: tab || 'pending',
+      filters: {
+        ...initialFilterState,
+        ...filterValues,
+      },
+    }
+  }, []) // Only compute on mount
+
+  const [state, dispatch] = useReducer(reconcileReducer, initialState)
+
+  // Sync state to URL when filters or tab change
+  const syncToUrl = useCallback(
+    (filters: FilterState, tab: Tab) => {
+      const params = serializeFiltersToUrl(filters, tab, searchParams)
+      const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
+      router.replace(newUrl, { scroll: false })
+    },
+    [pathname, router, searchParams]
+  )
+
+  // Action creators with URL sync
   const setActiveTab = useCallback((tab: Tab) => {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: tab })
-  }, [])
+    // Sync to URL after dispatch
+    syncToUrl(state.filters, tab)
+  }, [syncToUrl, state.filters])
 
   const setSelectedMatch = useCallback((match: MatchPair | null) => {
     dispatch({ type: 'SET_SELECTED_MATCH', payload: match })
@@ -98,7 +263,10 @@ export function useReconcileState() {
 
   const updateFilters = useCallback((filters: Partial<FilterState>) => {
     dispatch({ type: 'SET_FILTERS', payload: filters })
-  }, [])
+    // Sync to URL with updated filters
+    const newFilters = { ...state.filters, ...filters }
+    syncToUrl(newFilters, state.activeTab)
+  }, [syncToUrl, state.filters, state.activeTab])
 
   const setShowFilters = useCallback((show: boolean) => {
     dispatch({ type: 'SET_SHOW_FILTERS', payload: show })
@@ -106,7 +274,9 @@ export function useReconcileState() {
 
   const clearFilters = useCallback(() => {
     dispatch({ type: 'CLEAR_FILTERS' })
-  }, [])
+    // Sync cleared filters to URL
+    syncToUrl(initialFilterState, state.activeTab)
+  }, [syncToUrl, state.activeTab])
 
   const pushUndo = useCallback((action: UndoAction) => {
     dispatch({ type: 'PUSH_UNDO', payload: action })

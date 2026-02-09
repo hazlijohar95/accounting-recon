@@ -405,6 +405,8 @@ export declare const api: {
         pending: number;
         suspense: number;
         total: number;
+        totalCashIn: number;
+        totalCashOut: number;
       }
     >;
     getTopExpenses: FunctionReference<

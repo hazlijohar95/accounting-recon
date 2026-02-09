@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { IconCheckCircle } from '@/components/brand/icons'
+import { IconCheckCircle, IconWarningCircle } from '@/components/brand/icons'
 import { cn } from '@/lib/utils'
 import { confidenceToPercent } from '@/lib/matching-utils'
 import { MatchLayerBadge, TruncatedText } from '@/components/brand'
@@ -16,6 +16,7 @@ export interface MatchRowProps {
   selected: boolean
   onClick: () => void
   approved?: boolean
+  showConfidenceWarning?: boolean
 }
 
 /**
@@ -31,10 +32,22 @@ export const MatchRow = React.memo(function MatchRow({
   selected,
   onClick,
   approved = false,
+  showConfidenceWarning = false,
 }: MatchRowProps) {
   const confidencePercent = confidenceToPercent(match.confidence)
   const confidenceColor =
     match.confidence === 'high' ? 'bg-emerald-500' : match.confidence === 'medium' ? 'bg-amber-500' : 'bg-red-500'
+
+  // Determine warning message based on match reason/layer
+  const getConfidenceWarning = () => {
+    if (match.matchLayer === 5) return 'AI suggested match - verify manually'
+    if (match.matchLayer === 4) return 'Fuzzy name match - verify counterparty'
+    if (match.confidence === 'medium') return 'Medium confidence - review amounts'
+    if (match.confidence === 'low') return 'Low confidence - careful review needed'
+    return null
+  }
+
+  const warningMessage = showConfidenceWarning ? getConfidenceWarning() : null
 
   return (
     <button
@@ -44,7 +57,8 @@ export const MatchRow = React.memo(function MatchRow({
         'w-full px-4 py-3 border-b border-border text-left transition-all duration-150',
         'hover:bg-secondary/50',
         selected && 'row-selected',
-        approved && !selected && 'row-approved'
+        approved && !selected && 'row-approved',
+        showConfidenceWarning && !selected && 'bg-warning/5'
       )}
     >
       <div className="flex items-center gap-3">
@@ -65,6 +79,11 @@ export const MatchRow = React.memo(function MatchRow({
           ${Math.abs(match.cashTransaction.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </div>
 
+        {/* Warning Icon for medium confidence */}
+        {showConfidenceWarning && (
+          <IconWarningCircle size={16} className="text-warning flex-shrink-0" aria-label="Needs review" />
+        )}
+
         {/* Approved Icon */}
         {approved && (
           <IconCheckCircle size={16} className="text-success flex-shrink-0" aria-label="Approved" />
@@ -72,17 +91,17 @@ export const MatchRow = React.memo(function MatchRow({
       </div>
 
       <div className="flex items-center justify-between mt-2 pl-14">
-        <div className="text-xs text-muted-foreground">{match.cashTransaction.date}</div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{match.cashTransaction.date}</span>
+          {/* Warning message */}
+          {warningMessage && (
+            <span className="text-xs text-warning/80 italic">{warningMessage}</span>
+          )}
+        </div>
 
         {/* Wider Confidence Bar */}
         <div className="flex items-center gap-2">
-          <div
-            className="w-24 h-1 bg-secondary overflow-hidden"
-            role="progressbar"
-            aria-valuenow={confidencePercent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
+          <div className="w-24 h-1 bg-secondary overflow-hidden" role="progressbar" aria-valuenow={confidencePercent} aria-valuemin={0} aria-valuemax={100}>
             <div
               className={cn('h-full transition-all duration-500', confidenceColor)}
               style={{ width: `${confidencePercent}%` }}

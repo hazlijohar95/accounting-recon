@@ -8,5 +8,9 @@ export { ReconcileAssistant } from './reconcile-assistant'
 export { AssistantActionButtons, CreateMatchButton } from './assistant-action-buttons'
 export { OnboardingChatAI } from './onboarding-chat-ai'
 
+// Agentic reconciliation assistant (multi-step tool use, client-side confirmation)
+export { ReconcileAgent } from './reconcile-agent'
+
 // Note: AssistantPanel is kept for backwards compatibility (e.g., other pages)
-// ReconcileAssistant is the new branded component for the reconcile page
+// ReconcileAssistant is the previous single-turn component — kept for one release
+// ReconcileAgent is the new agentic component for the reconcile page

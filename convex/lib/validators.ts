@@ -16,6 +16,40 @@ export const accrualDocIdValidator = v.id("accrualDocuments");
 export const suspenseItemIdValidator = v.id("suspenseItems");
 export const categoryIdValidator = v.id("categories");
 
+// ============ BOUNDING BOX VALIDATOR ============
+
+/**
+ * Bounding box validator for OCR/extraction source linking
+ * Coordinates are percentages (0-100) relative to image dimensions
+ */
+export const boundingBoxValidator = v.object({
+  x: v.number(),      // X coordinate (percentage from left)
+  y: v.number(),      // Y coordinate (percentage from top)
+  width: v.number(),  // Width (percentage)
+  height: v.number(), // Height (percentage)
+});
+
+/**
+ * Field-level bounding boxes for transaction source linking
+ */
+export const fieldBoundingBoxesValidator = v.object({
+  pageNumber: v.number(),
+  date: v.optional(boundingBoxValidator),
+  description: v.optional(boundingBoxValidator),
+  amount: v.optional(boundingBoxValidator),
+  reference: v.optional(boundingBoxValidator),
+});
+
+/**
+ * Field-level confidence scores for extraction quality indication
+ */
+export const fieldConfidenceValidator = v.object({
+  date: v.optional(v.number()),
+  description: v.optional(v.number()),
+  amount: v.optional(v.number()),
+  reference: v.optional(v.number()),
+});
+
 // ============ ENUM VALIDATORS ============
 
 // Transaction types
@@ -86,7 +120,8 @@ export const matchLayerValidator = v.union(
   v.literal(3), // Reference match
   v.literal(4), // Fuzzy match
   v.literal(5), // LLM semantic match
-  v.literal(6)  // Manual match
+  v.literal(6), // Manual match
+  v.literal(7)  // Partial match (one-to-many)
 );
 
 // Match status
@@ -192,8 +227,28 @@ export const documentDocValidator = v.object({
   periodStart: v.optional(v.string()),
   periodEnd: v.optional(v.string()),
   extractedTransactionCount: v.optional(v.number()),
+  extractionProgress: v.optional(v.object({
+    currentPage: v.number(),
+    totalPages: v.number(),
+    pagesCompleted: v.optional(v.number()),
+    streamedTransactionCount: v.optional(v.number()),
+    phaseMessage: v.optional(v.string()),
+  })),
+  extractionPhase: v.optional(v.union(
+    v.literal("uploading"),
+    v.literal("converting"),
+    v.literal("extracting"),
+    v.literal("processing"),
+    v.literal("complete"),
+    v.literal("failed")
+  )),
   uploadedAt: v.number(),
   processedAt: v.optional(v.number()),
+  // AI upload analysis fields
+  aiClassification: v.optional(v.string()),
+  aiBasisType: v.optional(v.union(v.literal("cash"), v.literal("accrual"))),
+  aiClassificationConfidence: v.optional(v.number()),
+  uploadAnalysisId: v.optional(v.id("uploadAnalyses")),
 });
 
 // Matched pair document
@@ -212,10 +267,11 @@ export const matchDocValidator = v.object({
   // Partial matching support
   matchedAmount: v.optional(v.number()),
   isPartialMatch: v.optional(v.boolean()),
+  partialMatchGroupId: v.optional(v.string()), // Groups related partial matches
   reviewedAt: v.optional(v.number()),
   reviewedBy: v.optional(userIdValidator),
   createdAt: v.number(),
-});;
+});
 
 // Session document
 export const sessionDocValidator = v.object({
@@ -313,6 +369,7 @@ export const enrichedMatchValidator = v.object({
   // Partial matching support
   matchedAmount: v.optional(v.number()),
   isPartialMatch: v.optional(v.boolean()),
+  partialMatchGroupId: v.optional(v.string()), // Groups related partial matches
   reviewedAt: v.optional(v.number()),
   reviewedBy: v.optional(userIdValidator),
   createdAt: v.number(),
@@ -320,7 +377,7 @@ export const enrichedMatchValidator = v.object({
   cashTransaction: v.union(transactionDocValidator, v.null()),
   accrualTransaction: v.union(transactionDocValidator, v.null()),
   accrualDocument: v.union(accrualDocValidator, v.null()),
-});;
+});
 
 // Session with stats
 export const sessionWithStatsValidator = v.object({
@@ -423,3 +480,43 @@ export const bulkResultValidator = v.object({
   inserted: v.number(),
   errors: v.array(v.string()),
 });
+
+// ============ WORKSHEET DATA SOURCE VALIDATORS ============
+
+/**
+ * Reconciliation source configuration
+ */
+export const reconciliationSourceConfigValidator = v.object({
+  sessionId: sessionIdValidator,
+  includeMatches: v.optional(v.boolean()),
+  includeSuspense: v.optional(v.boolean()),
+  matchStatusFilter: v.optional(matchStatusValidator),
+  suspenseStatusFilter: v.optional(suspenseStatusValidator),
+});
+
+/**
+ * CSV import source configuration
+ */
+export const csvImportSourceConfigValidator = v.object({
+  fileName: v.string(),
+  columnMapping: v.record(v.string(), v.number()),
+  importedAt: v.number(),
+});
+
+/**
+ * Manual source configuration (empty object)
+ */
+export const manualSourceConfigValidator = v.object({});
+
+/**
+ * Union validator for all source configurations.
+ * Use this in the schema instead of v.any() for type safety.
+ */
+export const worksheetSourceConfigValidator = v.union(
+  // Manual source - empty object
+  manualSourceConfigValidator,
+  // Reconciliation source - contains sessionId
+  reconciliationSourceConfigValidator,
+  // CSV import source - contains fileName
+  csvImportSourceConfigValidator
+);

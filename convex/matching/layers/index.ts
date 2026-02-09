@@ -14,6 +14,11 @@ export { WindowMatchLayer, layer2WindowMatch } from "./window";
 export { ReferenceMatchLayer, layer3ReferenceMatch } from "./reference";
 export { FuzzyMatchLayer, layer4FuzzyMatch } from "./fuzzy";
 export { SemanticMatchLayer, formatForLLM, convertLLMSuggestions } from "./semantic";
+export {
+  findPartialMatchCombination,
+  generatePartialMatchGroupId,
+  validatePartialMatch,
+} from "./partial";
 
 // Create all layers for pipeline usage
 import { ExactMatchLayer } from "./exact";

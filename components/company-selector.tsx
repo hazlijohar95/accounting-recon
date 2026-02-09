@@ -74,11 +74,11 @@ export function CompanySelector({ onCreateNew, className }: CompanySelectorProps
       name: c.name,
       code: c.code,
     }))
-    setCompanies(mapped)
 
-    // Auto-select first company if none selected
+    // Batch state updates: set companies and auto-select in one pass
+    // This prevents any intermediate render where companies exist but none is selected
+    setCompanies(mapped)
     if (!selectedCompanyId && mapped.length > 0) {
-      console.log('[CompanySelector] Auto-selecting first company:', mapped[0].id, mapped[0].name)
       setSelectedCompanyId(mapped[0].id)
     }
   }, [convexCompanies, selectedCompanyId, setSelectedCompanyId, setCompanies, workosIdForQuery])

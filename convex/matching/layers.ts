@@ -18,11 +18,15 @@ export type {
   MatchingLayer,
   LLMMatchSuggestion,
   LLMInput,
+  PartialMatchingConfig,
+  PartialMatchResult,
+  PartialMatchCandidate,
 } from "./layers/index";
 
 // Re-export values
 export {
   DEFAULT_CONFIG,
+  DEFAULT_PARTIAL_CONFIG,
   // Layer implementations
   ExactMatchLayer,
   WindowMatchLayer,
@@ -39,6 +43,10 @@ export {
   convertLLMSuggestions,
   // Layer factory
   getNonLLMLayers,
+  // Partial matching (Layer 7)
+  findPartialMatchCombination,
+  generatePartialMatchGroupId,
+  validatePartialMatch,
 } from "./layers/index";
 
 // Import for the runNonLLMLayers backward compatibility function

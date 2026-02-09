@@ -37,18 +37,19 @@ import {
   IconReports,
   IconSettings,
 } from '@/components/brand'
-import { IconTable } from '@/components/brand/icons'
+import { IconTable, IconWarningCircle } from '@/components/brand/icons'
 import { CompanySelector } from '@/components/company-selector'
 import { NavTooltip } from '@/components/nav-tooltip'
 import { useAuth } from '@/components/auth-provider'
 
 /** Navigation items configuration for the sidebar */
-const navItems: { href: string; label: string; icon: React.ReactNode }[] = [
+const navItems: { href: string; label: string; icon: React.ReactNode; badge?: 'beta' | 'new' }[] = [
   { href: '/dashboard', label: 'Dashboard', icon: <IconDashboard size={16} /> },
   { href: '/upload', label: 'Upload', icon: <IconUpload size={16} /> },
   { href: '/reconcile', label: 'Reconcile', icon: <IconReconcile size={16} /> },
   { href: '/reports', label: 'Reports', icon: <IconReports size={16} /> },
-  { href: '/workspace', label: 'Workspace', icon: <IconTable size={16} /> },
+  { href: '/spreadsheet', label: 'Spreadsheet', icon: <IconTable size={16} />, badge: 'beta' },
+  { href: '/dlq', label: 'Failed Items', icon: <IconWarningCircle size={16} /> },
   { href: '/settings', label: 'Settings', icon: <IconSettings size={16} /> },
 ]
 
@@ -150,6 +151,7 @@ export function AppSidebar() {
                 <NavTooltip label={showBadge ? `${item.label} (${processingCount} processing)` : item.label} show={isCollapsed}>
                   <Link
                     href={item.href}
+                    prefetch={true}
                     aria-current={isActive ? 'page' : undefined}
                     className={cn(
                       'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors relative',
@@ -170,6 +172,12 @@ export function AppSidebar() {
                       )}
                     </span>
                     <span className="sidebar-label flex-1">{item.label}</span>
+                    {/* Beta badge */}
+                    {item.badge === 'beta' && !isCollapsed && (
+                      <span className="text-[9px] px-1.5 py-0.5 bg-foreground/5 text-muted-foreground font-medium uppercase tracking-wider border border-border/50">
+                        Beta
+                      </span>
+                    )}
                     {/* Processing count badge */}
                     {showBadge && !isCollapsed && (
                       <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-500 font-medium tabular-nums">

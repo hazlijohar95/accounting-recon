@@ -25,7 +25,7 @@ export interface MatchCandidate {
   cashTransactionId: Id<"transactions">;
   accrualDocumentId: Id<"accrualDocuments">;
   confidenceScore: number;
-  matchLayer: 1 | 2 | 3 | 4 | 5;
+  matchLayer: 1 | 2 | 3 | 4 | 5 | 7; // 7 = partial match (6 is manual)
   matchReason: string;
 }
 
@@ -118,6 +118,70 @@ export interface LLMMatchSuggestion {
   accrualDocumentId: string;
   confidence: number;
   reasoning: string;
+}
+
+/**
+ * Configuration for partial (one-to-many) matching
+ * Used when a single bank transaction covers multiple invoices
+ */
+export interface PartialMatchingConfig {
+  /** Whether partial matching is enabled (default: true) */
+  enabled: boolean;
+  /** Minimum cash transaction amount to attempt partial matching (default: 500) */
+  minCashAmount: number;
+  /** Maximum number of invoices to combine per match (default: 5) */
+  maxInvoicesPerMatch: number;
+  /** Absolute tolerance for amount matching in dollars (default: 0.01) */
+  toleranceAbsolute: number;
+  /** Percentage tolerance for amount matching (default: 0.01 = 1%) */
+  tolerancePercent: number;
+  /** Minimum confidence score to auto-match (default: 85) */
+  minConfidence: number;
+}
+
+/**
+ * Default partial matching configuration
+ */
+export const DEFAULT_PARTIAL_CONFIG: PartialMatchingConfig = {
+  enabled: true,
+  minCashAmount: 500,
+  maxInvoicesPerMatch: 5,
+  toleranceAbsolute: 0.01,
+  tolerancePercent: 0.01,
+  minConfidence: 85,
+};
+
+/**
+ * Result from partial match algorithm
+ * Represents a combination of accrual documents that match a cash transaction
+ */
+export interface PartialMatchResult {
+  /** Accrual documents that combine to match the payment */
+  documents: AccrualDocument[];
+  /** Total amount of all documents combined */
+  totalAmount: number;
+  /** Variance between cash amount and document total */
+  variance: number;
+  /** Variance as percentage of cash amount */
+  variancePercent: number;
+  /** Whether this is an exact match (variance = 0) */
+  isExact: boolean;
+  /** Calculated confidence score (0-100) */
+  confidence: number;
+  /** Reason explaining the match */
+  matchReason: string;
+}
+
+/**
+ * Extended match candidate for partial matches
+ */
+export interface PartialMatchCandidate extends MatchCandidate {
+  /** ID linking related partial matches together */
+  partialMatchGroupId: string;
+  /** Amount attributed to this specific match */
+  matchedAmount: number;
+  /** Whether this is part of a partial match */
+  isPartialMatch: true;
 }
 
 /**

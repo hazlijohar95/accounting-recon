@@ -15,12 +15,13 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '@/components/auth-provider'
-import { useWorkosUserId } from '@/lib/convex-hooks/shared'
+import { useWorkosUserId, withWorkosUserId } from '@/lib/convex-hooks/shared'
 import { useSelectedCompanyId, useSetSelectedCompanyId, useIsDemo } from '@/lib/store'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { toast } from '@/components/ui/toast'
 import { Modal } from '@/components/ui/modal'
+import { useSyncedFormState } from '@/hooks'
 import {
   IconUser,
   IconBuildings,
@@ -67,19 +68,20 @@ export function SettingsView() {
   const isDemo = useIsDemo()
   const selectedCompanyId = useSelectedCompanyId()
   const setSelectedCompanyId = useSetSelectedCompanyId()
+  const workosUserId = useWorkosUserId()
 
   // Fetch company data if authenticated and company selected - pass workosUserId for auth fallback
   const company = useQuery(
     api.companies.get,
     selectedCompanyId && user && !isDemo
-      ? { id: selectedCompanyId, workosUserId: user.workosId }
+      ? withWorkosUserId({ id: selectedCompanyId }, workosUserId)
       : 'skip'
   )
 
   // Also fetch all companies for auto-selection fallback - pass workosUserId for auth fallback
   const allCompanies = useQuery(
     api.companies.listByOwner,
-    isAuthenticated && user && !isDemo ? { workosUserId: user.workosId } : 'skip'
+    isAuthenticated && user && !isDemo ? withWorkosUserId({}, workosUserId) : 'skip'
   )
 
   // Auto-select first company if none selected but companies exist
@@ -175,7 +177,7 @@ interface ProfileSectionProps {
 }
 
 function ProfileSection({ user, isDemo }: ProfileSectionProps) {
-  const [name, setName] = useState(user?.name || '')
+  const [name, setName] = useSyncedFormState(user?.name || '', [user?.name])
   const [isSaving, setIsSaving] = useState(false)
   const updateUser = useMutation(api.users.update)
 
@@ -288,27 +290,16 @@ interface CompanySectionProps {
 }
 
 function CompanySection({ company, isDemo }: CompanySectionProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useSyncedFormState({
     name: company?.name || '',
     currency: company?.currency || 'MYR',
     fiscalYearEnd: company?.fiscalYearEnd || 'December',
     industryCategory: company?.industryCategory || '',
     taxNumber: company?.taxNumber || '',
-  })
+  }, [company])
   const [isSaving, setIsSaving] = useState(false)
   const updateCompany = useMutation(api.companies.update)
   const workosUserId = useWorkosUserId()
-
-  useEffect(() => {
-    if (!company) return
-    setFormData({
-      name: company.name || '',
-      currency: company.currency || 'MYR',
-      fiscalYearEnd: company.fiscalYearEnd || 'December',
-      industryCategory: company.industryCategory || '',
-      taxNumber: company.taxNumber || '',
-    })
-  }, [company])
 
   const handleSave = async () => {
     if (!company || isDemo) return

@@ -1,147 +1,62 @@
 /**
  * Extraction Functions
  *
- * Handles document extraction via the ML service.
- * Uses async webhook pattern - action returns immediately, ML calls back when done.
+ * Document extraction routing:
+ * - PDFs: Use native extraction (client-side PDF.js + Bedrock Vision)
+ *   - See convex/nativePdfExtraction.ts and hooks/usePdfExtraction.ts
+ * - Images: Route to Cloudinary + Bedrock Vision (legacy)
+ *   - See convex/cloudinaryExtraction.ts
+ *
+ * NOTE: For PDFs, extraction is now handled entirely client-side via the
+ * usePdfExtraction hook. This action is only used for non-PDF images.
+ *
+ * @module convex/extraction
  */
 
 import { v } from "convex/values";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import { authKit } from "./auth";
-import { AuthErrors, ResourceErrors, BusinessErrors, ValidationErrors } from "./lib/errors";
+import { ResourceErrors, BusinessErrors, ValidationErrors } from "./lib/errors";
 import { documentDocValidator } from "./lib/validators";
-
-// ML Service URL from environment
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
 
 // ============ ACTION ============
 
 /**
  * Trigger extraction for a document
  *
- * Called after a document is uploaded to start the extraction process.
- * Returns immediately with job_id - ML service calls webhook when done.
+ * ROUTING:
+ * - PDF files: Should use native extraction via usePdfExtraction hook (client-side)
+ *   This action will still work for PDFs but routes to Cloudinary (legacy)
+ * - Image files: Routes to Cloudinary + Claude Vision extraction
+ *
+ * For best performance with PDFs, use the usePdfExtraction hook which:
+ * 1. Renders PDF pages client-side using PDF.js (no Cloudinary needed)
+ * 2. Uploads page images to Convex storage
+ * 3. Calls Bedrock Vision for each page
+ *
+ * This action is kept for backward compatibility and for image extraction.
  */
 export const triggerExtraction = action({
   args: {
     documentId: v.id("documents"),
+    workosUserId: v.optional(v.string()), // Fallback when AuthKit fails
+    force: v.optional(v.boolean()), // Force re-extraction even if stuck in processing
   },
-  returns: v.object({ jobId: v.string(), success: v.boolean() }),
-  handler: async (ctx, args): Promise<{ jobId: string; success: boolean }> => {
-    const isProduction = process.env.NODE_ENV === "production";
-
-    // SECURITY: Verify user is authenticated
-    let authUser: { id: string } | null = null;
-    try {
-      authUser = await authKit.getAuthUser(ctx);
-    } catch {
-      // SECURITY: In production, AuthKit failure is fatal
-      if (isProduction) {
-        console.error("SECURITY: AuthKit failed in production during extraction");
-        return AuthErrors.serviceUnavailable();
-      }
-      // AuthKit not configured - allow for development/demo mode only
-      console.warn("AuthKit not configured, skipping auth check in extraction (dev mode only)");
-    }
-
-    // SECURITY: Block unauthenticated access in production
-    if (!authUser && isProduction) {
-      return AuthErrors.unauthorized("Authentication required for extraction");
-    }
-
-    // Get document details
-    const document = await ctx.runQuery(internal.extraction.getDocument, {
+  returns: v.object({ jobId: v.string(), success: v.boolean(), message: v.optional(v.string()) }),
+  handler: async (ctx, args): Promise<{ jobId: string; success: boolean; message?: string }> => {
+    // Route to Cloudinary + Claude Vision extraction
+    // NOTE: For PDFs, prefer using native extraction via usePdfExtraction hook
+    return await ctx.runAction(api.cloudinaryExtraction.triggerCloudinaryExtraction, {
       documentId: args.documentId,
+      workosUserId: args.workosUserId,
+      force: args.force,
     });
-
-    if (!document) {
-      return ResourceErrors.notFound("Document", args.documentId);
-    }
-
-    // SECURITY: Verify ownership if user is authenticated
-    if (authUser) {
-      const user = await ctx.runQuery(api.users.getByWorkosId, {
-        workosId: authUser.id,
-      });
-
-      if (!user) {
-        return AuthErrors.userNotFound();
-      }
-
-      const company = await ctx.runQuery(api.companies.get, {
-        id: document.companyId,
-      });
-
-      if (!company || company.ownerId !== user._id) {
-        return AuthErrors.unauthorized("You don't have access to this document");
-      }
-    }
-
-    if (!document.storageId) {
-      return ValidationErrors.missingField("storageId");
-    }
-
-    // Get storage URL from Convex storage (URLs don't expire)
-    // SECURITY: Using internal query - not exposed to clients
-    const storageUrl = await ctx.runQuery(internal.documents.getStorageUrl, {
-      storageId: document.storageId,
-    });
-
-    if (!storageUrl) {
-      return ValidationErrors.missingField("storageUrl (file not found in storage)");
-    }
-
-    // Update document status to processing
-    await ctx.runMutation(internal.extraction.updateDocumentStatus, {
-      documentId: args.documentId,
-      status: "processing",
-    });
-
-    try {
-      // Call ML service - returns immediately with job_id
-      // Note: Convex storage URLs don't expire, so ML service has unlimited time to fetch
-      const response = await fetch(`${ML_SERVICE_URL}/extract`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          document_id: args.documentId,
-          company_id: document.companyId,
-          storage_url: storageUrl,
-          file_name: document.fileName,
-          file_type: document.fileType,
-          document_type: document.documentType,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`ML service error: ${response.status} - ${errorText}`);
-      }
-
-      const result = (await response.json()) as { job_id: string };
-
-      // Store the job ID
-      await ctx.runMutation(internal.extraction.updateDocumentJobId, {
-        documentId: args.documentId,
-        jobId: result.job_id,
-      });
-
-      return { jobId: result.job_id, success: true };
-    } catch (error) {
-      // Update status to failed
-      await ctx.runMutation(internal.extraction.updateDocumentStatus, {
-        documentId: args.documentId,
-        status: "failed",
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
-      });
-      throw error;
-    }
   },
 });
 
 // ============ INTERNAL QUERIES ============
+// NOTE: These are kept for backwards compatibility with existing webhook handlers
 
 export const getDocument = internalQuery({
   args: { documentId: v.id("documents") },

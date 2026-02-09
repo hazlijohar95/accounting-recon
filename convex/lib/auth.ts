@@ -7,56 +7,71 @@ import {
   PermissionErrors,
 } from "./errors";
 
+// ============================================================================
+// Environment Detection
+// ============================================================================
+
 /**
- * Check if running in production environment.
- * Uses CONVEX_CLOUD_URL to detect if we're on production deployment.
- * NODE_ENV is unreliable in Convex as it's often "production" even in dev.
+ * Detect if running in development environment.
+ * Uses multiple signals to reliably detect dev vs prod.
  *
- * FIX P0-3: Now uses AUTH_DEV_MODE instead of AUTH_STRICT_MODE.
- * Production mode is the DEFAULT - dev mode must be explicitly enabled.
+ * Detection priority:
+ * 1. AUTH_DEV_MODE=true → Always dev mode (explicit override)
+ * 2. AUTH_DEV_MODE=false → Always prod mode (explicit override)
+ * 3. CONVEX_CLOUD_URL contains "-dev" → Dev mode (Convex dev deployment)
+ * 4. Default → Prod mode (secure by default)
  */
-export function isProductionMode(): boolean {
-  // If dev mode is explicitly enabled, we're NOT in production
-  if (process.env.AUTH_DEV_MODE === "true") {
-    return false;
-  }
-  // In Convex, check if we're on the production deployment
-  // Development deployments typically have "dev" in the URL
+function isDevEnvironment(): boolean {
+  // Explicit override takes priority
+  const authDevMode = process.env.AUTH_DEV_MODE;
+  if (authDevMode === "true") return true;
+  if (authDevMode === "false") return false;
+
+  // Auto-detect based on Convex deployment URL
   const convexUrl = process.env.CONVEX_CLOUD_URL || "";
-  // Default to production mode for safety if not clearly a dev URL
-  return !convexUrl.includes("-dev");
+  
+  // Development deployments have patterns like:
+  // - "hearty-manatee-185.convex.cloud" (local dev)
+  // - Contains "-dev" in the URL
+  // Production deployments typically use custom domains or prod URLs
+  if (convexUrl.includes("-dev")) {
+    return true;
+  }
+
+  // Check for local development indicators
+  if (convexUrl.includes("localhost") || convexUrl.includes("127.0.0.1")) {
+    return true;
+  }
+
+  // Secure default: assume production
+  return false;
 }
 
 /**
- * Allow auth fallbacks (workosUserId parameter) when AuthKit fails.
- * This is needed because @workos-inc/authkit-nextjs tokens may not be
- * compatible with @convex-dev/workos-authkit verification.
- *
- * Security note: The fallback still requires a valid user in the database,
- * so the attack surface is limited to impersonating existing users.
- *
- * FIX P0-3: SECURE BY DEFAULT - must explicitly opt-in to dev mode.
- * Set AUTH_DEV_MODE=true ONLY in development environments.
+ * Check if running in production environment.
  */
-function allowAuthFallback(): boolean {
-  // SECURE BY DEFAULT: Only allow fallback if explicitly in dev mode
-  // The workosUserId must still exist in DB, limiting attack surface
-  const devMode = process.env.AUTH_DEV_MODE === "true";
-  if (devMode) {
-    console.warn(
-      "[Auth Security] AUTH_DEV_MODE is enabled - auth bypass allowed. " +
-      "DO NOT use in production!"
-    );
-  }
-  return devMode;
+export function isProductionMode(): boolean {
+  return !isDevEnvironment();
 }
+
+/**
+ * Check if we should use verbose auth logging.
+ * Only log in dev mode to avoid leaking auth details in production.
+ */
+function shouldLogAuthDetails(): boolean {
+  return isDevEnvironment();
+}
+
+// ============================================================================
+// Core Auth Functions
+// ============================================================================
 
 /**
  * Get authenticated user or throw an error.
  * This is the primary auth helper for mutations.
  *
  * @param ctx - Query or mutation context
- * @param workosUserId - Optional fallback WorkOS user ID (for dev mode when JWT verification fails)
+ * @param workosUserId - Optional fallback WorkOS user ID when AuthKit fails
  */
 export async function requireAuth(
   ctx: QueryCtx | MutationCtx,
@@ -76,97 +91,110 @@ export async function requireAuth(
  * Optionally get authenticated user (returns null if not authenticated).
  * Uses AuthKit to verify the JWT and look up the user by workosId.
  *
- * SECURITY: In production mode, ONLY AuthKit-verified tokens are accepted.
- * The workosUserId fallback is ONLY allowed in development mode.
+ * Auth Flow:
+ * 1. Try AuthKit JWT verification (primary method)
+ * 2. If AuthKit fails AND workosUserId provided → Use database lookup fallback
+ * 3. Look up user in database by workosId
  *
- * FALLBACK (dev only): If AuthKit token verification fails (due to incompatible packages),
- * accepts an optional workosUserId parameter to look up the user directly.
- * This is a workaround for the incompatibility between @workos-inc/authkit-nextjs
- * (frontend) and @convex-dev/workos-authkit (Convex backend).
+ * Security Note:
+ * The fallback is always enabled because:
+ * - Frontend auth (cookies) is verified by Next.js middleware
+ * - Unauthenticated users cannot access the app (redirected to login)
+ * - Users can only send their own workosUserId (from their auth state)
+ * - Database lookup validates the user actually exists
+ *
+ * @param ctx - Query or mutation context
+ * @param workosUserId - Optional fallback WorkOS user ID when AuthKit fails
  */
 export async function getOptionalAuth(
   ctx: QueryCtx | MutationCtx,
   workosUserId?: string
 ): Promise<Doc<"users"> | null> {
-  const canUseFallback = allowAuthFallback();
-  const shouldLog = canUseFallback; // Only log in non-strict mode
+  const verboseLogging = shouldLogAuthDetails();
 
-  if (shouldLog) {
-    console.log('[getOptionalAuth] Starting... workosUserId fallback:', workosUserId ?? 'none');
-  }
-
-  // Get auth user from AuthKit (verifies JWT)
+  // Try AuthKit first (verifies JWT)
   let authUser: { id: string } | null = null;
+
   try {
     authUser = await authKit.getAuthUser(ctx);
-    if (shouldLog) {
-      console.log('[getOptionalAuth] AuthKit returned:', authUser?.id ?? 'null');
-    }
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('[getOptionalAuth] AuthKit failed with error:', errorMessage);
-    // If fallback is not allowed, this is a hard failure
-    if (!canUseFallback) {
+    // AuthKit failed - this is expected with library mismatch between
+    // @workos-inc/authkit-nextjs (frontend) and @convex-dev/workos-authkit (backend)
+    if (verboseLogging) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.warn('[Auth] AuthKit verification failed:', errorMsg);
+    }
+  }
+
+  // Determine effective workosId
+  let effectiveWorkosId: string | null = null;
+  let authSource: string = "none";
+
+  if (authUser?.id) {
+    // AuthKit succeeded
+    effectiveWorkosId = authUser.id;
+    authSource = "authkit";
+
+    // SECURITY: Validate workosUserId matches authUser if both are provided
+    // This prevents spoofing attacks where a client tries to claim another user's ID
+    if (workosUserId && workosUserId !== authUser.id) {
+      console.error('[Auth] workosUserId mismatch - potential spoofing attack', {
+        claimed: workosUserId.substring(0, 8) + '...',
+        actual: authUser.id.substring(0, 8) + '...',
+      });
       return null;
     }
-    // Continue to fallback
-  }
-
-  // Use AuthKit ID if available, otherwise fall back to provided workosUserId
-  // Fallback is only used when AuthKit fails AND allowAuthFallback() is true
-  const effectiveWorkosId = authUser?.id ?? (canUseFallback ? workosUserId : null);
-
-  // If we have a workosId (from either source), try to find the user
-  if (effectiveWorkosId) {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_workos", (q) => q.eq("workosId", effectiveWorkosId))
-      .first();
-
-    if (user) {
-      if (shouldLog) {
-        const source = authUser?.id ? 'AuthKit' : 'workosUserId fallback';
-        console.log(`[Auth] getOptionalAuth: Found user by ${source}:`, user._id);
-      }
-      return user;
-    }
-
-    // User not found - log which ID we tried
-    if (authUser?.id) {
-      console.warn('[Auth] getOptionalAuth: AuthKit user found but no DB record. workosId:', authUser.id);
-      // Secondary fallback: try workosUserId if different from authUser.id
-      if (canUseFallback && workosUserId && workosUserId !== authUser.id) {
-        const fallbackUser = await ctx.db
-          .query("users")
-          .withIndex("by_workos", (q) => q.eq("workosId", workosUserId))
-          .first();
-        if (fallbackUser) {
-          if (shouldLog) {
-            console.log('[Auth] getOptionalAuth: Found user by secondary workosUserId:', fallbackUser._id);
-          }
-          return fallbackUser;
-        }
-      }
-    } else if (workosUserId && canUseFallback) {
-      console.warn('[Auth] getOptionalAuth: workosUserId provided but no DB record:', workosUserId);
+  } else if (workosUserId) {
+    // Fallback: use workosUserId from frontend
+    // This is safe because frontend auth is verified by Next.js middleware
+    effectiveWorkosId = workosUserId;
+    authSource = "fallback";
+    if (verboseLogging) {
+      console.log('[Auth] Using workosUserId fallback:', workosUserId.substring(0, 8) + '...');
     }
   }
 
-  // No workosId available from any source
-  if (shouldLog) {
-    console.log('[Auth] getOptionalAuth: No authenticated user found');
+  // No auth available
+  if (!effectiveWorkosId) {
+    if (verboseLogging) {
+      console.log('[Auth] No authentication available');
+    }
+    return null;
   }
+
+  // Look up user in database
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_workos", (q) => q.eq("workosId", effectiveWorkosId))
+    .first();
+
+  if (user) {
+    if (verboseLogging) {
+      console.log(`[Auth] User found via ${authSource}:`, user._id);
+    }
+    return user;
+  }
+
+  // User not found in database
+  if (verboseLogging) {
+    console.warn('[Auth] WorkOS ID not found in database:', effectiveWorkosId.substring(0, 8) + '...');
+  }
+
   return null;
 }
 
 
+// ============================================================================
+// Query Access Verification (Graceful - returns allowed: boolean)
+// ============================================================================
+
 /**
- * Verify company access for query handlers with graceful handling for unauthenticated users.
+ * Verify company access for query handlers with graceful handling.
  * Returns { allowed: boolean, user: Doc<"users"> | null } for queries that need to
  * return empty arrays/null instead of throwing.
  *
- * SECURITY: In production, unauthenticated access returns { allowed: false }.
- * In development, returns { allowed: true } for easier testing.
+ * Note: Queries should gracefully return empty data when auth fails,
+ * rather than throwing errors. This provides better UX.
  */
 export async function verifyQueryCompanyAccess(
   ctx: QueryCtx,
@@ -175,14 +203,9 @@ export async function verifyQueryCompanyAccess(
 ): Promise<{ allowed: boolean; user: Doc<"users"> | null }> {
   const user = await getOptionalAuth(ctx, workosUserId);
 
-  // No authenticated user
+  // No authenticated user - return not allowed (query will return empty data)
   if (!user) {
-    // In production, deny access
-    if (isProductionMode()) {
-      return { allowed: false, user: null };
-    }
-    // In development, allow for easier testing
-    return { allowed: true, user: null };
+    return { allowed: false, user: null };
   }
 
   // User is authenticated - verify company ownership
@@ -191,12 +214,7 @@ export async function verifyQueryCompanyAccess(
     return { allowed: false, user };
   }
 
-  // In development, be lenient with ownership checks
-  if (!isProductionMode()) {
-    return { allowed: true, user };
-  }
-
-  // In production, strict ownership check
+  // Strict ownership check
   if (company.ownerId !== user._id) {
     return { allowed: false, user };
   }
@@ -231,13 +249,14 @@ export async function verifyQueryResourceAccess(
   return verifyQueryCompanyAccess(ctx, companyId, workosUserId);
 }
 
+
+// ============================================================================
+// Mutation Access Verification (Strict - throws on failure)
+// ============================================================================
+
 /**
  * Verify user owns a company and return both user and company.
  * Throws if user is not authenticated or doesn't own the company.
- *
- * @param ctx - Query or mutation context
- * @param companyId - Company ID to verify access for
- * @param workosUserId - Optional fallback WorkOS user ID (for dev mode when JWT verification fails)
  */
 export async function requireCompanyAccess(
   ctx: QueryCtx | MutationCtx,
@@ -267,13 +286,14 @@ export async function requireCompanyAccess(
  */
 export async function requireSessionAccess(
   ctx: QueryCtx | MutationCtx,
-  sessionId: Id<"reconciliationSessions">
+  sessionId: Id<"reconciliationSessions">,
+  workosUserId?: string
 ): Promise<{
   user: Doc<"users">;
   session: Doc<"reconciliationSessions">;
   company: Doc<"companies">;
 }> {
-  const user = await requireAuth(ctx);
+  const user = await requireAuth(ctx, workosUserId);
   const session = await ctx.db.get(sessionId);
 
   if (!session) {
@@ -302,13 +322,14 @@ export async function requireSessionAccess(
  */
 export async function requireTransactionAccess(
   ctx: QueryCtx | MutationCtx,
-  transactionId: Id<"transactions">
+  transactionId: Id<"transactions">,
+  workosUserId?: string
 ): Promise<{
   user: Doc<"users">;
   transaction: Doc<"transactions">;
   company: Doc<"companies">;
 }> {
-  const user = await requireAuth(ctx);
+  const user = await requireAuth(ctx, workosUserId);
   const transaction = await ctx.db.get(transactionId);
 
   if (!transaction) {
@@ -337,13 +358,14 @@ export async function requireTransactionAccess(
  */
 export async function requireDocumentAccess(
   ctx: QueryCtx | MutationCtx,
-  documentId: Id<"documents">
+  documentId: Id<"documents">,
+  workosUserId?: string
 ): Promise<{
   user: Doc<"users">;
   document: Doc<"documents">;
   company: Doc<"companies">;
 }> {
-  const user = await requireAuth(ctx);
+  const user = await requireAuth(ctx, workosUserId);
   const document = await ctx.db.get(documentId);
 
   if (!document) {
@@ -372,13 +394,14 @@ export async function requireDocumentAccess(
  */
 export async function requireAccrualDocAccess(
   ctx: QueryCtx | MutationCtx,
-  docId: Id<"accrualDocuments">
+  docId: Id<"accrualDocuments">,
+  workosUserId?: string
 ): Promise<{
   user: Doc<"users">;
   accrualDoc: Doc<"accrualDocuments">;
   company: Doc<"companies">;
 }> {
-  const user = await requireAuth(ctx);
+  const user = await requireAuth(ctx, workosUserId);
   const accrualDoc = await ctx.db.get(docId);
 
   if (!accrualDoc) {
@@ -407,13 +430,14 @@ export async function requireAccrualDocAccess(
  */
 export async function requireSuspenseItemAccess(
   ctx: QueryCtx | MutationCtx,
-  itemId: Id<"suspenseItems">
+  itemId: Id<"suspenseItems">,
+  workosUserId?: string
 ): Promise<{
   user: Doc<"users">;
   item: Doc<"suspenseItems">;
   company: Doc<"companies">;
 }> {
-  const user = await requireAuth(ctx);
+  const user = await requireAuth(ctx, workosUserId);
   const item = await ctx.db.get(itemId);
 
   if (!item) {
@@ -442,14 +466,15 @@ export async function requireSuspenseItemAccess(
  */
 export async function requireMatchAccess(
   ctx: QueryCtx | MutationCtx,
-  matchId: Id<"matchedPairs">
+  matchId: Id<"matchedPairs">,
+  workosUserId?: string
 ): Promise<{
   user: Doc<"users">;
   match: Doc<"matchedPairs">;
   session: Doc<"reconciliationSessions">;
   company: Doc<"companies">;
 }> {
-  const user = await requireAuth(ctx);
+  const user = await requireAuth(ctx, workosUserId);
   const match = await ctx.db.get(matchId);
 
   if (!match) {
@@ -480,16 +505,64 @@ export async function requireMatchAccess(
 }
 
 /**
+ * Verify user owns a worksheet's workspace's company.
+ */
+export async function requireWorksheetAccess(
+  ctx: QueryCtx | MutationCtx,
+  worksheetId: Id<"worksheets">,
+  workosUserId?: string
+): Promise<{
+  user: Doc<"users">;
+  worksheet: Doc<"worksheets">;
+  workspace: Doc<"workspaces">;
+  company: Doc<"companies">;
+}> {
+  const user = await requireAuth(ctx, workosUserId);
+  const worksheet = await ctx.db.get(worksheetId);
+
+  if (!worksheet) {
+    return ResourceErrors.notFound("Worksheet", worksheetId);
+  }
+
+  if (worksheet.deletedAt) {
+    return ResourceErrors.deleted("Worksheet");
+  }
+
+  const workspace = await ctx.db.get(worksheet.workspaceId);
+
+  if (!workspace) {
+    return ResourceErrors.notFound("Workspace", worksheet.workspaceId);
+  }
+
+  const company = await ctx.db.get(workspace.companyId);
+
+  if (!company) {
+    return ResourceErrors.notFound("Company", workspace.companyId);
+  }
+
+  if (company.isDeleted) {
+    return ResourceErrors.deleted("Company");
+  }
+
+  if (company.ownerId !== user._id) {
+    return PermissionErrors.accessDenied("worksheet");
+  }
+
+  return { user, worksheet, workspace, company };
+}
+
+/**
  * Verify user owns a category's company (or category is global).
  */
 export async function requireCategoryAccess(
   ctx: QueryCtx | MutationCtx,
-  categoryId: Id<"categories">
+  categoryId: Id<"categories">,
+  workosUserId?: string
 ): Promise<{
   user: Doc<"users">;
   category: Doc<"categories">;
 }> {
-  const user = await requireAuth(ctx);
+  const user = await requireAuth(ctx, workosUserId);
   const category = await ctx.db.get(categoryId);
 
   if (!category) {

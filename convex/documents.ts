@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { requireCompanyAccess, requireDocumentAccess, verifyQueryCompanyAccess, verifyQueryResourceAccess } from "./lib/auth";
 import { documentDocValidator, documentIdValidator } from "./lib/validators";
+import { logAuditEvent } from "./lib/auditLogger";
 
 // Allowed file types for upload validation
 const ALLOWED_CONTENT_TYPES = [
@@ -78,11 +79,12 @@ export const listByCompany = query({
         v.literal("other")
       )
     ),
+    workosUserId: v.optional(v.string()),
   },
   returns: v.array(documentDocValidator),
   handler: async (ctx, args) => {
-    // SECURITY: Verify company access
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify company access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
     if (!allowed) return [];
 
     // Use compound index when filtering by documentType
@@ -108,14 +110,17 @@ export const listByCompany = query({
 
 // Get a single document
 export const get = query({
-  args: { id: v.id("documents") },
+  args: {
+    id: v.id("documents"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.union(documentDocValidator, v.null()),
   handler: async (ctx, args) => {
     const document = await ctx.db.get(args.id);
     if (!document) return null;
 
-    // SECURITY: Verify ownership
-    const { allowed } = await verifyQueryResourceAccess(ctx, document.companyId);
+    // SECURITY: Verify ownership (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQueryResourceAccess(ctx, document.companyId, args.workosUserId);
     if (!allowed) return null;
 
     return document;
@@ -148,11 +153,12 @@ export const getPendingExtraction = internalQuery({
 export const generateUploadUrl = mutation({
   args: {
     companyId: v.id("companies"),
+    workosUserId: v.optional(v.string()), // Fallback when AuthKit fails
   },
   returns: v.string(),
   handler: async (ctx, args) => {
     // SECURITY: Verify user owns the company
-    await requireCompanyAccess(ctx, args.companyId);
+    await requireCompanyAccess(ctx, args.companyId, args.workosUserId);
 
     // SECURITY: Check rate limit (sliding window algorithm)
     const now = Date.now();
@@ -227,11 +233,12 @@ export const create = mutation({
       v.literal("receipt"),
       v.literal("other")
     ),
+    workosUserId: v.optional(v.string()), // Fallback when AuthKit fails
   },
   returns: documentIdValidator,
   handler: async (ctx, args) => {
     // Verify company ownership
-    await requireCompanyAccess(ctx, args.companyId);
+    const { user } = await requireCompanyAccess(ctx, args.companyId, args.workosUserId);
 
     // SECURITY: Validate file type
     if (!ALLOWED_CONTENT_TYPES.includes(args.contentType)) {
@@ -256,6 +263,22 @@ export const create = mutation({
       extractionStatus: "pending",
       uploadedAt: Date.now(),
     });
+
+    // Log audit event
+    await logAuditEvent(ctx, {
+      companyId: args.companyId,
+      userId: user._id,
+      action: "document_upload",
+      resourceType: "document",
+      resourceId: documentId,
+      metadata: {
+        fileName: safeFileName,
+        fileType: args.fileType,
+        fileSize: args.fileSize,
+        documentType: args.documentType,
+      },
+    });
+
     return documentId;
   },
 });
@@ -271,11 +294,12 @@ export const updateExtractionStatus = mutation({
       v.literal("failed")
     ),
     extractedText: v.optional(v.string()),
+    workosUserId: v.optional(v.string()),
   },
   returns: documentIdValidator,
   handler: async (ctx, args) => {
     // Verify document ownership
-    await requireDocumentAccess(ctx, args.id);
+    await requireDocumentAccess(ctx, args.id, args.workosUserId);
 
     const { id, ...updates } = args;
 
@@ -299,15 +323,50 @@ export const updateExtractionStatus = mutation({
   },
 });
 
+// Reset extraction for a single document (allows retry)
+export const resetExtraction = mutation({
+  args: {
+    id: v.id("documents"),
+    workosUserId: v.optional(v.string()),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    // Verify document ownership
+    const { document } = await requireDocumentAccess(ctx, args.id, args.workosUserId);
+
+    // Only reset if stuck in processing or failed
+    if (document.extractionStatus === "processing" || document.extractionStatus === "failed") {
+      await ctx.db.patch(args.id, {
+        extractionStatus: "pending",
+        extractionProgress: undefined,
+        extractionJobId: undefined,
+        errorMessage: undefined,
+      });
+      console.log(`[Reset] Document ${args.id} reset to pending for retry`);
+      return true;
+    }
+
+    return false;
+  },
+});
+
 // Delete a document
 export const remove = mutation({
-  args: { id: v.id("documents") },
+  args: {
+    id: v.id("documents"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     // Verify document ownership and get document
-    const { document } = await requireDocumentAccess(ctx, args.id);
+    const { user, company, document } = await requireDocumentAccess(ctx, args.id, args.workosUserId);
 
     // CASCADE DELETE: Clean up related data to prevent orphaned records
+    // Note: Convex mutations are transactional — if any step throws, all changes roll back.
+    // We track counts for the audit log.
+    let transactionsDeleted = 0;
+    let accrualDocsDeleted = 0;
+    let matchesDeleted = 0;
 
     // 1. Find and clean up transactions referencing this document
     const transactions = await ctx.db
@@ -345,6 +404,7 @@ export const remove = mutation({
           }
           // Delete the match
           await ctx.db.delete(match._id);
+          matchesDeleted++;
         }
       }
 
@@ -363,6 +423,7 @@ export const remove = mutation({
 
       // Delete the transaction
       await ctx.db.delete(txn._id);
+      transactionsDeleted++;
     }
 
     // 2. Find and clean up accrualDocuments referencing this document
@@ -384,6 +445,7 @@ export const remove = mutation({
           });
           // Delete the match
           await ctx.db.delete(match._id);
+          matchesDeleted++;
         }
       }
 
@@ -402,6 +464,7 @@ export const remove = mutation({
 
       // Delete the accrual document
       await ctx.db.delete(doc._id);
+      accrualDocsDeleted++;
     }
 
     // 3. Delete file from Convex storage if it exists
@@ -409,7 +472,24 @@ export const remove = mutation({
       await ctx.storage.delete(document.storageId);
     }
 
-    // 4. Delete the document record
+    // 4. Log audit event before deletion
+    await logAuditEvent(ctx, {
+      companyId: company._id,
+      userId: user._id,
+      action: "document_delete",
+      resourceType: "document",
+      resourceId: args.id,
+      metadata: {
+        fileName: document.fileName,
+        fileType: document.fileType,
+        documentType: document.documentType,
+        transactionsDeleted,
+        accrualDocsDeleted,
+        matchesDeleted,
+      },
+    });
+
+    // 5. Delete the document record
     await ctx.db.delete(args.id);
     return null;
   },

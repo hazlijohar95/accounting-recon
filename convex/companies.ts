@@ -113,27 +113,6 @@ export const listByOwner = query({
   },
 });
 
-// Get company by code
-export const getByCode = query({
-  args: { code: v.string() },
-  returns: v.union(companyDocValidator, v.null()),
-  handler: async (ctx, args) => {
-    const company = await ctx.db
-      .query("companies")
-      .withIndex("by_code", (q) => q.eq("code", args.code))
-      .filter((q) => q.eq(q.field("isDeleted"), false))
-      .first();
-
-    if (!company) return null;
-
-    // SECURITY: Verify ownership
-    const { allowed } = await verifyQueryResourceAccess(ctx, company._id);
-    if (!allowed) return null;
-
-    return company;
-  },
-});
-
 // ============ MUTATIONS ============
 
 // Create a new company
@@ -266,18 +245,12 @@ export const create = mutation({
         userId: user?._id ?? 'undefined',
         workosUserId: args.workosUserId,
         userEmail: args.userEmail,
-        providedOwnerId: args.ownerId,
       });
-      // Fall back to provided ownerId only in non-production mode
-      if (!isProductionMode() && args.ownerId) {
-        console.log('[Company Create] Using fallback ownerId (dev mode):', args.ownerId);
-      } else {
-        return AuthErrors.unauthorized("User creation failed. Please try again.");
-      }
+      return AuthErrors.unauthorized("User creation failed. Please try again.");
     }
 
-    // Use the Convex user._id as ownerId (NEVER use WorkOS ID directly)
-    const ownerId = user?._id ?? args.ownerId;
+    // Use the Convex user._id as ownerId (NEVER use client-provided ownerId)
+    const ownerId = user._id;
 
     console.log('[Company Create] Final ownerId (Convex ID):', ownerId ?? 'null');
     console.log('[Company Create] Verification - ownerId type check:', typeof ownerId, 'starts with:', String(ownerId).substring(0, 10));
@@ -383,13 +356,14 @@ export const update = mutation({
     ),
     currency: v.optional(v.string()),
     onboardingCompleted: v.optional(v.boolean()),
+    workosUserId: v.optional(v.string()),
   },
   returns: companyIdValidator,
   handler: async (ctx, args) => {
-    const { id, ...updates } = args;
+    const { id, workosUserId, ...updates } = args;
 
     // Verify ownership - will throw if not authorized
-    await requireCompanyAccess(ctx, id);
+    await requireCompanyAccess(ctx, id, workosUserId);
 
     // Validate optional updates
     if (updates.name !== undefined) validateNonEmpty(updates.name, "name");
@@ -405,11 +379,14 @@ export const update = mutation({
 
 // Complete onboarding for a company
 export const completeOnboarding = mutation({
-  args: { id: v.id("companies") },
+  args: {
+    id: v.id("companies"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: companyIdValidator,
   handler: async (ctx, args) => {
     // Verify ownership
-    await requireCompanyAccess(ctx, args.id);
+    await requireCompanyAccess(ctx, args.id, args.workosUserId);
 
     await ctx.db.patch(args.id, {
       onboardingCompleted: true,
@@ -421,11 +398,14 @@ export const completeOnboarding = mutation({
 
 // Soft delete a company
 export const remove = mutation({
-  args: { id: v.id("companies") },
+  args: {
+    id: v.id("companies"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     // Verify ownership
-    await requireCompanyAccess(ctx, args.id);
+    await requireCompanyAccess(ctx, args.id, args.workosUserId);
 
     await ctx.db.patch(args.id, {
       isDeleted: true,

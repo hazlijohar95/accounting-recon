@@ -43,9 +43,13 @@ interface ConvexEnrichedMatch {
   accrualTransactionId?: Id<"transactions">;
   confidence: "high" | "medium" | "low";
   confidenceScore: number;
-  matchLayer: 1 | 2 | 3 | 4 | 5 | 6;
+  matchLayer: 1 | 2 | 3 | 4 | 5 | 6 | 7; // 7 = partial match
   matchReason?: string;
   status: "pending" | "approved" | "rejected";
+  // Partial matching support
+  matchedAmount?: number;
+  isPartialMatch?: boolean;
+  partialMatchGroupId?: string;
   reviewedAt?: number;
   reviewedBy?: Id<"users">;
   createdAt: number;
@@ -152,6 +156,9 @@ function convexMatchToUIMatch(match: ConvexEnrichedMatch): MatchPair | null {
     matchLayer: match.matchLayer,
     matchReason: match.matchReason,
     approved: match.status === "approved",
+    reviewedAt: match.reviewedAt,
+    reviewedBy: match.reviewedBy,
+    status: match.status,
   };
 }
 
@@ -203,9 +210,11 @@ export interface UseReconcileDataResult {
  * In real mode: Returns data from Convex with real-time subscriptions
  *
  * @param convexSessionId - The Convex session ID to fetch data for (real mode)
+ * @param workosUserId - Optional WorkOS user ID for auth fallback when AuthKit JWT fails
  */
 export function useReconcileData(
-  convexSessionId?: Id<"reconciliationSessions">
+  convexSessionId?: Id<"reconciliationSessions">,
+  workosUserId?: string
 ): UseReconcileDataResult {
   const isDemo = useIsDemo();
 
@@ -219,17 +228,17 @@ export function useReconcileData(
 
   const convexMatches = useQuery(
     api.matches.listBySession,
-    shouldQuery ? { sessionId: convexSessionId! } : "skip"
+    shouldQuery ? { sessionId: convexSessionId!, workosUserId } : "skip"
   );
 
   const convexSuspense = useQuery(
     api.suspenseItems.listBySession,
-    shouldQuery ? { sessionId: convexSessionId! } : "skip"
+    shouldQuery ? { sessionId: convexSessionId!, workosUserId } : "skip"
   );
 
   const convexSession = useQuery(
     api.sessions.get,
-    shouldQuery ? { id: convexSessionId! } : "skip"
+    shouldQuery ? { id: convexSessionId!, workosUserId } : "skip"
   );
 
   // Transform and memoize data

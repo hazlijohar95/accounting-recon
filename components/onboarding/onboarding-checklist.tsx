@@ -30,7 +30,8 @@ import { cn } from '@/lib/utils'
 import { useOnboardingState } from './use-onboarding-state'
 import { useAuth } from '@/components/auth-provider'
 import { useSelectedCompanyId, useCompanies } from '@/lib/store'
-import { useWorkosUserId } from '@/lib/convex-hooks/shared'
+import { useWorkosUserId, withWorkosUserId } from '@/lib/convex-hooks/shared'
+import { getChecklistProgress, getOnboardingChecklistCompletion } from './checklist-logic'
 
 interface ChecklistItem {
   id: string
@@ -65,20 +66,34 @@ export function OnboardingChecklist() {
   // Documents uploaded for this company
   const documents = useQuery(
     api.documents.listByCompany,
-    selectedCompanyId ? { companyId: selectedCompanyId as Id<'companies'>, workosUserId } : 'skip'
+    selectedCompanyId
+      ? withWorkosUserId({ companyId: selectedCompanyId as Id<'companies'> }, workosUserId)
+      : 'skip'
   )
 
   // Sessions (reconciliation runs) for this company
   const sessions = useQuery(
     api.sessions.listByCompany,
-    selectedCompanyId ? { companyId: selectedCompanyId as Id<'companies'>, workosUserId } : 'skip'
+    selectedCompanyId
+      ? withWorkosUserId({ companyId: selectedCompanyId as Id<'companies'> }, workosUserId)
+      : 'skip'
   )
 
   // Check for reviewed matches (approved or rejected status) across sessions
   const hasReviewedMatch = useQuery(
     api.matches.hasReviewedMatchForCompany,
-    selectedCompanyId ? { companyId: selectedCompanyId as Id<'companies'>, workosUserId } : 'skip'
+    selectedCompanyId
+      ? withWorkosUserId({ companyId: selectedCompanyId as Id<'companies'> }, workosUserId)
+      : 'skip'
   )
+
+  const completion = getOnboardingChecklistCompletion({
+    companiesCount: companies.length,
+    documentCount: documents?.length ?? 0,
+    sessionCount: sessions?.length ?? 0,
+    hasReviewedMatch: hasReviewedMatch ?? false,
+    completedItems,
+  })
 
   // Define checklist items with completion checks using REAL data
   const checklistItems: ChecklistItem[] = [
@@ -88,7 +103,7 @@ export function OnboardingChecklist() {
       description: 'Set up your first company profile',
       icon: <IconBuildings size={16} />,
       href: '/dashboard',
-      checkComplete: () => companies.length > 0,
+      checkComplete: () => completion.company,
     },
     {
       id: 'upload',
@@ -97,7 +112,7 @@ export function OnboardingChecklist() {
       icon: <IconUpload size={16} />,
       href: '/upload',
       // Check if any documents exist for this company
-      checkComplete: () => (documents?.length ?? 0) > 0,
+      checkComplete: () => completion.upload,
     },
     {
       id: 'match',
@@ -106,7 +121,7 @@ export function OnboardingChecklist() {
       icon: <IconPlay size={16} />,
       href: '/reconcile',
       // Check if any reconciliation sessions have been created
-      checkComplete: () => (sessions?.length ?? 0) > 0,
+      checkComplete: () => completion.match,
     },
     {
       id: 'review',
@@ -115,7 +130,7 @@ export function OnboardingChecklist() {
       icon: <IconFileText size={16} />,
       href: '/reconcile',
       // Check if any match has been reviewed (approved/rejected)
-      checkComplete: () => hasReviewedMatch ?? false,
+      checkComplete: () => completion.review,
     },
     {
       id: 'export',
@@ -124,15 +139,12 @@ export function OnboardingChecklist() {
       icon: <IconDownload size={16} />,
       href: '/reports',
       // Keep localStorage for export since it's a client-side action
-      checkComplete: () => completedItems.includes('export'),
+      checkComplete: () => completion.export,
     },
   ]
 
-  // Calculate progress
-  const completedCount = checklistItems.filter(item => item.checkComplete()).length
-  const totalCount = checklistItems.length
-  const progressPercent = Math.round((completedCount / totalCount) * 100)
-  const isAllComplete = completedCount === totalCount
+  const { completedCount, totalCount, progressPercent, isAllComplete } =
+    getChecklistProgress(completion)
 
   // Don't show if not authenticated or all complete
   if (!isAuthenticated || isAllComplete) return null

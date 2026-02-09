@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils'
 import { IconSparkle } from '@/components/brand/icons'
 
-export type MatchLayer = 1 | 2 | 3 | 4 | 5 | 6
+export type MatchLayer = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 interface MatchLayerBadgeProps {
   layer: MatchLayer
@@ -18,6 +18,7 @@ const layerConfig: Record<MatchLayer, { label: string; color: string; bgColor: s
   4: { label: 'Fuzzy', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-400/15' },
   5: { label: 'AI', color: 'text-purple-700 dark:text-purple-300', bgColor: 'bg-purple-500/15', hasIcon: true },
   6: { label: 'Manual', color: 'text-blue-700 dark:text-blue-300', bgColor: 'bg-blue-500/15' },
+  7: { label: 'Partial', color: 'text-cyan-700 dark:text-cyan-300', bgColor: 'bg-cyan-500/15' },
 }
 
 /**
@@ -64,6 +65,7 @@ export function getMatchLayerLabel(layer: number): string {
     case 4: return 'Fuzzy Match'
     case 5: return 'AI Semantic'
     case 6: return 'Manual Match'
+    case 7: return 'Partial Match'
     default: return `Layer ${layer}`
   }
 }

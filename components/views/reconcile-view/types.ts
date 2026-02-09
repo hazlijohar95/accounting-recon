@@ -1,7 +1,7 @@
 import type { MatchPair, Transaction, MatchConfidence } from '@/lib/store'
 
 /** Tab options for the reconcile view */
-export type Tab = 'pending' | 'review' | 'matched' | 'suspense'
+export type Tab = 'pending' | 'review' | 'partial' | 'matched' | 'suspense'
 
 /** Undo action type for tracking reversible actions */
 export interface UndoAction {
@@ -15,7 +15,7 @@ export interface UndoAction {
 /** Filter state type */
 export interface FilterState {
   searchQuery: string
-  matchLayers: (1 | 2 | 3 | 4 | 5 | 6)[]
+  matchLayers: (1 | 2 | 3 | 4 | 5 | 6 | 7)[]
   confidenceLevels: MatchConfidence[]
   minAmount: number | null
   maxAmount: number | null

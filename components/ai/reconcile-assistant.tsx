@@ -27,6 +27,12 @@ import { ChatMessage, TypingIndicator, AnalysisMessage, MatchResult } from './ch
 import { AssistantActionButtons } from './assistant-action-buttons'
 import { LoadingSpinner } from '@/components/brand'
 
+/**
+ * @deprecated Use `ReconcileAgent` from `./reconcile-agent` instead.
+ * This single-turn assistant is replaced by the multi-step agentic assistant
+ * that uses tool calling, client-side confirmation, and Convex persistence.
+ * Will be removed in a future release.
+ */
 interface ReconcileAssistantProps {
   sessionId?: string
   companyName?: string

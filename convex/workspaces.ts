@@ -233,6 +233,42 @@ export const deleteWorkspace = mutation({
         await ctx.db.delete(job._id);
       }
 
+      // Delete data sources
+      const dataSources = await ctx.db
+        .query("worksheetDataSources")
+        .withIndex("by_worksheet", (q) => q.eq("worksheetId", worksheet._id))
+        .collect();
+      for (const ds of dataSources) {
+        await ctx.db.delete(ds._id);
+      }
+
+      // Delete conditional formats
+      const conditionalFormats = await ctx.db
+        .query("worksheetConditionalFormats")
+        .withIndex("by_worksheet", (q) => q.eq("worksheetId", worksheet._id))
+        .collect();
+      for (const cf of conditionalFormats) {
+        await ctx.db.delete(cf._id);
+      }
+
+      // Delete charts
+      const charts = await ctx.db
+        .query("worksheetCharts")
+        .withIndex("by_worksheet", (q) => q.eq("worksheetId", worksheet._id))
+        .collect();
+      for (const chart of charts) {
+        await ctx.db.delete(chart._id);
+      }
+
+      // Delete worksheet messages
+      const messages = await ctx.db
+        .query("worksheetMessages")
+        .withIndex("by_worksheet", (q) => q.eq("worksheetId", worksheet._id))
+        .collect();
+      for (const msg of messages) {
+        await ctx.db.delete(msg._id);
+      }
+
       await ctx.db.delete(worksheet._id);
     }
 
@@ -346,11 +382,22 @@ export const createWorksheet = mutation({
     // Validate name length
     validateNameLength(args.name);
 
+    // Get existing worksheets to determine order
+    const existingWorksheets = await ctx.db
+      .query("worksheets")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    const maxOrder = existingWorksheets.length > 0
+      ? Math.max(...existingWorksheets.map((w) => w.order ?? 0))
+      : -1;
+
     const now = Date.now();
 
     const worksheetId = await ctx.db.insert("worksheets", {
       workspaceId: args.workspaceId,
       name: args.name,
+      order: maxOrder + 1,
       createdAt: now,
       updatedAt: now,
     });
@@ -400,6 +447,42 @@ export const deleteWorksheet = mutation({
       .collect();
     for (const job of jobs) {
       await ctx.db.delete(job._id);
+    }
+
+    // Delete data sources
+    const dataSources = await ctx.db
+      .query("worksheetDataSources")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+    for (const ds of dataSources) {
+      await ctx.db.delete(ds._id);
+    }
+
+    // Delete conditional formats
+    const conditionalFormats = await ctx.db
+      .query("worksheetConditionalFormats")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+    for (const cf of conditionalFormats) {
+      await ctx.db.delete(cf._id);
+    }
+
+    // Delete charts
+    const charts = await ctx.db
+      .query("worksheetCharts")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+    for (const chart of charts) {
+      await ctx.db.delete(chart._id);
+    }
+
+    // Delete worksheet messages
+    const messages = await ctx.db
+      .query("worksheetMessages")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+    for (const msg of messages) {
+      await ctx.db.delete(msg._id);
     }
 
     // Delete the worksheet
@@ -627,7 +710,17 @@ export const reorderColumns = mutation({
       .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
       .collect();
 
-    const columnIdSet = new Set(columns.map((c) => c._id));
+    // Filter to non-deleted columns
+    const activeColumns = columns.filter((c) => !c.deletedAt);
+
+    // Validate that reorder includes ALL active columns
+    if (args.columnIds.length !== activeColumns.length) {
+      throw new Error(
+        `Reorder must include all columns. Expected ${activeColumns.length}, got ${args.columnIds.length}`
+      );
+    }
+
+    const columnIdSet = new Set(activeColumns.map((c) => c._id));
     for (const columnId of args.columnIds) {
       if (!columnIdSet.has(columnId)) {
         throw new Error("Invalid column ID - column does not belong to this worksheet");
@@ -1125,38 +1218,241 @@ export const emptyTrash = mutation({
       .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
       .collect();
 
-    for (const column of columns) {
-      if (column.deletedAt) {
-        const columnKey = `col_${column.order}`;
-        // Clear cell data for this column from remaining rows
-        const activeRows = await ctx.db
-          .query("worksheetRows")
-          .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
-          .collect();
+    // Collect all deleted column keys first to avoid N+1 query
+    const deletedColumns = columns.filter((c) => c.deletedAt);
+    const deletedColumnKeys = new Set(deletedColumns.map((c) => `col_${c.order}`));
 
-        for (const row of activeRows) {
-          if (row.cells[columnKey] !== undefined) {
-            const newCells = { ...row.cells };
+    // Query active rows ONCE (not inside the loop)
+    if (deletedColumns.length > 0 && deletedColumnKeys.size > 0) {
+      const activeRows = await ctx.db
+        .query("worksheetRows")
+        .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+        .filter((q) => q.eq(q.field("deletedAt"), undefined))
+        .collect();
+
+      // Update each row once with all deleted column keys removed
+      for (const row of activeRows) {
+        let needsUpdate = false;
+        const newCells = { ...row.cells };
+        const newStatus = { ...row.cellStatus };
+        const newErrors = row.cellErrors ? { ...row.cellErrors } : undefined;
+
+        for (const columnKey of deletedColumnKeys) {
+          if (newCells[columnKey] !== undefined) {
             delete newCells[columnKey];
-
-            const newStatus = { ...row.cellStatus };
+            needsUpdate = true;
+          }
+          if (newStatus[columnKey] !== undefined) {
             delete newStatus[columnKey];
-
-            const newErrors = row.cellErrors ? { ...row.cellErrors } : undefined;
-            if (newErrors) delete newErrors[columnKey];
-
-            await ctx.db.patch(row._id, {
-              cells: newCells,
-              cellStatus: newStatus,
-              cellErrors: newErrors,
-            });
+          }
+          if (newErrors && newErrors[columnKey] !== undefined) {
+            delete newErrors[columnKey];
           }
         }
-        await ctx.db.delete(column._id);
+
+        if (needsUpdate) {
+          await ctx.db.patch(row._id, {
+            cells: newCells,
+            cellStatus: newStatus,
+            cellErrors: newErrors,
+          });
+        }
       }
     }
 
+    // Delete the column records
+    for (const column of deletedColumns) {
+      await ctx.db.delete(column._id);
+    }
+
     await ctx.db.patch(args.worksheetId, { updatedAt: now });
+  },
+});
+
+// ============================================================================
+// Internal Mutations (for webhooks and scheduled functions)
+// ============================================================================
+
+// ============================================================================
+// Phase 3: Bulk Operations for Data Import
+// ============================================================================
+
+/**
+ * Create multiple columns at once (for data import).
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const createColumns = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    columns: v.array(
+      v.object({
+        name: v.string(),
+        order: v.number(),
+        columnType: v.union(v.literal("text"), v.literal("number"), v.literal("formula")),
+        formula: v.optional(v.string()),
+        dataSource: v.optional(v.string()),
+        width: v.optional(v.number()),
+      })
+    ),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    // Limit batch size
+    validateBatchSize(args.columns.length, "createColumns");
+
+    // Validate all inputs
+    for (const col of args.columns) {
+      validateNameLength(col.name);
+      if (col.formula) {
+        validateFormulaLength(col.formula);
+      }
+    }
+
+    // Check column limit
+    const existingColumns = await ctx.db
+      .query("worksheetColumns")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    if (existingColumns.length + args.columns.length > WORKSPACE_LIMITS.MAX_COLUMNS_PER_WORKSHEET) {
+      throw new Error(`Maximum columns would be exceeded (${WORKSPACE_LIMITS.MAX_COLUMNS_PER_WORKSHEET})`);
+    }
+
+    const columnIds: Id<"worksheetColumns">[] = [];
+
+    for (const col of args.columns) {
+      const columnId = await ctx.db.insert("worksheetColumns", {
+        worksheetId: args.worksheetId,
+        order: col.order,
+        name: col.name,
+        columnType: col.columnType,
+        formula: col.formula,
+        dataSource: col.dataSource,
+        width: col.width ? clampColumnWidth(col.width) : undefined,
+      });
+      columnIds.push(columnId);
+    }
+
+    await ctx.db.patch(args.worksheetId, { updatedAt: Date.now() });
+
+    return columnIds;
+  },
+});
+
+/**
+ * Create multiple rows at once with explicit row numbers (for data import).
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const createRows = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    rows: v.array(
+      v.object({
+        rowNumber: v.number(),
+        cells: v.record(v.string(), v.any()),
+      })
+    ),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    // Limit batch size
+    validateBatchSize(args.rows.length, "createRows");
+
+    // Validate all cells
+    for (const row of args.rows) {
+      const validation = validateCells(row.cells);
+      if (!validation.valid) {
+        ValidationErrors.invalidInput("cells", validation.error);
+      }
+    }
+
+    const now = Date.now();
+    const rowIds: Id<"worksheetRows">[] = [];
+
+    for (const row of args.rows) {
+      const rowId = await ctx.db.insert("worksheetRows", {
+        worksheetId: args.worksheetId,
+        rowNumber: row.rowNumber,
+        cells: row.cells,
+        cellStatus: {},
+        version: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+      rowIds.push(rowId);
+    }
+
+    await ctx.db.patch(args.worksheetId, { updatedAt: now });
+
+    return rowIds;
+  },
+});
+
+/**
+ * Update multiple rows at once (for data refresh).
+ * Only updates specified cells, preserving other cell values.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const updateRows = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    rows: v.array(
+      v.object({
+        rowNumber: v.number(),
+        cells: v.record(v.string(), v.any()),
+      })
+    ),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    // Limit batch size
+    validateBatchSize(args.rows.length, "updateRows");
+
+    // Get existing rows by row number
+    const existingRows = await ctx.db
+      .query("worksheetRows")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    const rowsByNumber = new Map(existingRows.map((r) => [r.rowNumber, r]));
+
+    const now = Date.now();
+    let updatedCount = 0;
+
+    for (const update of args.rows) {
+      const existingRow = rowsByNumber.get(update.rowNumber);
+      if (!existingRow) continue;
+
+      // Validate cells
+      const validation = validateCells(update.cells);
+      if (!validation.valid) {
+        ValidationErrors.invalidInput("cells", validation.error);
+      }
+
+      // Merge cells - only update specified columns
+      const newCells = { ...existingRow.cells, ...update.cells };
+      const currentVersion = existingRow.version ?? 0;
+
+      await ctx.db.patch(existingRow._id, {
+        cells: newCells,
+        version: currentVersion + 1,
+        updatedAt: now,
+      });
+      updatedCount++;
+    }
+
+    await ctx.db.patch(args.worksheetId, { updatedAt: now });
+
+    return { updatedCount };
   },
 });
 
@@ -1212,5 +1508,569 @@ export const updateCellStatus = internalMutation({
     }
 
     await ctx.db.patch(args.rowId, updates);
+  },
+});
+
+// ============================================================================
+// Additional Worksheet Operations (Generic Spreadsheet)
+// ============================================================================
+
+/**
+ * Rename a worksheet.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const renameWorksheet = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    name: v.string(),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    // Validate name length
+    validateNameLength(args.name);
+
+    const now = Date.now();
+    await ctx.db.patch(args.worksheetId, {
+      name: args.name,
+      updatedAt: now,
+    });
+
+    // Get workspace and update its timestamp
+    const worksheet = await ctx.db.get(args.worksheetId);
+    if (worksheet) {
+      await ctx.db.patch(worksheet.workspaceId, { updatedAt: now });
+    }
+  },
+});
+
+/**
+ * Duplicate a worksheet with all its columns and optionally data.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const duplicateWorksheet = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    newName: v.optional(v.string()),
+    includeData: v.optional(v.boolean()),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    const sourceWorksheet = await ctx.db.get(args.worksheetId);
+    if (!sourceWorksheet) throw new Error("Worksheet not found");
+
+    const now = Date.now();
+
+    // Get existing worksheets to determine order
+    const existingWorksheets = await ctx.db
+      .query("worksheets")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", sourceWorksheet.workspaceId))
+      .collect();
+
+    const maxOrder = existingWorksheets.length > 0
+      ? Math.max(...existingWorksheets.map((w) => w.order ?? 0))
+      : 0;
+
+    // Create new worksheet
+    const newWorksheetId = await ctx.db.insert("worksheets", {
+      workspaceId: sourceWorksheet.workspaceId,
+      name: args.newName || `${sourceWorksheet.name} (Copy)`,
+      order: maxOrder + 1,
+      frozenRows: sourceWorksheet.frozenRows,
+      frozenColumns: sourceWorksheet.frozenColumns,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Copy columns
+    const sourceColumns = await ctx.db
+      .query("worksheetColumns")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    const activeColumns = sourceColumns.filter((c) => !c.deletedAt);
+    const columnIdMap = new Map<Id<"worksheetColumns">, Id<"worksheetColumns">>();
+
+    for (const col of activeColumns) {
+      const newColumnId = await ctx.db.insert("worksheetColumns", {
+        worksheetId: newWorksheetId,
+        order: col.order,
+        name: col.name,
+        columnType: col.columnType,
+        formula: col.formula,
+        excelFormula: col.excelFormula,
+        format: col.format,
+        dropdownOptions: col.dropdownOptions,
+        dataSource: col.dataSource,
+        width: col.width,
+        hidden: col.hidden,
+        validation: col.validation,
+        // Don't copy inputColumnId yet - need to remap
+      });
+      columnIdMap.set(col._id, newColumnId);
+    }
+
+    // Update inputColumnId references for formula columns
+    for (const col of activeColumns) {
+      if (col.inputColumnId && columnIdMap.has(col.inputColumnId)) {
+        const newColumnId = columnIdMap.get(col._id);
+        if (newColumnId) {
+          await ctx.db.patch(newColumnId, {
+            inputColumnId: columnIdMap.get(col.inputColumnId),
+          });
+        }
+      }
+    }
+
+    // Copy rows if requested
+    if (args.includeData !== false) {
+      const sourceRows = await ctx.db
+        .query("worksheetRows")
+        .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+        .collect();
+
+      const activeRows = sourceRows.filter((r) => !r.deletedAt);
+
+      for (const row of activeRows) {
+        await ctx.db.insert("worksheetRows", {
+          worksheetId: newWorksheetId,
+          rowNumber: row.rowNumber,
+          cells: row.cells,
+          cellStatus: {}, // Don't copy status
+          version: 0,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
+    // Update workspace timestamp
+    await ctx.db.patch(sourceWorksheet.workspaceId, { updatedAt: now });
+
+    return newWorksheetId;
+  },
+});
+
+/**
+ * Update worksheet properties (order, frozen rows/columns).
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const updateWorksheet = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    name: v.optional(v.string()),
+    order: v.optional(v.number()),
+    frozenRows: v.optional(v.number()),
+    frozenColumns: v.optional(v.number()),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    // Validate inputs
+    if (args.name !== undefined) {
+      validateNameLength(args.name);
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+    if (args.name !== undefined) updates.name = args.name;
+    if (args.order !== undefined) updates.order = args.order;
+    if (args.frozenRows !== undefined) updates.frozenRows = Math.max(0, args.frozenRows);
+    if (args.frozenColumns !== undefined) updates.frozenColumns = Math.max(0, args.frozenColumns);
+
+    await ctx.db.patch(args.worksheetId, updates);
+  },
+});
+
+/**
+ * Reorder worksheets within a workspace.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const reorderWorksheets = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    worksheetIds: v.array(v.id("worksheets")),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this workspace
+    await requireWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
+
+    // Verify all worksheets belong to this workspace
+    const worksheets = await ctx.db
+      .query("worksheets")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    // Filter to non-deleted worksheets
+    const activeWorksheets = worksheets.filter((w) => !w.deletedAt);
+
+    // Validate that reorder includes ALL active worksheets
+    if (args.worksheetIds.length !== activeWorksheets.length) {
+      throw new Error(
+        `Reorder must include all worksheets. Expected ${activeWorksheets.length}, got ${args.worksheetIds.length}`
+      );
+    }
+
+    const worksheetIdSet = new Set(activeWorksheets.map((w) => w._id));
+    for (const worksheetId of args.worksheetIds) {
+      if (!worksheetIdSet.has(worksheetId)) {
+        throw new Error("Invalid worksheet ID - worksheet does not belong to this workspace");
+      }
+    }
+
+    // Update order values
+    const now = Date.now();
+    for (let i = 0; i < args.worksheetIds.length; i++) {
+      await ctx.db.patch(args.worksheetIds[i], { order: i, updatedAt: now });
+    }
+
+    await ctx.db.patch(args.workspaceId, { updatedAt: now });
+  },
+});
+
+// ============================================================================
+// Column Extended Operations (Generic Spreadsheet)
+// ============================================================================
+
+/**
+ * Rename a column.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const renameColumn = mutation({
+  args: {
+    columnId: v.id("worksheetColumns"),
+    name: v.string(),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const column = await ctx.db.get(args.columnId);
+    if (!column) return;
+
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, column.worksheetId, args.workosUserId);
+
+    // Validate name
+    validateNameLength(args.name);
+
+    await ctx.db.patch(args.columnId, { name: args.name });
+    await ctx.db.patch(column.worksheetId, { updatedAt: Date.now() });
+  },
+});
+
+/**
+ * Update extended column properties for generic spreadsheet.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const updateColumnExtended = mutation({
+  args: {
+    columnId: v.id("worksheetColumns"),
+    name: v.optional(v.string()),
+    columnType: v.optional(v.union(
+      v.literal("text"),
+      v.literal("number"),
+      v.literal("date"),
+      v.literal("dropdown"),
+      v.literal("checkbox"),
+      v.literal("currency"),
+      v.literal("percentage"),
+      v.literal("formula")
+    )),
+    excelFormula: v.optional(v.string()),
+    format: v.optional(v.string()),
+    dropdownOptions: v.optional(v.array(v.string())),
+    width: v.optional(v.number()),
+    hidden: v.optional(v.boolean()),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const column = await ctx.db.get(args.columnId);
+    if (!column) return;
+
+    // SECURITY: Verify user has access to this worksheet
+    await requireWorksheetAccess(ctx, column.worksheetId, args.workosUserId);
+
+    // Validate inputs
+    if (args.name !== undefined) {
+      validateNameLength(args.name);
+    }
+    if (args.excelFormula !== undefined) {
+      validateFormulaLength(args.excelFormula);
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (args.name !== undefined) updates.name = args.name;
+    if (args.columnType !== undefined) updates.columnType = args.columnType;
+    if (args.excelFormula !== undefined) updates.excelFormula = args.excelFormula || undefined;
+    if (args.format !== undefined) updates.format = args.format || undefined;
+    if (args.dropdownOptions !== undefined) updates.dropdownOptions = args.dropdownOptions;
+    if (args.width !== undefined) updates.width = clampColumnWidth(args.width);
+    if (args.hidden !== undefined) updates.hidden = args.hidden;
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(args.columnId, updates);
+      await ctx.db.patch(column.worksheetId, { updatedAt: Date.now() });
+    }
+  },
+});
+
+// ============================================================================
+// Sheet Template Operations
+// ============================================================================
+
+/**
+ * List all templates (built-in + company custom).
+ * SECURITY: Requires authenticated user with company ownership for custom templates.
+ */
+export const listTemplates = query({
+  args: {
+    companyId: v.optional(v.id("companies")),
+    category: v.optional(v.union(
+      v.literal("blank"),
+      v.literal("reconciliation"),
+      v.literal("accounting"),
+      v.literal("custom")
+    )),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Get built-in templates (always available)
+    const builtInTemplates = await ctx.db
+      .query("sheetTemplates")
+      .withIndex("by_built_in", (q) => q.eq("isBuiltIn", true))
+      .collect();
+
+    let customTemplates: Doc<"sheetTemplates">[] = [];
+
+    // Get company custom templates if companyId provided
+    if (args.companyId) {
+      const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
+      if (allowed) {
+        customTemplates = await ctx.db
+          .query("sheetTemplates")
+          .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+          .collect();
+      }
+    }
+
+    const allTemplates = [...builtInTemplates, ...customTemplates];
+
+    // Filter by category if provided
+    if (args.category) {
+      return allTemplates.filter((t) => t.category === args.category);
+    }
+
+    return allTemplates;
+  },
+});
+
+/**
+ * Get a template by ID.
+ */
+export const getTemplate = query({
+  args: {
+    templateId: v.id("sheetTemplates"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.templateId);
+  },
+});
+
+/**
+ * Create a custom template from a worksheet.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const createTemplateFromWorksheet = mutation({
+  args: {
+    worksheetId: v.id("worksheets"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    category: v.optional(v.union(
+      v.literal("reconciliation"),
+      v.literal("accounting"),
+      v.literal("custom")
+    )),
+    includeSampleData: v.optional(v.boolean()),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this worksheet
+    const { user, worksheet } = await requireWorksheetAccess(ctx, args.worksheetId, args.workosUserId);
+
+    if (!worksheet) throw new Error("Worksheet not found");
+
+    // Get workspace to find companyId
+    const workspace = await ctx.db.get(worksheet.workspaceId);
+    if (!workspace) throw new Error("Workspace not found");
+
+    // Validate inputs
+    validateNameLength(args.name);
+    if (args.description) {
+      validateDescriptionLength(args.description);
+    }
+
+    // Get columns
+    const columns = await ctx.db
+      .query("worksheetColumns")
+      .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+      .collect();
+
+    const activeColumns = columns
+      .filter((c) => !c.deletedAt)
+      .sort((a, b) => a.order - b.order);
+
+    const templateColumns = activeColumns.map((col) => ({
+      name: col.name,
+      columnType: col.columnType,
+      width: col.width,
+      format: col.format,
+      dropdownOptions: col.dropdownOptions,
+      validation: col.validation,
+    }));
+
+    // Get sample data if requested
+    let sampleData: Record<string, unknown>[] | undefined;
+    if (args.includeSampleData) {
+      const rows = await ctx.db
+        .query("worksheetRows")
+        .withIndex("by_worksheet", (q) => q.eq("worksheetId", args.worksheetId))
+        .collect();
+
+      const activeRows = rows
+        .filter((r) => !r.deletedAt)
+        .sort((a, b) => a.rowNumber - b.rowNumber)
+        .slice(0, 10); // Only include first 10 rows as sample
+
+      sampleData = activeRows.map((row) => row.cells);
+    }
+
+    const now = Date.now();
+
+    const templateId = await ctx.db.insert("sheetTemplates", {
+      name: args.name,
+      description: args.description,
+      category: args.category || "custom",
+      isBuiltIn: false,
+      columns: templateColumns,
+      sampleData,
+      companyId: workspace.companyId,
+      createdBy: user._id,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return templateId;
+  },
+});
+
+/**
+ * Create a worksheet from a template.
+ * SECURITY: Requires authenticated user with company ownership.
+ */
+export const createWorksheetFromTemplate = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    templateId: v.id("sheetTemplates"),
+    name: v.optional(v.string()),
+    includeSampleData: v.optional(v.boolean()),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SECURITY: Verify user has access to this workspace
+    await requireWorkspaceAccess(ctx, args.workspaceId, args.workosUserId);
+
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new Error("Template not found");
+
+    const now = Date.now();
+
+    // Get existing worksheets to determine order
+    const existingWorksheets = await ctx.db
+      .query("worksheets")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    const maxOrder = existingWorksheets.length > 0
+      ? Math.max(...existingWorksheets.map((w) => w.order ?? 0))
+      : 0;
+
+    // Create worksheet
+    const worksheetId = await ctx.db.insert("worksheets", {
+      workspaceId: args.workspaceId,
+      name: args.name || template.name,
+      order: maxOrder + 1,
+      templateId: args.templateId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Create columns from template
+    for (let i = 0; i < template.columns.length; i++) {
+      const col = template.columns[i];
+      await ctx.db.insert("worksheetColumns", {
+        worksheetId,
+        order: i,
+        name: col.name,
+        columnType: col.columnType as "text" | "number" | "date" | "dropdown" | "checkbox" | "currency" | "percentage" | "formula",
+        width: col.width,
+        format: col.format,
+        dropdownOptions: col.dropdownOptions,
+        validation: col.validation,
+      });
+    }
+
+    // Create sample data rows if requested and available
+    if (args.includeSampleData !== false && template.sampleData) {
+      for (let i = 0; i < template.sampleData.length; i++) {
+        await ctx.db.insert("worksheetRows", {
+          worksheetId,
+          rowNumber: i,
+          cells: template.sampleData[i] as Record<string, unknown>,
+          cellStatus: {},
+          version: 0,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
+    // Update workspace timestamp
+    await ctx.db.patch(args.workspaceId, { updatedAt: now });
+
+    return worksheetId;
+  },
+});
+
+/**
+ * Delete a custom template.
+ * SECURITY: Requires authenticated user with company ownership.
+ * Cannot delete built-in templates.
+ */
+export const deleteTemplate = mutation({
+  args: {
+    templateId: v.id("sheetTemplates"),
+    workosUserId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template) return;
+
+    // Cannot delete built-in templates
+    if (template.isBuiltIn) {
+      throw new Error("Cannot delete built-in templates");
+    }
+
+    // SECURITY: Verify user has access to the company
+    if (template.companyId) {
+      await requireCompanyAccess(ctx, template.companyId, args.workosUserId);
+    }
+
+    await ctx.db.delete(args.templateId);
   },
 });

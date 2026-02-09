@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["@testing-library/jest-dom"],
-    "lib": [
+        "lib": [
       "dom",
       "dom.iterable",
       "esnext"

@@ -93,6 +93,22 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({}),
 }))
 
+// Mock next/cache (required by @workos-inc/authkit-nextjs)
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+  unstable_cache: vi.fn((fn: Function) => fn),
+  unstable_noStore: vi.fn(),
+}))
+
+// Mock @workos-inc/authkit-nextjs (imports next/cache which fails in vitest ESM)
+vi.mock('@workos-inc/authkit-nextjs', () => ({
+  withAuth: vi.fn(),
+  getUser: vi.fn(),
+  signOut: vi.fn(),
+  authkitMiddleware: vi.fn(),
+}))
+
 // Mock next-themes
 vi.mock('next-themes', () => ({
   useTheme: () => ({

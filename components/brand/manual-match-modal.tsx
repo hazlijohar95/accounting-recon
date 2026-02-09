@@ -25,9 +25,11 @@ type ConfidenceLevel = 'high' | 'medium' | 'low'
 interface ModalState {
   searchQuery: string
   selectedCandidateId: string | null
+  selectedCandidateIds: string[] // For multi-select partial match mode
   confidence: ConfidenceLevel
   isCreating: boolean
   error: string | null
+  partialMatchMode: boolean // Toggle for partial match mode
 }
 
 // Shared tolerance constant (15% = 0.15 in decimal)
@@ -53,9 +55,11 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
   const [state, setState] = useState<ModalState>({
     searchQuery: '',
     selectedCandidateId: null,
+    selectedCandidateIds: [],
     confidence: 'medium',
     isCreating: false,
     error: null,
+    partialMatchMode: false,
   })
 
   // Memoized candidates calculation for performance
@@ -103,6 +107,30 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
       })
       .sort((a, b) => a.amountDiff - b.amountDiff)
   }, [accrualDocuments, suspenseItem.amount, state.searchQuery])
+
+  // Computed values for partial match mode
+  const selectedCandidates = useMemo(() => {
+    if (!state.partialMatchMode) return []
+    return candidates.filter((c) => state.selectedCandidateIds.includes(c.id))
+  }, [candidates, state.selectedCandidateIds, state.partialMatchMode])
+
+  const partialMatchTotals = useMemo(() => {
+    const targetAmount = Math.abs(suspenseItem.amount)
+    const selectedTotal = selectedCandidates.reduce((sum, c) => sum + Math.abs(c.amount), 0)
+    const variance = targetAmount - selectedTotal
+    const variancePercent = targetAmount > 0 ? Math.abs(variance) / targetAmount : 0
+    const isWithinTolerance = variancePercent <= AMOUNT_TOLERANCE
+    const isExact = Math.abs(variance) < 0.01
+
+    return {
+      targetAmount,
+      selectedTotal,
+      variance,
+      variancePercent,
+      isWithinTolerance,
+      isExact,
+    }
+  }, [selectedCandidates, suspenseItem.amount])
 
   // Focus search input on mount
   useEffect(() => {
@@ -158,7 +186,72 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
     return () => document.removeEventListener('keydown', handleTabKey)
   }, [])
 
+  // Toggle candidate selection in multi-select mode
+  const toggleCandidateSelection = (candidateId: string) => {
+    setState((s) => {
+      if (s.selectedCandidateIds.includes(candidateId)) {
+        return {
+          ...s,
+          selectedCandidateIds: s.selectedCandidateIds.filter((id) => id !== candidateId),
+          error: null,
+        }
+      } else {
+        return {
+          ...s,
+          selectedCandidateIds: [...s.selectedCandidateIds, candidateId],
+          error: null,
+        }
+      }
+    })
+  }
+
+  // Handle single candidate selection (non-partial mode)
+  const handleSingleSelect = (candidateId: string) => {
+    setState((s) => ({ ...s, selectedCandidateId: candidateId, error: null }))
+  }
+
   const handleCreateMatch = async () => {
+    // Partial match mode - create partial matches
+    if (state.partialMatchMode) {
+      if (state.selectedCandidateIds.length < 2) {
+        setState((s) => ({
+          ...s,
+          error: 'Select at least 2 documents for a partial match.',
+        }))
+        return
+      }
+
+      // Validate all selected candidates still exist and are pending
+      const validCandidates = selectedCandidates.filter((c) => c.status === 'pending')
+      if (validCandidates.length !== state.selectedCandidateIds.length) {
+        setState((s) => ({
+          ...s,
+          error: 'Some selected documents are no longer available.',
+        }))
+        return
+      }
+
+      setState((s) => ({ ...s, isCreating: true, error: null }))
+
+      try {
+        // For partial matches, we need to call a different mutation
+        // For now, we create individual matches (will be enhanced later)
+        for (const candidateId of state.selectedCandidateIds) {
+          createManualMatch(suspenseItem.id, candidateId, state.confidence)
+        }
+        onMatchCreated?.()
+      } catch (error) {
+        console.error('Failed to create partial match:', error)
+        setState((s) => ({
+          ...s,
+          error: 'Failed to create partial match. Please try again.',
+          isCreating: false,
+        }))
+      }
+      return
+    }
+
+    // Single match mode (original behavior)
     if (!state.selectedCandidateId) return
 
     // Validate selected candidate still exists and is pending
@@ -192,7 +285,14 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
     searchInputRef.current?.focus()
   }
 
-  const selectedCandidate = candidates.find((c) => c.id === state.selectedCandidateId)
+  const selectedCandidate = state.partialMatchMode
+    ? null // Use selectedCandidates array in partial mode for visual connector
+    : candidates.find((c) => c.id === state.selectedCandidateId)
+
+  // Check if we should show the visual connector
+  const showVisualConnector = state.partialMatchMode
+    ? state.selectedCandidateIds.length > 0
+    : state.selectedCandidateId !== null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200 motion-reduce:animate-none">
@@ -282,12 +382,17 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
           </div>
 
           {/* Visual Connector */}
-          {state.selectedCandidateId && (
+          {showVisualConnector && (
             <div className="flex items-center justify-center py-1 animate-in fade-in duration-200">
               <div className="flex flex-col items-center gap-1">
                 <div className="w-px h-3 bg-border" />
-                <div className="w-6 h-6 border border-blue-500 bg-blue-500/10 flex items-center justify-center">
-                  <IconArrowDown size={12} className="text-blue-500" />
+                <div className={cn(
+                  'w-6 h-6 border flex items-center justify-center',
+                  state.partialMatchMode
+                    ? 'border-cyan-500 bg-cyan-500/10'
+                    : 'border-blue-500 bg-blue-500/10'
+                )}>
+                  <IconArrowDown size={12} className={state.partialMatchMode ? 'text-cyan-500' : 'text-blue-500'} />
                 </div>
                 <div className="w-px h-3 bg-border" />
               </div>
@@ -321,6 +426,88 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
             </div>
           </div>
 
+          {/* Partial Match Mode Toggle */}
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                Partial Match Mode
+              </span>
+              <span className="text-[10px] text-muted-foreground/60">
+                (combine multiple invoices)
+              </span>
+            </div>
+            <button
+              onClick={() =>
+                setState((s) => ({
+                  ...s,
+                  partialMatchMode: !s.partialMatchMode,
+                  selectedCandidateId: null,
+                  selectedCandidateIds: [],
+                  error: null,
+                }))
+              }
+              className={cn(
+                'relative w-10 h-5 rounded-full transition-colors',
+                state.partialMatchMode
+                  ? 'bg-cyan-500'
+                  : 'bg-secondary border border-border'
+              )}
+              role="switch"
+              aria-checked={state.partialMatchMode}
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 left-0.5 w-4 h-4 bg-background border shadow-sm transition-transform',
+                  state.partialMatchMode && 'translate-x-5'
+                )}
+              />
+            </button>
+          </div>
+
+          {/* Running Total Display (Partial Match Mode) */}
+          {state.partialMatchMode && state.selectedCandidateIds.length > 0 && (
+            <div className="p-3 border border-cyan-500/30 bg-cyan-500/5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">
+                  Selected: {state.selectedCandidateIds.length} invoice(s)
+                </span>
+                <span className="font-mono font-medium">
+                  ${partialMatchTotals.selectedTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs mt-2">
+                <span className="text-muted-foreground">Target:</span>
+                <span className="font-mono">
+                  ${partialMatchTotals.targetAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="h-px bg-border my-2" />
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Variance:</span>
+                <span
+                  className={cn(
+                    'text-xs font-mono font-medium',
+                    partialMatchTotals.isExact
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : partialMatchTotals.isWithinTolerance
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-destructive'
+                  )}
+                >
+                  {partialMatchTotals.isExact ? (
+                    'Exact match!'
+                  ) : (
+                    <>
+                      {partialMatchTotals.variance > 0 ? '-' : '+'}$
+                      {Math.abs(partialMatchTotals.variance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      {' '}({(partialMatchTotals.variancePercent * 100).toFixed(1)}%)
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Candidates List */}
           <div>
             <span className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -342,9 +529,16 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
                   <CandidateRow
                     key={candidate.id}
                     candidate={candidate}
-                    isSelected={state.selectedCandidateId === candidate.id}
+                    isSelected={
+                      state.partialMatchMode
+                        ? state.selectedCandidateIds.includes(candidate.id)
+                        : state.selectedCandidateId === candidate.id
+                    }
+                    isMultiSelect={state.partialMatchMode}
                     onClick={() =>
-                      setState((s) => ({ ...s, selectedCandidateId: candidate.id, error: null }))
+                      state.partialMatchMode
+                        ? toggleCandidateSelection(candidate.id)
+                        : handleSingleSelect(candidate.id)
                     }
                   />
                 ))
@@ -353,7 +547,7 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
           </div>
 
           {/* Confidence Selection */}
-          {state.selectedCandidateId && (
+          {(state.selectedCandidateId || (state.partialMatchMode && state.selectedCandidateIds.length > 0)) && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-200">
               <span className="text-xs text-muted-foreground uppercase tracking-wider">
                 Match Confidence
@@ -433,10 +627,17 @@ export function ManualMatchModal({ suspenseItem, onClose, onMatchCreated }: Manu
           <ButtonPrimary
             size="sm"
             onClick={handleCreateMatch}
-            disabled={!state.selectedCandidateId || state.isCreating}
+            disabled={
+              state.partialMatchMode
+                ? state.selectedCandidateIds.length < 2 || state.isCreating
+                : !state.selectedCandidateId || state.isCreating
+            }
             loading={state.isCreating}
+            className={state.partialMatchMode ? 'bg-cyan-500 hover:bg-cyan-600' : ''}
           >
-            Create Match
+            {state.partialMatchMode
+              ? `Create Partial Match (${state.selectedCandidateIds.length})`
+              : 'Create Match'}
           </ButtonPrimary>
         </div>
       </div>
@@ -456,10 +657,11 @@ interface CandidateRowProps {
     isExactMatch: boolean
   }
   isSelected: boolean
+  isMultiSelect?: boolean
   onClick: () => void
 }
 
-function CandidateRow({ candidate, isSelected, onClick }: CandidateRowProps) {
+function CandidateRow({ candidate, isSelected, isMultiSelect = false, onClick }: CandidateRowProps) {
   // Doc type abbreviations and colors
   const docTypeConfig: Record<string, { abbr: string; className: string }> = {
     sales_invoice: { abbr: 'SI', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
@@ -480,7 +682,9 @@ function CandidateRow({ candidate, isSelected, onClick }: CandidateRowProps) {
       className={cn(
         'w-full px-3 py-3 text-left border-b border-border last:border-b-0 transition-colors duration-150',
         'hover:bg-secondary/50',
-        isSelected && 'bg-blue-500/5 border-l-2 border-l-blue-500'
+        isSelected && (isMultiSelect
+          ? 'bg-cyan-500/5 border-l-2 border-l-cyan-500'
+          : 'bg-blue-500/5 border-l-2 border-l-blue-500')
       )}
     >
       <div className="flex items-center gap-3">
@@ -489,7 +693,9 @@ function CandidateRow({ candidate, isSelected, onClick }: CandidateRowProps) {
           className={cn(
             'w-4 h-4 border-2 flex items-center justify-center flex-shrink-0 transition-colors',
             isSelected
-              ? 'border-blue-500 bg-blue-500'
+              ? isMultiSelect
+                ? 'border-cyan-500 bg-cyan-500'
+                : 'border-blue-500 bg-blue-500'
               : 'border-muted-foreground/30 hover:border-muted-foreground/50'
           )}
         >

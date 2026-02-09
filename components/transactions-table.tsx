@@ -5,6 +5,7 @@ import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Id } from '@/convex/_generated/dataModel'
 import { cn } from '@/lib/utils'
+import { useWorkosUserId } from '@/lib/convex-hooks/shared'
 import {
   IconArrowRight,
   IconArrowDown,
@@ -74,11 +75,13 @@ function TransactionsTableContent({
   const debouncedSearch = useDebounce(searchQuery, 300)
 
   // Fetch transactions
+  const workosUserId = useWorkosUserId()
   const transactions = useQuery(api.transactions.listByCompany, {
     companyId,
     type,
     status,
     limit,
+    workosUserId,
   })
 
   // Filter and sort transactions

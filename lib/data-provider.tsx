@@ -14,6 +14,7 @@ import {
   SuspenseItem,
   useSelectedCompanyId,
 } from "./store";
+import { useOptionalAuth } from "@/components/auth-provider";
 
 // Types for the data context
 interface DataContextValue {
@@ -55,6 +56,8 @@ export function DataProvider({
 }: DataProviderProps) {
   const isDemo = useAppStore((s) => s.isDemo);
   const storeCompanyId = useSelectedCompanyId();
+  const auth = useOptionalAuth();
+  const workosUserId = auth?.user?.workosId;
 
   // Use props companyId if provided, otherwise use store's selected company
   const companyId = propsCompanyId ?? storeCompanyId ?? undefined;
@@ -76,33 +79,33 @@ export function DataProvider({
 
   const convexCashTransactions = useQuery(
     api.transactions.listByCompany,
-    shouldFetchConvex ? { companyId, type: "cash" } : "skip"
+    shouldFetchConvex ? { companyId, type: "cash", workosUserId } : "skip"
   );
 
   const convexAccrualTransactions = useQuery(
     api.transactions.listByCompany,
-    shouldFetchConvex ? { companyId, type: "accrual" } : "skip"
+    shouldFetchConvex ? { companyId, type: "accrual", workosUserId } : "skip"
   );
 
   const convexMatches = useQuery(
     api.matches.listBySession,
-    shouldFetchConvex && sessionId ? { sessionId } : "skip"
+    shouldFetchConvex && sessionId ? { sessionId, workosUserId } : "skip"
   );
 
   const convexSession = useQuery(
     api.sessions.get,
-    shouldFetchConvex && sessionId ? { id: sessionId } : "skip"
+    shouldFetchConvex && sessionId ? { id: sessionId, workosUserId } : "skip"
   );
 
   // New queries for accrual documents and suspense items
   const convexAccrualDocuments = useQuery(
     api.accrualDocuments.listBySession,
-    shouldFetchConvex && sessionId ? { sessionId } : "skip"
+    shouldFetchConvex && sessionId ? { sessionId, workosUserId } : "skip"
   );
 
   const convexSuspenseItems = useQuery(
     api.suspenseItems.listBySession,
-    shouldFetchConvex && sessionId ? { sessionId } : "skip"
+    shouldFetchConvex && sessionId ? { sessionId, workosUserId } : "skip"
   );
 
   const value = useMemo<DataContextValue>(() => {

@@ -15,3 +15,8 @@ export const reconciliationModel = bedrock('us.anthropic.claude-sonnet-4-2025051
 
 // Claude 3 Haiku for faster, cheaper operations (onboarding, simple queries)
 export const fastModel = bedrock('us.anthropic.claude-3-haiku-20240307-v1:0')
+
+// Claude Opus 4.5 for agentic assistant (multi-step tool use, complex reasoning)
+export const agentModel = bedrock(
+  process.env.BEDROCK_AGENT_MODEL_ID || 'us.anthropic.claude-opus-4-5-20251101-v1:0'
+)

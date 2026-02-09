@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireAuth, isProductionMode } from "./lib/auth";
+import { requireAuth, getOptionalAuth, isProductionMode } from "./lib/auth";
 
 /**
  * Onboarding Progress Mutations
@@ -12,7 +12,10 @@ import { requireAuth, isProductionMode } from "./lib/auth";
 export const getProgress = query({
   args: {},
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx);
+    const user = await getOptionalAuth(ctx);
+    if (!user) {
+      return null;
+    }
     return await ctx.db
       .query("onboardingProgress")
       .withIndex("by_user", (q) => q.eq("userId", user._id))

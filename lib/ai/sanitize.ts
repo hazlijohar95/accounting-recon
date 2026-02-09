@@ -1,30 +1,101 @@
 /**
  * Input sanitization utilities for AI prompts
  * Prevents prompt injection attacks by sanitizing user-supplied data
+ *
+ * Defense strategy: structural delimiters + content normalization + length limits.
+ * We normalize unicode confusables and use an allowlist of safe character classes
+ * rather than trying to blocklist specific injection phrases (which is trivially bypassable).
  */
 
+// Characters allowed in financial data context (allowlist approach)
+// Allows: alphanumeric, basic punctuation, currency symbols, whitespace
+const SAFE_CHARS_PATTERN = /[^\p{L}\p{N}\p{Sc}\s.,;:!?'"\-()/@#&+=%*\[\]{}]/gu
+
 /**
- * Sanitize a string for safe inclusion in AI prompts
- * Escapes special characters and removes potential injection patterns
+ * Normalize unicode confusables that could bypass pattern matching.
+ * Maps common lookalike characters to their ASCII equivalents.
+ */
+function normalizeUnicode(input: string): string {
+  return input
+    // Normalize to NFC form first
+    .normalize('NFC')
+    // Map common confusables
+    .replace(/[\u0130\u0131]/g, 'i')       // Turkish dotted/dotless i
+    .replace(/[\u0410]/g, 'A')              // Cyrillic А → Latin A
+    .replace(/[\u0435]/g, 'e')              // Cyrillic е → Latin e
+    .replace(/[\u043E]/g, 'o')              // Cyrillic о → Latin o
+    .replace(/[\u0440]/g, 'p')              // Cyrillic р → Latin p
+    .replace(/[\u0441]/g, 'c')              // Cyrillic с → Latin c
+    .replace(/[\u0443]/g, 'y')              // Cyrillic у → Latin y
+    .replace(/[\u0455]/g, 's')              // Cyrillic ѕ → Latin s
+    .replace(/[\u0456]/g, 'i')              // Cyrillic і → Latin i
+    // Fullwidth ASCII variants
+    .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    // Zero-width characters that could be used to split keywords
+    .replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, '')
+}
+
+/**
+ * Detect injection-like patterns after normalization.
+ * Returns true if the content appears to contain prompt injection attempts.
+ */
+function containsInjectionPatterns(normalized: string): boolean {
+  const lower = normalized.toLowerCase()
+
+  // Structural injection patterns (trying to redefine the AI's behavior)
+  const injectionPatterns = [
+    /ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions|context|prompts?)/,
+    /disregard\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions|context|prompts?)/,
+    /forget\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions|context|prompts?)/,
+    /override\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions|context|prompts?)/,
+    /you\s+are\s+now\s+(a|an|my)\s+/,
+    /new\s+(instructions|role|persona|identity)\s*:/,
+    /system\s*prompt\s*:/,
+    /\bact\s+as\s+(a|an|if)\b/,
+    /\bpretend\s+(to\s+be|you\s+are)\b/,
+    /\brole\s*:\s*(system|admin|root)\b/,
+    /\b(admin|root|sudo)\s+override\b/,
+    // Delimiter injection
+    /<<\s*(system|SYS|INST)/,
+    /\[INST\]/,
+    /\[SYSTEM\]/,
+    /```\s*(system|instructions)/,
+  ]
+
+  return injectionPatterns.some(pattern => pattern.test(lower))
+}
+
+/**
+ * Sanitize a string for safe inclusion in AI prompts.
+ *
+ * Uses a multi-layer approach:
+ * 1. Unicode normalization (defeats homoglyph attacks)
+ * 2. Structural pattern detection (catches injection attempts)
+ * 3. Character allowlisting (removes unexpected characters)
+ * 4. Length limiting (prevents context stuffing)
  */
 export function sanitizeForPrompt(input: string | undefined | null): string {
   if (!input) return ''
 
-  return input
-    // Remove any attempts to break out of context
-    .replace(/```/g, '`\u200B`\u200B`') // Zero-width space to break code blocks
-    .replace(/---/g, '—') // Replace markdown separators
-    .replace(/\n{3,}/g, '\n\n') // Limit consecutive newlines
-    // Escape common injection patterns
-    .replace(/ignore (all )?(previous |prior )?instructions/gi, '[redacted]')
-    .replace(/disregard (all )?(previous |prior )?instructions/gi, '[redacted]')
-    .replace(/forget (all )?(previous |prior )?(instructions|context)/gi, '[redacted]')
-    .replace(/you are now/gi, '[redacted]')
-    .replace(/new (instructions|role|persona)/gi, '[filtered]')
-    .replace(/system prompt/gi, '[filtered]')
-    // Limit length to prevent context stuffing
-    .slice(0, 1000)
-    .trim()
+  // Layer 1: Normalize unicode to prevent confusable bypasses
+  let sanitized = normalizeUnicode(input)
+
+  // Layer 2: Remove unsafe characters (allowlist approach)
+  sanitized = sanitized.replace(SAFE_CHARS_PATTERN, '')
+
+  // Layer 3: Structural sanitization
+  sanitized = sanitized
+    .replace(/```/g, '`\u200B`\u200B`')  // Break code block delimiters
+    .replace(/---/g, '—')                  // Replace markdown separators
+    .replace(/\n{3,}/g, '\n\n')            // Limit consecutive newlines
+
+  // Layer 4: Detect and redact injection patterns on normalized text
+  if (containsInjectionPatterns(sanitized)) {
+    sanitized = '[content filtered - injection pattern detected]'
+  }
+
+  // Layer 5: Length limit to prevent context stuffing
+  return sanitized.slice(0, 1000).trim()
 }
 
 /**

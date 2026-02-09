@@ -25,31 +25,26 @@
  * @module components/views/reconcile-view
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   useAppStore,
+  useSelectedCompanyId,
   MatchPair,
   Transaction,
-  MatchConfidence,
 } from '@/lib/store'
+import { useQuery, useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { useReconcileData } from '@/lib/use-reconcile-data'
+import { useOptionalAuth } from '@/components/auth-provider'
 import { Id } from '@/convex/_generated/dataModel'
-import { confidenceToPercent } from '@/lib/matching-utils'
 import { useDemoGuard } from '@/hooks/useDemoGuard'
 import {
-  IconCheck,
-  IconX,
   IconWarningCircle,
   IconPlay,
-  IconArrowDown,
   IconCheckCircle,
-  IconBank,
   IconFileText,
-  IconSearch,
   IconCommand,
-  IconFilter,
-  IconCaretDown,
   IconDollarSign,
 } from '@/components/brand/icons'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
@@ -57,26 +52,26 @@ import { useToastHelpers } from '@/components/ui/toast'
 import { useRunMatching, usePreviewMatching } from '@/lib/convex-hooks'
 import { cn } from '@/lib/utils'
 import {
-  ConfidenceBar,
-  ConfidenceGauge,
   MatchCelebration,
   MatchingStepIndicator,
   BrandedEmptyState,
-  MatchLayerBadge,
-  TruncatedText,
   ButtonPrimary,
-  ButtonDanger,
-  Skeleton,
   ManualMatchModal,
 } from '@/components/brand'
-import { ReconcileAssistant } from '@/components/ai'
-import type { MatchLayer } from '@/components/brand'
+import { ReconcileAgent } from '@/components/ai'
 import type { Tab, UndoAction, FilterState } from './reconcile-view/types'
 import { initialFilterState } from './reconcile-view/types'
 import { useReconcileState } from './reconcile-view/use-reconcile-state'
 import { useMatchActions } from '@/hooks/useMatchActions'
 import { MatchDetailPanel, MobileMatchDetailPanel } from './reconcile-view/match-detail-panel'
 import { ReconcileFilterBar } from './reconcile-view/filter-bar'
+import { MatchRow } from './reconcile-view/match-row'
+import { SuspenseRow } from './reconcile-view/suspense-row'
+import { KeyboardShortcutsModal } from './reconcile-view/keyboard-shortcuts-modal'
+import { PartialMatchGroup } from './reconcile-view/partial-match-group'
+import { SkeletonMatchRow } from './reconcile-view/skeleton-match-row'
+import { TabEmptyState } from './reconcile-view/tab-empty-state'
+import { HistoryList } from './reconcile-view/history-list'
 
 /**
  * Main reconciliation workspace with match review and approval workflow.
@@ -107,12 +102,41 @@ export function ReconcileView() {
 function ReconcileViewContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const selectedCompanyId = useSelectedCompanyId()
+  const auth = useOptionalAuth()
+  const workosUserId = auth?.user?.workosId
 
-  // Get session ID from URL params (real mode) or fall back to store
+  // Get session ID from URL params, or fall back to most recent session for company
   const urlSessionId = searchParams.get('sessionId')
+  // Always query company sessions — used for fallback session selection AND stats
+  const companySessions = useQuery(
+    api.sessions.listByCompany,
+    selectedCompanyId
+      ? { companyId: selectedCompanyId as Id<'companies'>, workosUserId }
+      : 'skip'
+  )
   const convexSessionId = urlSessionId
     ? (urlSessionId as Id<'reconciliationSessions'>)
+    : companySessions && companySessions.length > 0
+      ? companySessions[0]._id
+      : undefined
+
+  // Find the current session in companySessions for stats (no extra query needed)
+  const currentSessionData = convexSessionId && companySessions
+    ? companySessions.find((s) => s._id === convexSessionId)
     : undefined
+
+  // Live stats subscription — derives counts from actual DB state (not stale stored values)
+  const sessionStats = useQuery(
+    api.sessions.getWithStats,
+    convexSessionId ? { id: convexSessionId, workosUserId } : 'skip'
+  )
+
+  // Documents for the current company — used for document summary in empty states
+  const companyDocuments = useQuery(
+    api.documents.listByCompany,
+    selectedCompanyId ? { companyId: selectedCompanyId as Id<'companies'>, workosUserId } : 'skip'
+  )
 
   // Use the unified data hook - handles demo/real mode automatically
   const {
@@ -125,7 +149,7 @@ function ReconcileViewContent() {
     isLoading: dataIsLoading,
     isDemo,
     counts,
-  } = useReconcileData(convexSessionId)
+  } = useReconcileData(convexSessionId, workosUserId)
 
   // Actions from store (they operate on current mode's data)
   const { showCelebration, setShowCelebration } = useAppStore()
@@ -165,6 +189,34 @@ function ReconcileViewContent() {
 
   // Toast notifications (P0-4, P1-5)
   const toast = useToastHelpers()
+
+  // Re-sync documents mutation
+  const resyncDocuments = useMutation(api.sessions.resyncDocuments)
+  const [isResyncing, setIsResyncing] = React.useState(false)
+
+  const handleResync = useCallback(async () => {
+    if (!selectedCompanyId || isResyncing) return
+    setIsResyncing(true)
+    try {
+      const result = await resyncDocuments({
+        companyId: selectedCompanyId as Id<'companies'>,
+        sessionId: convexSessionId,
+        workosUserId,
+      })
+      toast.success(
+        `Synced ${result.linkedCash} cash + ${result.linkedAccrual} accrual items`
+      )
+      // If we got a new session, navigate to it
+      if (!convexSessionId && result.sessionId) {
+        router.push(`/reconcile?sessionId=${result.sessionId}`)
+      }
+    } catch (error) {
+      toast.error('Failed to sync documents')
+      console.error('[Reconcile] Resync failed:', error)
+    } finally {
+      setIsResyncing(false)
+    }
+  }, [selectedCompanyId, convexSessionId, isResyncing, resyncDocuments, toast, router])
 
   // Apply filters to matches
   const filterMatches = useCallback((matchList: MatchPair[]) => {
@@ -206,13 +258,30 @@ function ReconcileViewContent() {
   // - High confidence (≥90%): Show in "Pending" tab - ready for quick approval
   // - Medium confidence (70-89%): Show in "Review" tab - needs careful review
   const highConfidencePending = useMemo(() =>
-    rawPendingMatches.filter((m) => m.confidence === 'high'),
+    rawPendingMatches.filter((m) => m.confidence === 'high' && m.matchLayer !== 7),
     [rawPendingMatches]
   )
   const mediumConfidencePending = useMemo(() =>
-    rawPendingMatches.filter((m) => m.confidence === 'medium' || m.confidence === 'low'),
+    rawPendingMatches.filter((m) => (m.confidence === 'medium' || m.confidence === 'low') && m.matchLayer !== 7),
     [rawPendingMatches]
   )
+
+  // Partial matches (Layer 7) - grouped by partialMatchGroupId
+  const partialMatches = useMemo(() =>
+    rawPendingMatches.filter((m) => m.matchLayer === 7),
+    [rawPendingMatches]
+  )
+
+  // Group partial matches by their group ID for display
+  const partialMatchGroups = useMemo(() => {
+    const groups = new Map<string, MatchPair[]>()
+    partialMatches.forEach((m) => {
+      const groupId = (m as MatchPair & { partialMatchGroupId?: string }).partialMatchGroupId || m.id
+      if (!groups.has(groupId)) groups.set(groupId, [])
+      groups.get(groupId)!.push(m)
+    })
+    return Array.from(groups.values())
+  }, [partialMatches])
 
   const pendingMatches = useMemo(() =>
     filterMatches(highConfidencePending),
@@ -234,10 +303,11 @@ function ReconcileViewContent() {
     switch (tab) {
       case 'pending': return pendingMatches
       case 'review': return reviewMatches
+      case 'partial': return partialMatches
       case 'matched': return approvedMatches
       default: return []
     }
-  }, [pendingMatches, reviewMatches, approvedMatches])
+  }, [pendingMatches, reviewMatches, partialMatches, approvedMatches])
 
   // Auto-select the first match in the active tab for a clearer default state
   useEffect(() => {
@@ -284,23 +354,34 @@ function ReconcileViewContent() {
     }
   }, [selectedMatch, activeTab, pendingMatches, reviewMatches, approvedMatches, currentMatchIndex, undoStack, getActiveList])
 
-  // Empty state for Real mode with no data (and not loading)
-  const hasNoData =
-    !isDemo && !dataIsLoading && matches.length === 0 && suspenseTransactions.length === 0
+  // Live counts from getWithStats (actual DB state, not stored session values)
+  const cashCount = sessionStats?.stats?.cashTransactions ?? 0
+  const accrualCount = sessionStats?.stats?.accrualTransactions ?? 0
 
-  if (hasNoData) {
-    return (
-      <BrandedEmptyState
-        variant="reconcile"
-        title="No matches to review"
-        description="Start by uploading bank statements and invoices to generate matches."
-        action={{
-          label: 'Upload Documents',
-          onClick: () => router.push('/upload'),
-        }}
-      />
-    )
-  }
+  // Combined loading guard — true when we have a session ID but queries haven't resolved
+  const isSessionLoading = !!convexSessionId && (companySessions === undefined || sessionStats === undefined)
+
+  const sessionStatus = currentSessionData?.status
+
+  // Empty state flag for Real mode with no data (and not loading)
+  // NOTE: This must NOT cause an early return — hooks below must always execute.
+  // Don't trap user in empty state when session is in "review" with items on either side
+  const hasNoData =
+    !isDemo && !dataIsLoading && !isSessionLoading &&
+    matches.length === 0 && suspenseTransactions.length === 0 &&
+    !(convexSessionId && sessionStatus === 'review' && (cashCount > 0 || accrualCount > 0))
+
+  // Notify when new data arrives (Phase 2B)
+  const prevCounts = useRef({ cash: 0, accrual: 0 })
+  useEffect(() => {
+    if (!sessionStats?.stats) return
+    const { cashTransactions: cash, accrualTransactions: accrual } = sessionStats.stats
+    const prev = prevCounts.current
+    if ((prev.cash > 0 || prev.accrual > 0) && (cash > prev.cash || accrual > prev.accrual)) {
+      toast.info('Session updated', `New documents linked. ${cash} cash, ${accrual} accrual items.`)
+    }
+    prevCounts.current = { cash, accrual }
+  }, [sessionStats?.stats?.cashTransactions, sessionStats?.stats?.accrualTransactions, toast])
 
   // Helper to auto-advance to next pending match
   const advanceToNextMatch = useCallback(() => {
@@ -502,6 +583,13 @@ function ReconcileViewContent() {
           description: 'All medium-confidence matches have been reviewed. Great work!',
           className: 'empty-state-review',
         }
+      case 'partial':
+        return {
+          icon: <IconDollarSign size={32} className="text-cyan-500/40" />,
+          title: 'No partial matches',
+          description: 'When a payment covers multiple invoices, they will appear here for review.',
+          className: 'empty-state-partial',
+        }
       case 'matched':
         return {
           icon: <IconCheckCircle size={32} className="text-success/40" />,
@@ -517,6 +605,175 @@ function ReconcileViewContent() {
           className: 'empty-state-suspense',
         }
     }
+  }
+
+  // Show loading spinner while session data resolves (not empty state)
+  if (isSessionLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center gap-3">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+          <span className="text-muted-foreground">Loading session data...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Render empty state if no data — placed AFTER all hooks to satisfy React rules
+  if (hasNoData) {
+    // Filter documents belonging to the current session (for document summary)
+    const sessionDocuments = companyDocuments?.filter((d) =>
+      d.extractionStatus === 'completed' || d.extractionStatus === 'processing'
+    )
+
+    // Document summary component (Phase 2A)
+    const documentSummary = sessionDocuments && sessionDocuments.length > 0 ? (
+      <div className="mt-4 text-sm text-muted-foreground space-y-1 text-left w-full max-w-sm mx-auto">
+        <p className="font-medium">Documents uploaded:</p>
+        {sessionDocuments.slice(0, 5).map((doc) => (
+          <div key={doc._id} className="flex items-center gap-2">
+            <span className={`inline-block px-1.5 py-0.5 text-xs rounded ${
+              doc.documentType === 'bank_statement' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+            }`}>
+              {doc.documentType === 'bank_statement' ? 'Bank' : 'Invoice'}
+            </span>
+            <span className="truncate flex-1">{doc.fileName}</span>
+            <span className={doc.extractionStatus === 'completed' ? 'text-green-600' : 'text-yellow-600'}>
+              {doc.extractionStatus === 'completed' ? 'Done' : 'Processing'}
+            </span>
+          </div>
+        ))}
+        {sessionDocuments.length > 5 && (
+          <p className="text-xs">...and {sessionDocuments.length - 5} more</p>
+        )}
+      </div>
+    ) : null
+
+    if (convexSessionId && cashCount > 0 && accrualCount === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <BrandedEmptyState
+            variant="reconcile"
+            title={`${cashCount} bank transaction${cashCount !== 1 ? 's' : ''} loaded`}
+            description="Upload invoices or receipts to start matching. Matching runs automatically once both sides are uploaded."
+            action={{
+              label: 'Upload Invoices',
+              onClick: () => router.push('/upload'),
+            }}
+          />
+          {documentSummary}
+        </div>
+      )
+    }
+
+    if (convexSessionId && cashCount === 0 && accrualCount > 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <BrandedEmptyState
+            variant="reconcile"
+            title={`${accrualCount} invoice${accrualCount !== 1 ? 's' : ''} loaded`}
+            description="Upload a bank statement to start matching, or re-sync if bank statements are already uploaded but not linked."
+            action={{
+              label: 'Upload Bank Statements',
+              onClick: () => router.push('/upload'),
+            }}
+          />
+          {selectedCompanyId && (
+            <button
+              onClick={handleResync}
+              disabled={isResyncing}
+              className="mt-3 px-4 py-2 text-sm text-muted-foreground border border-border hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {isResyncing ? 'Syncing...' : 'Re-sync Documents'}
+            </button>
+          )}
+          {documentSummary}
+        </div>
+      )
+    }
+
+    if (convexSessionId && cashCount > 0 && accrualCount > 0) {
+      // Both sides exist but no matches yet
+      if (sessionStatus === 'review') {
+        return (
+          <div className="flex flex-col items-center justify-center h-full p-6">
+            <BrandedEmptyState
+              variant="reconcile"
+              title="No matches found"
+              description={`${cashCount} cash and ${accrualCount} accrual items were compared but no matches were identified. Check that the documents are for the same period and company.`}
+              action={{
+                label: 'Run Matching Again',
+                onClick: () => handleRunMatching(false),
+              }}
+            />
+            {documentSummary}
+          </div>
+        )
+      }
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <BrandedEmptyState
+            variant="reconcile"
+            title={`${cashCount} cash + ${accrualCount} accrual items ready`}
+            description="Matching should start automatically. If it hasn't, click below to run it manually."
+            action={{
+              label: 'Run Matching',
+              onClick: () => handleRunMatching(false),
+            }}
+          />
+          {documentSummary}
+        </div>
+      )
+    }
+
+    if (convexSessionId && cashCount === 0 && accrualCount === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <BrandedEmptyState
+            variant="reconcile"
+            title="Session is empty"
+            description="No documents have been linked to this session yet. If you've uploaded documents, try re-syncing."
+            action={{
+              label: 'Upload Documents',
+              onClick: () => router.push('/upload'),
+            }}
+          />
+          {selectedCompanyId && (
+            <button
+              onClick={handleResync}
+              disabled={isResyncing}
+              className="mt-3 px-4 py-2 text-sm text-muted-foreground border border-border hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {isResyncing ? 'Syncing...' : 'Re-sync Documents'}
+            </button>
+          )}
+          {documentSummary}
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-6">
+        <BrandedEmptyState
+          variant="reconcile"
+          title="No reconciliation session"
+          description="Upload documents to automatically create a session, or re-sync if documents are already uploaded."
+          action={{
+            label: 'Upload Documents',
+            onClick: () => router.push('/upload'),
+          }}
+        />
+        {selectedCompanyId && (
+          <button
+            onClick={handleResync}
+            disabled={isResyncing}
+            className="mt-3 px-4 py-2 text-sm text-muted-foreground border border-border hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            {isResyncing ? 'Syncing...' : 'Re-sync Documents'}
+          </button>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -595,11 +852,12 @@ function ReconcileViewContent() {
 
         {/* Tabs */}
         <div className="flex border-b border-border" role="tablist" aria-label="Reconciliation tabs">
-          {(['pending', 'review', 'matched', 'suspense'] as Tab[]).map((tab) => {
+          {(['pending', 'review', 'partial', 'matched', 'suspense'] as Tab[]).map((tab) => {
             // Tab labels and descriptions
             const tabConfig: Record<Tab, { label: string; description: string }> = {
               pending: { label: 'Ready', description: 'High confidence, ready to approve' },
               review: { label: 'Review', description: 'Medium confidence, needs careful review' },
+              partial: { label: 'Partial', description: 'One-to-many payment matches' },
               matched: { label: 'Matched', description: 'Approved matches' },
               suspense: { label: 'Suspense', description: 'Unmatched items' },
             }
@@ -609,9 +867,11 @@ function ReconcileViewContent() {
                 ? pendingMatches.length
                 : tab === 'review'
                   ? reviewMatches.length
-                  : tab === 'matched'
-                    ? approvedMatches.length
-                    : suspenseItems.length
+                  : tab === 'partial'
+                    ? partialMatchGroups.length
+                    : tab === 'matched'
+                      ? approvedMatches.length
+                      : suspenseItems.length
             return (
               <button
                 key={tab}
@@ -704,19 +964,35 @@ function ReconcileViewContent() {
             </>
           )}
 
-          {/* Approved Matches */}
-          {!(isLoading || dataIsLoading) && activeTab === 'matched' && (
+          {/* Partial Matches (One-to-Many Payment Matches) */}
+          {!(isLoading || dataIsLoading) && activeTab === 'partial' && (
             <>
-              {approvedMatches.map((match) => (
-                <MatchRow
-                  key={match.id}
-                  match={match}
-                  selected={selectedMatch?.id === match.id}
-                  onClick={() => setSelectedMatch(match)}
-                  approved
+              {partialMatchGroups.length > 0 && (
+                <div className="px-4 py-2 bg-cyan-500/10 border-b border-cyan-500/20 text-xs text-cyan-700 dark:text-cyan-300 flex items-center gap-2">
+                  <IconDollarSign size={12} />
+                  <span>Partial matches - one payment split across multiple invoices</span>
+                </div>
+              )}
+              {partialMatchGroups.map((group, groupIndex) => (
+                <PartialMatchGroup
+                  key={group[0]?.id || groupIndex}
+                  matches={group}
+                  selected={selectedMatch ? group.some(m => m.id === selectedMatch.id) : false}
+                  onSelectMatch={setSelectedMatch}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
                 />
               ))}
             </>
+          )}
+
+          {/* Approved Matches — Approval History Timeline */}
+          {!(isLoading || dataIsLoading) && activeTab === 'matched' && approvedMatches.length > 0 && (
+            <HistoryList
+              matches={approvedMatches}
+              onSelectMatch={setSelectedMatch}
+              selectedMatchId={selectedMatch?.id}
+            />
           )}
 
           {/* Suspense Items */}
@@ -732,6 +1008,7 @@ function ReconcileViewContent() {
           {!(isLoading || dataIsLoading) &&
             ((activeTab === 'pending' && pendingMatches.length === 0) ||
               (activeTab === 'review' && reviewMatches.length === 0) ||
+              (activeTab === 'partial' && partialMatchGroups.length === 0) ||
               (activeTab === 'matched' && approvedMatches.length === 0) ||
               (activeTab === 'suspense' && suspenseItems.length === 0)) && (
               <TabEmptyState {...getTabEmptyState(activeTab)} />
@@ -739,16 +1016,13 @@ function ReconcileViewContent() {
         </div>
 
         {/* AI Reconciliation Assistant - Centered within this section */}
-        <ReconcileAssistant
-          className="assistant-container--in-reconcile"
-          sessionId={sessionId as string}
-          companyName={sessionName}
-          matches={matches}
-          pendingMatches={pendingMatches}
-          suspenseItems={suspenseItems}
-          onApproveMatch={handleApprove}
-          onRejectMatch={handleReject}
-        />
+        {sessionId && (
+          <ReconcileAgent
+            className="assistant-container--in-reconcile"
+            sessionId={sessionId}
+            companyName={sessionName}
+          />
+        )}
       </div>
 
       {/* Detail Panel - Fixed on desktop (lg+), Overlay on tablet/mobile */}
@@ -777,345 +1051,9 @@ function ReconcileViewContent() {
       )}
 
       {/* Keyboard Shortcuts Help Modal */}
-      {showKeyboardHelp && (
-        <KeyboardShortcutsModal onClose={() => setShowKeyboardHelp(false)} />
-      )}
+      <KeyboardShortcutsModal isOpen={showKeyboardHelp} onClose={() => setShowKeyboardHelp(false)} />
     </div>
   )
 }
 
-// =============================================================================
-// MATCH ROW COMPONENT
-// =============================================================================
 
-/**
- * Props for the MatchRow component.
- */
-interface MatchRowProps {
-  match: MatchPair
-  selected: boolean
-  onClick: () => void
-  approved?: boolean
-  showConfidenceWarning?: boolean
-}
-
-/**
- * Individual match row in the list with layer badge and confidence bar.
- *
- * Shows match layer indicator, transaction description, amount, and
- * inline confidence bar. Highlights when selected or approved.
- *
- * Memoized to prevent unnecessary re-renders when parent state changes.
- */
-const MatchRow = React.memo(function MatchRow({
-  match,
-  selected,
-  onClick,
-  approved = false,
-  showConfidenceWarning = false,
-}: MatchRowProps) {
-  const confidencePercent = confidenceToPercent(match.confidence)
-  const confidenceColor =
-    match.confidence === 'high' ? 'bg-emerald-500' : match.confidence === 'medium' ? 'bg-amber-500' : 'bg-red-500'
-
-  // Determine warning message based on match reason/layer
-  const getConfidenceWarning = () => {
-    if (match.matchLayer === 5) return 'AI suggested match - verify manually'
-    if (match.matchLayer === 4) return 'Fuzzy name match - verify counterparty'
-    if (match.confidence === 'medium') return 'Medium confidence - review amounts'
-    if (match.confidence === 'low') return 'Low confidence - careful review needed'
-    return null
-  }
-
-  const warningMessage = showConfidenceWarning ? getConfidenceWarning() : null
-
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={selected}
-      className={cn(
-        'w-full px-4 py-3 border-b border-border text-left transition-all duration-150',
-        'hover:bg-secondary/50',
-        selected && 'row-selected',
-        approved && !selected && 'row-approved',
-        showConfidenceWarning && !selected && 'bg-warning/5'
-      )}
-    >
-      <div className="flex items-center gap-3">
-        {/* Layer Badge */}
-        <MatchLayerBadge layer={match.matchLayer as MatchLayer} size="sm" />
-
-        {/* Description */}
-        <div className="flex-1 min-w-0">
-          <TruncatedText
-            text={match.cashTransaction.description}
-            maxWidth="200px"
-            className="text-sm"
-          />
-        </div>
-
-        {/* Amount */}
-        <div className="text-amount-sm">
-          ${Math.abs(match.cashTransaction.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </div>
-
-        {/* Warning Icon for medium confidence */}
-        {showConfidenceWarning && (
-          <IconWarningCircle size={16} className="text-warning flex-shrink-0" aria-label="Needs review" />
-        )}
-
-        {/* Approved Icon */}
-        {approved && (
-          <IconCheckCircle size={16} className="text-success flex-shrink-0" aria-label="Approved" />
-        )}
-      </div>
-
-      <div className="flex items-center justify-between mt-2 pl-14">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{match.cashTransaction.date}</span>
-          {/* Warning message */}
-          {warningMessage && (
-            <span className="text-xs text-warning/80 italic">{warningMessage}</span>
-          )}
-        </div>
-
-        {/* Wider Confidence Bar */}
-        <div className="flex items-center gap-2">
-          <div className="w-24 h-1 bg-secondary overflow-hidden" role="progressbar" aria-valuenow={confidencePercent} aria-valuemin={0} aria-valuemax={100}>
-            <div
-              className={cn('h-full transition-all duration-500', confidenceColor)}
-              style={{ width: `${confidencePercent}%` }}
-            />
-          </div>
-          <span className="text-xs font-mono text-muted-foreground w-10 text-right">{confidencePercent}%</span>
-        </div>
-      </div>
-    </button>
-  )
-})
-
-// =============================================================================
-// SUSPENSE ROW COMPONENT
-// =============================================================================
-
-/**
- * Props for the SuspenseRow component.
- */
-interface SuspenseRowProps {
-  item: Transaction
-  onFindMatch?: (item: Transaction) => void
-}
-
-/**
- * Suspense item row showing unmatched transaction with manual match option.
- *
- * Displays warning icon, description, amount, and "Find Match" button
- * that appears on hover to initiate manual matching.
- *
- * Memoized to prevent unnecessary re-renders when parent state changes.
- */
-const SuspenseRow = React.memo(function SuspenseRow({ item, onFindMatch }: SuspenseRowProps) {
-  return (
-    <div className="px-4 py-3 border-b border-border hover:bg-secondary/30 transition-colors group" role="listitem">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-6 h-6 bg-warning/10 flex items-center justify-center" aria-hidden="true">
-            <IconWarningCircle size={14} className="text-warning" />
-          </div>
-          <TruncatedText text={item.description} maxWidth="200px" className="text-sm" />
-        </div>
-        <div className="flex items-center gap-3">
-          {onFindMatch && (
-            <button
-              onClick={() => onFindMatch(item)}
-              aria-label={`Find match for ${item.description}`}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-colors opacity-70 hover:opacity-100 focus:opacity-100 focus:ring-1 focus:ring-foreground/50"
-            >
-              <IconSearch size={12} aria-hidden="true" />
-              Find Match
-            </button>
-          )}
-          <div className="text-amount-sm">
-            ${Math.abs(item.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </div>
-        </div>
-      </div>
-      <div className="text-xs text-muted-foreground mt-2 pl-9">{item.date}</div>
-    </div>
-  )
-})
-
-// =============================================================================
-// SKELETON MATCH ROW
-// =============================================================================
-
-/**
- * Loading skeleton placeholder for match rows during data fetching.
- */
-function SkeletonMatchRow() {
-  return (
-    <div className="skeleton-match-row">
-      <div className="flex items-center gap-3">
-        <Skeleton className="w-12 h-5" />
-        <Skeleton className="flex-1 h-4" />
-        <Skeleton className="w-20 h-4" />
-      </div>
-      <div className="flex items-center justify-between pl-14 mt-1">
-        <Skeleton className="w-20 h-3" />
-        <div className="flex items-center gap-2">
-          <Skeleton className="w-24 h-1" />
-          <Skeleton className="w-10 h-3" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// =============================================================================
-// TAB EMPTY STATE
-// =============================================================================
-
-/**
- * Props for the TabEmptyState component.
- */
-interface TabEmptyStateProps {
-  icon: React.ReactNode
-  title: string
-  description: string
-  className?: string
-}
-
-/**
- * Empty state displayed when a tab has no items to show.
- *
- * Shows contextual icon, title, and description based on the tab type.
- */
-function TabEmptyState({ icon, title, description, className }: TabEmptyStateProps) {
-  return (
-    <div className={cn('flex flex-col items-center justify-center h-64 p-6', className)}>
-      <div className="mb-4">{icon}</div>
-      <h3 className="text-sm font-medium mb-1">{title}</h3>
-      <p className="text-xs text-muted-foreground text-center max-w-[240px]">{description}</p>
-    </div>
-  )
-}
-
-// =============================================================================
-// KEYBOARD SHORTCUTS MODAL
-// =============================================================================
-
-const keyboardShortcuts = [
-  { key: 'A', description: 'Approve current match', category: 'Actions' },
-  { key: 'R', description: 'Reject current match', category: 'Actions' },
-  { key: '↓ / S / J', description: 'Skip to next match', category: 'Navigation' },
-  { key: '↑ / K', description: 'Go to previous match', category: 'Navigation' },
-  { key: '/', description: 'Focus search bar', category: 'Navigation' },
-  { key: '?', description: 'Show this help', category: 'Help' },
-  { key: 'Ctrl+Z', description: 'Undo last action', category: 'Actions' },
-  { key: 'Esc', description: 'Close modals', category: 'Help' },
-]
-
-/**
- * Modal displaying keyboard shortcuts for power users.
- * P1-7 FIX: Added focus trap to keep keyboard navigation within modal.
- */
-function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
-  const categories = ['Actions', 'Navigation', 'Help']
-  const modalRef = React.useRef<HTMLDivElement>(null)
-  const closeButtonRef = React.useRef<HTMLButtonElement>(null)
-
-  // Focus trap: keep focus within the modal
-  React.useEffect(() => {
-    // Focus the close button when modal opens
-    closeButtonRef.current?.focus()
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-
-      const focusableElements = modalRef.current?.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      )
-      if (!focusableElements || focusableElements.length === 0) return
-
-      const firstElement = focusableElements[0] as HTMLElement
-      const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement
-
-      if (e.shiftKey) {
-        // Shift+Tab: if on first element, go to last
-        if (document.activeElement === firstElement) {
-          e.preventDefault()
-          lastElement.focus()
-        }
-      } else {
-        // Tab: if on last element, go to first
-        if (document.activeElement === lastElement) {
-          e.preventDefault()
-          firstElement.focus()
-        }
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="shortcuts-modal-title"
-    >
-      <div
-        ref={modalRef}
-        className="bg-background border border-border shadow-xl w-full max-w-md mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div className="flex items-center gap-3">
-            <IconCommand size={20} className="text-muted-foreground" aria-hidden="true" />
-            <h2 id="shortcuts-modal-title" className="text-lg font-medium">Keyboard Shortcuts</h2>
-          </div>
-          <button
-            ref={closeButtonRef}
-            onClick={onClose}
-            className="p-1 text-muted-foreground hover:text-foreground transition-colors focus:ring-1 focus:ring-foreground/50"
-            aria-label="Close keyboard shortcuts"
-          >
-            <IconX size={20} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-6">
-          {categories.map((category) => (
-            <div key={category}>
-              <h3 className="text-xs text-muted-foreground uppercase tracking-wider mb-3">{category}</h3>
-              <div className="space-y-2">
-                {keyboardShortcuts
-                  .filter((s) => s.category === category)
-                  .map((shortcut) => (
-                    <div key={shortcut.key} className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">{shortcut.description}</span>
-                      <kbd className="px-2 py-1 text-xs bg-secondary border border-border font-mono">
-                        {shortcut.key}
-                      </kbd>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-border bg-secondary/30">
-          <p className="text-xs text-muted-foreground text-center">
-            Press <kbd className="px-1 py-0.5 text-[10px] bg-background border border-border font-mono">Esc</kbd> or click outside to close
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}

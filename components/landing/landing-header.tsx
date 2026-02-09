@@ -32,7 +32,7 @@ export function LandingHeader({ className }: LandingHeaderProps) {
           className={cn(
             'inline-block px-1.5 py-0.5',
             'border border-foreground/30 text-foreground/50',
-            'text-[9px] font-mono font-medium tracking-widest'
+            'text-[9px] font-[family-name:var(--font-pixel)] font-normal tracking-widest'
           )}
         >
           ALPHA
@@ -44,7 +44,7 @@ export function LandingHeader({ className }: LandingHeaderProps) {
         <Link
           href="/docs"
           className={cn(
-            'text-xs md:text-sm font-mono text-muted-foreground/70',
+            'text-xs md:text-sm font-[family-name:var(--font-pixel)] text-muted-foreground/70',
             'hover:text-foreground transition-colors',
             'px-2 py-1',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background'

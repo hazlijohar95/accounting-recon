@@ -4,14 +4,12 @@
  * Onboarding State Hook
  *
  * Manages the state for the onboarding tour and checklist.
- * Uses localStorage for persistence and Convex for server-side state.
+ * Uses localStorage for persistence.
  */
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/components/auth-provider'
 import { useSelectedCompanyId } from '@/lib/store'
-import { useQuery, useMutation } from 'convex/react'
-import { api } from '@/convex/_generated/api'
 
 const ONBOARDING_STORAGE_KEY = 'reconciled:onboarding'
 const TOUR_SEEN_KEY = 'reconciled:tour-seen'

@@ -1,17 +1,18 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   useAppStore,
-  useMatchesSafe,
   useCashTransactionsSafe,
   useAccrualTransactionsSafe,
-  useActiveSessionSafe,
 } from '@/lib/store'
 import { useAction, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useRecentActivity } from '@/lib/convex-hooks'
+import { useOnboardingState } from '@/components/onboarding'
+import { useWorkosUserId } from '@/lib/convex-hooks/shared'
+import { useReconcileData } from '@/lib/use-reconcile-data'
 import {
   IconDownload,
   IconCaretDown,
@@ -76,27 +77,68 @@ export function ReportsView() {
 
 function ReportsViewContent() {
   const router = useRouter()
-  // Mode-aware selectors - automatically return correct data based on isDemo
-  const matches = useMatchesSafe()
-  const cashTransactions = useCashTransactionsSafe()
-  const accrualTransactions = useAccrualTransactionsSafe()
-  const activeSession = useActiveSessionSafe()
-  // Actions and UI state still from store
+  const searchParams = useSearchParams()
+
+  // Get session ID from URL params (real mode) or from recent sessions
+  const urlSessionId = searchParams.get('sessionId')
+
+  // Actions and UI state from store
   const { setShowPaywall, isDemo, selectedCompanyId } = useAppStore()
   const [selectedReport, setSelectedReport] = useState<ReportType>('summary')
 
-  // Derived loading state from data - no effect needed
+  // Fetch sessions for the company (to get most recent if no URL param)
+  const workosUserId = useWorkosUserId()
+  const companySessions = useQuery(
+    api.sessions.listByCompany,
+    !isDemo && selectedCompanyId ? { companyId: selectedCompanyId as Id<"companies">, workosUserId } : 'skip'
+  )
+
+  // Determine the session ID to use: URL param > most recent session
+  const convexSessionId = useMemo(() => {
+    if (urlSessionId) {
+      return urlSessionId as Id<"reconciliationSessions">
+    }
+    // Fall back to most recent session
+    if (companySessions && companySessions.length > 0) {
+      return companySessions[0]._id
+    }
+    return undefined
+  }, [urlSessionId, companySessions])
+
+  // Use unified reconcile data hook - handles demo/real mode automatically
+  const {
+    matches,
+    sessionId: activeSessionId,
+    sessionName,
+    isLoading: reconcileLoading,
+    isDemo: reconcileIsDemo,
+  } = useReconcileData(convexSessionId)
+
+  // Mode-aware transaction selectors for additional data
+  const cashTransactions = useCashTransactionsSafe()
+  const accrualTransactions = useAccrualTransactionsSafe()
+
+  // Active session info for exports
+  const activeSession = useMemo(() => ({
+    id: activeSessionId,
+    name: sessionName,
+  }), [activeSessionId, sessionName])
+
+  // Derived loading state
   const hasData = useMemo(() =>
     matches.length > 0 || cashTransactions.length > 0 || accrualTransactions.length > 0,
     [matches, cashTransactions, accrualTransactions]
   )
-  const isLoading = !hasData
+  const isLoading = reconcileLoading || (!hasData && !isDemo)
   const [exportLoading, setExportLoading] = useState<'csv' | 'xlsx' | 'accounting' | 'pdf' | null>(null)
   const [showAccountingMenu, setShowAccountingMenu] = useState(false)
   const [pdfJobId, setPdfJobId] = useState<string | null>(null)
 
   // Toast notifications
   const toast = useToastHelpers()
+
+  // Onboarding tracking
+  const { completeItem } = useOnboardingState()
 
   // Convex actions
   const generateExport = useAction(api.exports.index.generateExport)
@@ -207,6 +249,8 @@ function ReportsViewContent() {
       if (result.success && result.fileUrl && result.fileName) {
         downloadFile(result.fileUrl, result.fileName)
         toast.success(`${format.toUpperCase()} export ready`, 'Your file is downloading')
+        // Mark onboarding export step as complete
+        completeItem('export')
       } else {
         toast.error('Export failed', result.error || 'Unknown error')
       }
@@ -215,7 +259,7 @@ function ReportsViewContent() {
     } finally {
       setExportLoading(null)
     }
-  }, [isDemo, activeSession, selectedReport, generateExport, setShowPaywall, downloadFile, toast])
+  }, [isDemo, activeSession, selectedReport, generateExport, setShowPaywall, downloadFile, toast, completeItem])
 
   const handleAccountingExport = useCallback(async (software: AccountingSoftware) => {
     if (isDemo) {
@@ -244,6 +288,8 @@ function ReportsViewContent() {
         downloadFile(result.fileUrl, result.fileName)
         const softwareName = accountingSoftwareOptions.find(o => o.id === software)?.name || software
         toast.success(`${softwareName} export ready`, 'Your file is downloading')
+        // Mark onboarding export step as complete
+        completeItem('export')
       } else {
         toast.error('Export failed', result.error || 'Unknown error')
       }
@@ -297,7 +343,8 @@ function ReportsViewContent() {
   }, [isDemo, activeSession, selectedReport, generatePDFExport, setShowPaywall, toast])
 
   // Empty state for Real mode with no data - MUST be after ALL hooks (including useCallback)
-  const hasNoData = !isDemo && matches.length === 0 && cashTransactions.length === 0 && accrualTransactions.length === 0
+  // Only show empty state if we're NOT loading and have no data
+  const hasNoData = !isDemo && !isLoading && matches.length === 0 && cashTransactions.length === 0 && accrualTransactions.length === 0
 
   if (hasNoData) {
     return (

@@ -16,14 +16,17 @@ import { accrualDocValidator, accrualDocIdValidator, accrualCountsValidator } fr
 
 // Get a single accrual document by ID
 export const get = query({
-  args: { id: v.id("accrualDocuments") },
+  args: {
+    id: v.id("accrualDocuments"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.union(accrualDocValidator, v.null()),
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
 
-    // SECURITY: Verify company access
-    const { allowed } = await verifyQueryResourceAccess(ctx, doc.companyId);
+    // SECURITY: Verify company access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQueryResourceAccess(ctx, doc.companyId, args.workosUserId);
     if (!allowed) return null;
 
     return doc;
@@ -42,11 +45,12 @@ export const listByCompany = query({
         v.literal("suspense")
       )
     ),
+    workosUserId: v.optional(v.string()),
   },
   returns: v.array(accrualDocValidator),
   handler: async (ctx, args) => {
-    // SECURITY: Verify company access
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify company access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
     if (!allowed) return [];
 
     if (args.status) {
@@ -76,11 +80,12 @@ export const listBySession = query({
         v.literal("suspense")
       )
     ),
+    workosUserId: v.optional(v.string()),
   },
   returns: v.array(accrualDocValidator),
   handler: async (ctx, args) => {
-    // SECURITY: Verify session access
-    const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId);
+    // SECURITY: Verify session access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQuerySessionAccess(ctx, args.sessionId, args.workosUserId);
     if (!allowed) return [];
 
     // Use compound index when filtering by status
@@ -100,13 +105,43 @@ export const listBySession = query({
   },
 });
 
+// Get accrual document by source document ID
+export const getBySourceDocument = query({
+  args: {
+    sourceDocumentId: v.id("documents"),
+    workosUserId: v.optional(v.string()),
+  },
+  returns: v.union(accrualDocValidator, v.null()),
+  handler: async (ctx, args) => {
+    // Get the source document to check company access
+    const sourceDoc = await ctx.db.get(args.sourceDocumentId);
+    if (!sourceDoc) return null;
+
+    // SECURITY: Verify company access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQueryResourceAccess(ctx, sourceDoc.companyId, args.workosUserId);
+    if (!allowed) return null;
+
+    // Find accrual document by source document ID
+    const docs = await ctx.db
+      .query("accrualDocuments")
+      .withIndex("by_company", (q) => q.eq("companyId", sourceDoc.companyId))
+      .filter((q) => q.eq(q.field("sourceDocumentId"), args.sourceDocumentId))
+      .first();
+
+    return docs;
+  },
+});
+
 // Get counts by status for a company
 export const getCounts = query({
-  args: { companyId: v.id("companies") },
+  args: {
+    companyId: v.id("companies"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.union(accrualCountsValidator, v.null()),
   handler: async (ctx, args) => {
-    // SECURITY: Verify company access
-    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId);
+    // SECURITY: Verify company access (workosUserId fallback for AuthKit failures)
+    const { allowed } = await verifyQueryCompanyAccess(ctx, args.companyId, args.workosUserId);
     if (!allowed) return null;
 
     const docs = await ctx.db
@@ -148,6 +183,7 @@ export const create = mutation({
     lineItems: v.optional(v.string()),
     sourceDocumentId: v.optional(v.id("documents")),
     extractedText: v.optional(v.string()),
+    workosUserId: v.optional(v.string()),
   },
   returns: accrualDocIdValidator,
   handler: async (ctx, args) => {
@@ -158,11 +194,11 @@ export const create = mutation({
     validateOptionalAmount(args.taxAmount, "taxAmount");
 
     // Verify company ownership
-    await requireCompanyAccess(ctx, args.companyId);
+    await requireCompanyAccess(ctx, args.companyId, args.workosUserId);
 
     // If sessionId provided, verify session belongs to same company
     if (args.sessionId) {
-      const { company } = await requireSessionAccess(ctx, args.sessionId);
+      const { company } = await requireSessionAccess(ctx, args.sessionId, args.workosUserId);
       if (company._id !== args.companyId) {
         return BusinessErrors.sessionMismatch("Accrual document");
       }
@@ -203,6 +239,7 @@ export const createBulk = mutation({
         extractedText: v.optional(v.string()),
       })
     ),
+    workosUserId: v.optional(v.string()),
   },
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
@@ -216,7 +253,7 @@ export const createBulk = mutation({
     // Verify ownership of all companies involved
     const companyIds = new Set(args.documents.map((d) => d.companyId));
     for (const companyId of companyIds) {
-      await requireCompanyAccess(ctx, companyId);
+      await requireCompanyAccess(ctx, companyId, args.workosUserId);
     }
 
     // Verify ownership of all sessions involved
@@ -226,7 +263,7 @@ export const createBulk = mutation({
         .filter((id): id is NonNullable<typeof id> => id !== undefined)
     );
     for (const sessionId of sessionIds) {
-      await requireSessionAccess(ctx, sessionId);
+      await requireSessionAccess(ctx, sessionId, args.workosUserId);
     }
 
     const now = Date.now();
@@ -274,13 +311,14 @@ export const update = mutation({
       )
     ),
     matchId: v.optional(v.id("matchedPairs")),
+    workosUserId: v.optional(v.string()),
   },
   returns: accrualDocIdValidator,
   handler: async (ctx, args) => {
-    const { id, ...updates } = args;
+    const { id, workosUserId, ...updates } = args;
 
     // Verify document ownership
-    await requireAccrualDocAccess(ctx, id);
+    await requireAccrualDocAccess(ctx, id, workosUserId);
 
     // Validate optional updates
     validateOptionalAmount(updates.amount, "amount");
@@ -296,11 +334,14 @@ export const update = mutation({
 
 // Delete an accrual document
 export const remove = mutation({
-  args: { id: v.id("accrualDocuments") },
+  args: {
+    id: v.id("accrualDocuments"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     // Verify document ownership
-    await requireAccrualDocAccess(ctx, args.id);
+    await requireAccrualDocAccess(ctx, args.id, args.workosUserId);
 
     await ctx.db.delete(args.id);
     return null;
@@ -312,11 +353,12 @@ export const markMatched = mutation({
   args: {
     id: v.id("accrualDocuments"),
     matchId: v.id("matchedPairs"),
+    workosUserId: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     // Verify document ownership
-    await requireAccrualDocAccess(ctx, args.id);
+    await requireAccrualDocAccess(ctx, args.id, args.workosUserId);
 
     await ctx.db.patch(args.id, {
       status: "matched",
@@ -328,11 +370,14 @@ export const markMatched = mutation({
 
 // Reset to pending (when match is rejected)
 export const resetToPending = mutation({
-  args: { id: v.id("accrualDocuments") },
+  args: {
+    id: v.id("accrualDocuments"),
+    workosUserId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     // Verify document ownership
-    await requireAccrualDocAccess(ctx, args.id);
+    await requireAccrualDocAccess(ctx, args.id, args.workosUserId);
 
     await ctx.db.patch(args.id, {
       status: "pending",

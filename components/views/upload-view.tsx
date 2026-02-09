@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   useAppStore,
@@ -12,25 +13,25 @@ import {
   useCurrentUser,
 } from '@/lib/store'
 import {
-  IconFileText,
-  IconWarningCircle,
-  IconRefresh,
-  IconX,
   IconCloudUpload,
-  IconTrash,
-  IconEye,
 } from '@/components/brand/icons'
-import { cn, formatFileSize } from '@/lib/utils'
-import { LoadingSpinner, SuccessCheckmark, LogoMark, BrandedEmptyState } from '@/components/brand'
+import { cn } from '@/lib/utils'
+import { LogoMark } from '@/components/brand'
 import { Id } from '@/convex/_generated/dataModel'
-import { useCreateDocument, useTriggerExtraction, useDocument, useCompanyDocuments, useDeleteDocument, useGenerateUploadUrl } from '@/lib/convex-hooks'
+import { useCreateDocument, useTriggerExtraction, useCompanyDocuments, useGenerateUploadUrl } from '@/lib/convex-hooks'
+import { usePdfExtraction, isPdfFile } from '@/hooks/usePdfExtraction'
+import { useGeminiExtraction } from '@/hooks/useGeminiExtraction'
+import { useUploadAnalysis } from '@/hooks/useUploadAnalysis'
+import { UploadAnalysisPanel } from './upload-view/upload-analysis-panel'
+
+const EXTRACTION_PROVIDER = process.env.NEXT_PUBLIC_EXTRACTION_PROVIDER || 'bedrock'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useToast } from '@/components/ui/toast'
 import { TabNav, TabPanel } from '@/components/ui/tab-nav'
-import { Modal } from '@/components/ui/modal'
-import { ExtractionStatus } from '@/components/extraction-status'
-
-type FileStatus = 'idle' | 'uploading' | 'processing' | 'complete' | 'failed'
+import type { UploadedFile, FileStatus, UploadTab } from './upload-view/types'
+import { FileItem } from './upload-view/file-item'
+import { BatchProgressBar } from './upload-view/batch-progress-bar'
+import { DocumentsSection } from './upload-view/documents-section'
 
 // SECURITY: File validation constants (must match convex/documents.ts)
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
@@ -85,34 +86,6 @@ function sanitizeFilename(filename: string): string {
   return sanitized
 }
 
-interface UploadedFile {
-  id: string
-  name: string
-  size: number
-  type: 'bank_statement' | 'invoice' | 'receipt' | 'other'
-  status: FileStatus
-  progress: number
-  documentId?: Id<"documents">
-  errorMessage?: string
-  file?: File
-}
-
-// File type labels mapping (shared across components)
-const fileTypeLabels: Record<UploadedFile['type'], string> = {
-  bank_statement: 'Bank Statement',
-  invoice: 'Invoice',
-  receipt: 'Receipt',
-  other: 'Document',
-}
-
-// Extraction status color styles (shared across components)
-const statusColors: Record<string, string> = {
-  pending: 'bg-secondary text-muted-foreground',
-  processing: 'bg-info-light text-info',
-  completed: 'bg-success-light text-success',
-  failed: 'bg-error-light text-error',
-}
-
 export function UploadView() {
   return (
     <ErrorBoundary componentName="UploadView">
@@ -121,9 +94,8 @@ export function UploadView() {
   )
 }
 
-type UploadTab = 'upload' | 'documents'
-
 function UploadViewContent() {
+  const router = useRouter()
   // Use individual selectors to prevent unnecessary re-renders
   const isDemo = useIsDemo()
   const selectedCompanyId = useSelectedCompanyId()
@@ -134,7 +106,6 @@ function UploadViewContent() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [activeTab, setActiveTab] = useState<UploadTab>('upload')
-  const [defaultDocType, setDefaultDocType] = useState<UploadedFile['type'] | 'auto'>('auto')
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Store XHR objects in ref to avoid storing non-serializable objects in state
@@ -142,7 +113,7 @@ function UploadViewContent() {
 
   // Query documents for the Documents tab (using wrapper hook for consistency)
   const documents = useCompanyDocuments(
-    activeTab === 'documents' ? selectedCompanyId as Id<"companies"> | undefined : undefined
+    selectedCompanyId as Id<"companies"> | undefined
   )
   const selectedCompanyName = useMemo(() => {
     if (!selectedCompanyId) return 'No company selected'
@@ -157,6 +128,13 @@ function UploadViewContent() {
     }
   }, [])
 
+  // Upload analysis hook (AI classification + company verification)
+  const uploadAnalysis = useUploadAnalysis({
+    companyId: selectedCompanyId as Id<"companies"> | null,
+    enabled: !isDemo,
+  })
+  const [isApproving, setIsApproving] = useState(false)
+
   // Toast notifications
   const toast = useToast()
 
@@ -164,6 +142,65 @@ function UploadViewContent() {
   const generateUploadUrl = useGenerateUploadUrl()
   const createDocument = useCreateDocument()
   const triggerExtraction = useTriggerExtraction()
+
+  // Extraction callbacks (shared between Bedrock and Gemini)
+  const extractionCallbacks = useMemo(() => ({
+    onProgress: (progress: { currentPage?: number; totalPages?: number; phase: string; message?: string }) => {
+      setFiles((prev) =>
+        prev.map((f) => {
+          if (f.status === 'processing' && f.file && isPdfFile(f.file)) {
+            const pct = progress.currentPage && progress.totalPages
+              ? Math.round((progress.currentPage / progress.totalPages) * 100)
+              : undefined
+            return {
+              ...f,
+              progress: pct ?? f.progress,
+              progressMessage: progress.message || f.progressMessage,
+            }
+          }
+          return f
+        })
+      )
+    },
+    onComplete: (documentId: Id<"documents">, transactionCount: number) => {
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.documentId === documentId
+            ? { ...f, status: 'complete' as FileStatus, progressMessage: undefined }
+            : f
+        )
+      )
+      toast.addToast({
+        type: 'success',
+        title: 'Extraction complete',
+        description: `${transactionCount} transactions extracted.`,
+      })
+      // No auto-redirect — analysis panel handles navigation after user review
+    },
+    onError: (documentId: Id<"documents"> | null, error: string) => {
+      if (documentId) {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.documentId === documentId
+              ? { ...f, status: 'failed' as FileStatus, errorMessage: error, progressMessage: undefined }
+              : f
+          )
+        )
+      }
+      toast.addToast({
+        type: 'error',
+        title: 'Extraction failed',
+        description: error,
+      })
+    },
+    skipSessionCreation: true, // Session creation handled by analysis approval
+  }), [toast])
+
+  // Both hooks are always called (React rules of hooks), but only the active one is used
+  const bedrockExtraction = usePdfExtraction(extractionCallbacks)
+  const geminiExtraction = useGeminiExtraction(extractionCallbacks)
+
+  const { extractPdf } = EXTRACTION_PROVIDER === 'gemini' ? geminiExtraction : bedrockExtraction
 
   // Detect document type from filename
   const detectDocumentType = (filename: string): UploadedFile['type'] => {
@@ -214,7 +251,7 @@ function UploadViewContent() {
         id: crypto.randomUUID(),
         name: sanitizedName,
         size: file.size,
-        type: defaultDocType === 'auto' ? detectDocumentType(sanitizedName) : defaultDocType,
+        type: detectDocumentType(sanitizedName),
         status: 'idle' as FileStatus,
         progress: 0,
         file,
@@ -237,7 +274,7 @@ function UploadViewContent() {
     if (newFiles.length > 0) {
       setFiles((prev) => [...prev, ...newFiles])
     }
-  }, [defaultDocType, toast])
+  }, [toast])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -329,6 +366,39 @@ function UploadViewContent() {
     )
 
     try {
+      // Check if this is a PDF - use native extraction (Gemini or Bedrock)
+      if (isPdfFile(fileData.file)) {
+        setFiles((prev) =>
+          prev.map((f) => (f.id === fileId ? {
+            ...f,
+            status: 'processing' as FileStatus,
+            progress: 0,
+            progressMessage: 'Starting extraction...',
+          } : f))
+        )
+
+        const documentId = await extractPdf(
+          fileData.file,
+          selectedCompanyId as Id<"companies">,
+          fileData.type
+        )
+
+        if (documentId) {
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === fileId
+                ? { ...f, documentId, status: 'complete' as FileStatus, progressMessage: undefined }
+                : f
+            )
+          )
+          // Auto-switch to Documents tab after successful extraction
+          setActiveTab('documents')
+        }
+        // Error handling is done in extraction hook's onError callback
+        return
+      }
+
+      // For non-PDF files (images, CSV, Excel), use the standard upload flow
       // Step 1: Get upload URL from Convex
       const uploadUrl = await generateUploadUrl({
         companyId: selectedCompanyId as Id<"companies">,
@@ -409,7 +479,7 @@ function UploadViewContent() {
         )
       )
 
-      // Step 4: Trigger extraction
+      // Step 4: Trigger extraction (Cloudinary for images only now)
       await triggerExtraction(documentId)
 
       toast.addToast({
@@ -494,14 +564,63 @@ function UploadViewContent() {
     uploadFile(fileId)
   }
 
-  const processAll = () => {
+  const processAll = async () => {
     if (isDemo) {
       setShowPaywall(true)
       return
     }
     const pendingFiles = files.filter((f) => f.status === 'idle')
     pendingFiles.forEach((f) => uploadFile(f.id))
+
+    // Create analysis batch after kicking off uploads
+    // Document IDs will be collected as extractions complete
+    // For now, we'll create the batch after first file gets a documentId
   }
+
+  // Track document IDs and create/update analysis batch
+  const analysisDocIdsRef = useRef<Set<string>>(new Set())
+  const analysisBatchCreatedRef = useRef(false)
+
+  useEffect(() => {
+    if (isDemo || !selectedCompanyId) return
+
+    // Collect document IDs from completed files
+    const completedDocIds = files
+      .filter((f) => f.documentId && (f.status === 'complete' || f.status === 'processing'))
+      .map((f) => f.documentId!)
+
+    if (completedDocIds.length === 0) return
+
+    // Check for new document IDs
+    const newDocIds = completedDocIds.filter((id) => !analysisDocIdsRef.current.has(id))
+    if (newDocIds.length === 0) return
+
+    // Track them
+    newDocIds.forEach((id) => analysisDocIdsRef.current.add(id))
+
+    // Create or update analysis batch
+    if (!analysisBatchCreatedRef.current) {
+      analysisBatchCreatedRef.current = true
+      uploadAnalysis.createBatch(completedDocIds).then(() => {
+        setActiveTab('analysis')
+      }).catch((err) => {
+        console.error('[UploadView] Failed to create analysis batch:', err)
+        analysisBatchCreatedRef.current = false
+      })
+    } else if (uploadAnalysis.analysisId) {
+      uploadAnalysis.addDocuments(newDocIds).catch((err) => {
+        console.error('[UploadView] Failed to add documents to analysis:', err)
+      })
+    }
+  }, [files, isDemo, selectedCompanyId, uploadAnalysis.analysisId])
+
+  // Reset analysis tracking when files are cleared
+  useEffect(() => {
+    if (files.length === 0) {
+      analysisDocIdsRef.current.clear()
+      analysisBatchCreatedRef.current = false
+    }
+  }, [files.length])
 
   const idleCount = files.filter((f) => f.status === 'idle').length
   const processingCount = files.filter((f) => f.status === 'uploading' || f.status === 'processing').length
@@ -526,33 +645,15 @@ function UploadViewContent() {
         </p>
       </header>
 
-      {/* Context bar */}
-      <div className="border border-border bg-secondary/20 px-4 py-3 flex flex-col md:flex-row md:items-center gap-3">
-        <div className="text-xs">
-          <span className="text-muted-foreground">Company</span>
-          <div className="text-sm font-medium">{selectedCompanyName}</div>
+      {/* Context bar - compact single row */}
+      <div className="border border-border bg-secondary/20 px-4 py-2.5 flex items-center gap-6 text-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground">Company:</span>
+          <span className="font-medium">{selectedCompanyName}</span>
         </div>
-        <div className="text-xs">
-          <span className="text-muted-foreground">Active session</span>
-          <div className="text-sm font-medium">
-            {activeSession?.name || 'No active session'}
-          </div>
-        </div>
-        <div className="text-xs md:ml-auto">
-          <span className="text-muted-foreground">Default document type</span>
-          <div className="mt-1">
-            <select
-              value={defaultDocType}
-              onChange={(e) => setDefaultDocType(e.target.value as UploadedFile['type'] | 'auto')}
-              className="px-2 py-1 text-xs border border-border bg-background focus:outline-none focus:border-foreground"
-            >
-              <option value="auto">Auto-detect</option>
-              <option value="bank_statement">Bank statement</option>
-              <option value="invoice">Invoice</option>
-              <option value="receipt">Receipt</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground">Session:</span>
+          <span className="font-medium">{activeSession?.name || 'None'}</span>
         </div>
       </div>
 
@@ -561,6 +662,9 @@ function UploadViewContent() {
         tabs={[
           { id: 'upload' as UploadTab, label: 'Upload New', count: pendingFilesCount || undefined },
           { id: 'documents' as UploadTab, label: 'Documents', count: documents?.length },
+          ...(uploadAnalysis.analysisId
+            ? [{ id: 'analysis' as UploadTab, label: 'Analysis', count: uploadAnalysis.analysis?.documentClassifications?.length }]
+            : []),
         ]}
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab as UploadTab)}
@@ -691,588 +795,59 @@ function UploadViewContent() {
           isDemo={isDemo}
         />
       </TabPanel>
-    </div>
-  )
-}
 
-/**
- * Individual file item component with real-time status updates
- */
-function FileItem({
-  file,
-  onUpload,
-  onRetry,
-  onCancel,
-  onRemove,
-}: {
-  file: UploadedFile
-  onUpload: () => void
-  onRetry: () => void
-  onCancel: () => void
-  onRemove: () => void
-}) {
-  const toast = useToast()
-
-  // Subscribe to document status updates (using wrapper hook for consistency)
-  const document = useDocument(file.documentId)
-
-  // Track previous extraction status to detect completion
-  const prevStatusRef = useRef<string | null>(null)
-
-  // Show toast when extraction completes
-  useEffect(() => {
-    const currentStatus = document?.extractionStatus
-    const prevStatus = prevStatusRef.current
-
-    // Detect transition to 'completed' status
-    if (currentStatus === 'completed' && prevStatus !== 'completed' && prevStatus !== null) {
-      const txCount = document?.extractedTransactionCount ?? 0
-      toast.addToast({
-        type: 'success',
-        title: 'Extraction complete',
-        description: `${file.name}: ${txCount} transactions extracted`,
-        duration: 8000,
-      })
-    }
-
-    // Detect transition to 'failed' status
-    if (currentStatus === 'failed' && prevStatus !== 'failed' && prevStatus !== null) {
-      toast.addToast({
-        type: 'error',
-        title: 'Extraction failed',
-        description: document?.errorMessage || `${file.name} could not be processed`,
-        duration: 10000,
-      })
-    }
-
-    prevStatusRef.current = currentStatus || null
-  }, [document?.extractionStatus, document?.extractedTransactionCount, document?.errorMessage, file.name, toast])
-
-  // Update local status based on document status
-  const displayStatus = document?.extractionStatus === 'completed'
-    ? 'complete'
-    : document?.extractionStatus === 'failed'
-      ? 'failed'
-      : file.status
-
-  const errorMessage = document?.errorMessage || file.errorMessage
-
-  return (
-    <li className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-secondary/20 transition-colors">
-      {/* File info */}
-      <div className="flex items-start sm:items-center gap-3 min-w-0">
-        <div className="flex-shrink-0 mt-0.5 sm:mt-0">
-          <IconFileText size={20} className="text-muted-foreground" aria-hidden="true" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate" title={file.name}>
-            {file.name}
-          </p>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-            <span>{formatFileSize(file.size)}</span>
-            <span aria-hidden="true">&middot;</span>
-            <span>{fileTypeLabels[file.type]}</span>
-            {document?.extractedTransactionCount !== undefined && (
-              <>
-                <span aria-hidden="true">&middot;</span>
-                <span className="text-foreground font-medium">
-                  {document.extractedTransactionCount} transactions
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Status and actions */}
-      <div className="flex items-center gap-3 sm:flex-shrink-0 pl-8 sm:pl-0">
-        {displayStatus === 'idle' && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onUpload}
-              className="px-3 py-1.5 text-xs border border-border hover:bg-secondary transition-colors focus-ring"
-            >
-              Upload
-            </button>
-            <button
-              onClick={onRemove}
-              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-ring"
-              aria-label={`Remove ${file.name}`}
-            >
-              <IconX size={16} />
-            </button>
-          </div>
-        )}
-
-        {displayStatus === 'uploading' && (
-          <div className="flex items-center gap-3" role="status">
-            <div className="w-24 h-1.5 bg-secondary overflow-hidden">
-              <div
-                className="h-full bg-foreground transition-all duration-150"
-                style={{ width: `${file.progress}%` }}
-                role="progressbar"
-                aria-valuenow={file.progress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={`Upload progress: ${file.progress}%`}
-              />
-            </div>
-            <span className="text-xs text-muted-foreground tabular-nums w-9">
-              {file.progress}%
-            </span>
-            <button
-              onClick={onCancel}
-              className="p-1 text-muted-foreground hover:text-foreground transition-colors focus-ring"
-              aria-label="Cancel upload"
-            >
-              <IconX size={16} />
-            </button>
-          </div>
-        )}
-
-        {displayStatus === 'processing' && (
-          <div className="flex items-center gap-2" role="status" aria-label="Processing document">
-            <LoadingSpinner size="sm" />
-            <span className="text-xs text-muted-foreground">Extracting...</span>
-          </div>
-        )}
-
-        {displayStatus === 'complete' && (
-          <div className="flex items-center gap-2" role="status">
-            <SuccessCheckmark size={16} animate={true} />
-            <span className="text-xs text-success font-medium">Complete</span>
-            {document?.extractionConfidence !== undefined && (
-              <span className="text-xs text-muted-foreground">
-                {Math.round(document.extractionConfidence)}%
-              </span>
-            )}
-          </div>
-        )}
-
-        {displayStatus === 'failed' && (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 text-xs text-error">
-              <IconWarningCircle size={16} aria-hidden="true" />
-              <span className="max-w-[150px] truncate" title={errorMessage}>
-                {errorMessage || 'Failed'}
-              </span>
-            </div>
-            <button
-              onClick={onRetry}
-              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-ring"
-              aria-label={`Retry upload for ${file.name}`}
-            >
-              <IconRefresh size={16} />
-            </button>
-            <button
-              onClick={onRemove}
-              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-ring"
-              aria-label={`Remove ${file.name}`}
-            >
-              <IconX size={16} />
-            </button>
-          </div>
-        )}
-      </div>
-    </li>
-  )
-}
-
-/**
- * Batch Progress Bar - shows aggregate upload progress
- */
-function BatchProgressBar({ files }: { files: UploadedFile[] }) {
-  const stats = useMemo(() => {
-    const total = files.length
-    const completed = files.filter((f) => f.status === 'complete').length
-    const processing = files.filter(
-      (f) => f.status === 'processing' || f.status === 'uploading'
-    ).length
-    const progress =
-      total > 0 ? Math.round(((completed + processing * 0.5) / total) * 100) : 0
-    return { total, completed, processing, progress }
-  }, [files])
-
-  if (stats.total === 0) return null
-
-  return (
-    <div className="p-3 border border-border bg-secondary/20">
-      <div className="flex items-center justify-between text-xs mb-2">
-        <span className="text-muted-foreground">Overall Progress</span>
-        <span className="tabular-nums font-medium">
-          {stats.completed}/{stats.total} complete
-        </span>
-      </div>
-      <div className="h-1.5 bg-secondary overflow-hidden">
-        <div
-          className="h-full bg-foreground transition-all duration-300"
-          style={{ width: `${stats.progress}%` }}
-          role="progressbar"
-          aria-valuenow={stats.progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`Overall batch progress: ${stats.progress}%`}
-        />
-      </div>
-    </div>
-  )
-}
-
-// Document type for the documents section
-type DocumentItem = {
-  _id: Id<"documents">
-  fileName: string
-  fileSize: number
-  documentType: string
-  extractionStatus: string
-  uploadedAt: number
-  extractedTransactionCount?: number
-  extractionConfidence?: number
-  errorMessage?: string
-}
-
-/**
- * Documents Section - displays uploaded documents list with management actions
- */
-function DocumentsSection({
-  documents,
-  companyId,
-  isDemo,
-}: {
-  documents: DocumentItem[] | undefined
-  companyId: Id<"companies"> | null
-  isDemo: boolean
-}) {
-  const [filterType, setFilterType] = useState<string>('all')
-  const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null)
-  const deleteDocument = useDeleteDocument()
-  const toast = useToast()
-
-  // Demo mode shows mock list
-  if (isDemo) {
-    return <DemoDocumentsList />
-  }
-
-  // Loading state
-  if (documents === undefined) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner size="md" />
-      </div>
-    )
-  }
-
-  // No company selected
-  if (!companyId) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-sm text-muted-foreground">
-          Select a company to view documents
-        </p>
-      </div>
-    )
-  }
-
-  // Empty state
-  if (documents.length === 0) {
-    return (
-      <BrandedEmptyState
-        variant="upload"
-        title="No documents yet"
-        description="Upload bank statements, invoices, or receipts to get started with reconciliation."
-      />
-    )
-  }
-
-  // Filter documents by type
-  const filteredDocuments =
-    filterType === 'all'
-      ? documents
-      : documents.filter((d) => d.documentType === filterType)
-
-  const handleDelete = async (docId: Id<"documents">) => {
-    try {
-      await deleteDocument(docId)
-      toast.addToast({
-        type: 'success',
-        title: 'Document deleted',
-      })
-    } catch (error) {
-      console.error('Failed to delete document:', error)
-      toast.addToast({
-        type: 'error',
-        title: 'Failed to delete',
-        description: error instanceof Error ? error.message : 'Unknown error',
-      })
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Filter dropdown */}
-      <div className="flex items-center gap-2">
-        <label htmlFor="doc-type-filter" className="text-xs text-muted-foreground">
-          Filter:
-        </label>
-        <select
-          id="doc-type-filter"
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="text-sm bg-background border border-border px-2 py-1 focus-ring"
-        >
-          <option value="all">All Types</option>
-          <option value="bank_statement">Bank Statements</option>
-          <option value="invoice">Invoices</option>
-          <option value="receipt">Receipts</option>
-          <option value="other">Other</option>
-        </select>
-        <span className="text-xs text-muted-foreground ml-auto">
-          {filteredDocuments.length} document{filteredDocuments.length !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      {/* Document list */}
-      <ul className="border border-border divide-y divide-border" role="list">
-        {filteredDocuments.map((doc) => (
-          <DocumentListItem
-            key={doc._id}
-            document={doc}
-            onSelect={() => setSelectedDoc(doc)}
-            onDelete={() => handleDelete(doc._id)}
+      {/* Analysis Tab */}
+      {uploadAnalysis.analysisId && (
+        <TabPanel tabId="analysis" activeTab={activeTab}>
+          <UploadAnalysisPanel
+            phase={uploadAnalysis.phase}
+            detectedCompany={uploadAnalysis.analysis?.detectedCompany ?? undefined}
+            documentClassifications={uploadAnalysis.analysis?.documentClassifications ?? []}
+            stats={uploadAnalysis.analysis?.stats ?? undefined}
+            currentCompanyName={selectedCompanyName}
+            extractionProgress={uploadAnalysis.extractionProgress}
+            onReclassify={(docId, classification, basisType) => {
+              uploadAnalysis.reclassify(docId, classification, basisType)
+            }}
+            onProceed={async () => {
+              setIsApproving(true)
+              try {
+                const sessionId = await uploadAnalysis.approve()
+                toast.addToast({
+                  type: 'success',
+                  title: 'Session created',
+                  description: 'Redirecting to reconciliation...',
+                })
+                setTimeout(() => {
+                  router.push(`/reconcile?sessionId=${sessionId}`)
+                }, 500)
+              } catch (err) {
+                toast.addToast({
+                  type: 'error',
+                  title: 'Failed to create session',
+                  description: err instanceof Error ? err.message : 'Unknown error',
+                })
+              } finally {
+                setIsApproving(false)
+              }
+            }}
+            onDismiss={async () => {
+              try {
+                await uploadAnalysis.dismiss()
+                setActiveTab('upload')
+                toast.addToast({
+                  type: 'info',
+                  title: 'Analysis skipped',
+                  description: 'You can manually create a reconciliation session',
+                })
+              } catch (err) {
+                console.error('[UploadView] Failed to dismiss analysis:', err)
+              }
+            }}
+            isApproving={isApproving}
           />
-        ))}
-      </ul>
-
-      {/* Detail modal */}
-      {selectedDoc && (
-        <DocumentDetailModal
-          document={selectedDoc}
-          onClose={() => setSelectedDoc(null)}
-          onDelete={() => {
-            handleDelete(selectedDoc._id)
-            setSelectedDoc(null)
-          }}
-        />
+        </TabPanel>
       )}
-    </div>
-  )
-}
-
-/**
- * Document List Item - individual document row
- */
-function DocumentListItem({
-  document,
-  onSelect,
-  onDelete,
-}: {
-  document: DocumentItem
-  onSelect: () => void
-  onDelete: () => void
-}) {
-  return (
-    <li className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-secondary/20 transition-colors">
-      {/* File info - clickable */}
-      <button
-        onClick={onSelect}
-        className="flex items-start gap-3 flex-1 text-left min-w-0 focus-ring"
-      >
-        <IconFileText size={20} className="text-muted-foreground flex-shrink-0 mt-0.5" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate" title={document.fileName}>
-            {document.fileName}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {new Date(document.uploadedAt).toLocaleDateString()} · {formatFileSize(document.fileSize)}
-            {document.extractedTransactionCount !== undefined && (
-              <span className="ml-1">· {document.extractedTransactionCount} txns</span>
-            )}
-          </p>
-        </div>
-      </button>
-
-      {/* Type badge */}
-      <span className="text-xs text-muted-foreground hidden sm:inline">
-        {fileTypeLabels[document.documentType as UploadedFile['type']] || document.documentType}
-      </span>
-
-      {/* Status badge */}
-      <span
-        className={cn(
-          'px-2 py-0.5 text-xs font-medium capitalize',
-          statusColors[document.extractionStatus] || 'bg-secondary text-muted-foreground'
-        )}
-      >
-        {document.extractionStatus}
-      </span>
-
-      {/* Delete button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete()
-        }}
-        className="p-1.5 text-muted-foreground hover:text-error transition-colors focus-ring"
-        aria-label={`Delete ${document.fileName}`}
-      >
-        <IconTrash size={16} />
-      </button>
-    </li>
-  )
-}
-
-/**
- * Document Detail Modal - shows document details with retry/delete actions
- */
-function DocumentDetailModal({
-  document,
-  onClose,
-  onDelete,
-}: {
-  document: DocumentItem
-  onClose: () => void
-  onDelete: () => void
-}) {
-  return (
-    <Modal isOpen onClose={onClose} title="Document Details" size="md">
-      <div className="space-y-4">
-        {/* File info */}
-        <div>
-          <h3 className="font-medium text-sm">{document.fileName}</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            {formatFileSize(document.fileSize)} · {fileTypeLabels[document.documentType as UploadedFile['type']] || document.documentType}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Uploaded {new Date(document.uploadedAt).toLocaleString()}
-          </p>
-        </div>
-
-        {/* Extraction status with full details */}
-        <div className="pt-4 border-t border-border">
-          <h4 className="text-xs font-medium text-muted-foreground mb-2">
-            Extraction Status
-          </h4>
-          <ExtractionStatus documentId={document._id} showDetails />
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-2 pt-4 border-t border-border">
-          <button
-            onClick={onDelete}
-            className="px-3 py-1.5 text-xs text-error border border-error/30 hover:bg-error/10 transition-colors focus-ring"
-          >
-            Delete Document
-          </button>
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-xs border border-border hover:bg-secondary transition-colors focus-ring"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-/**
- * Demo Documents List - mock documents for demo mode
- */
-function DemoDocumentsList() {
-  const mockDocuments = [
-    {
-      id: '1',
-      name: 'Maybank_Statement_Jan2024.pdf',
-      type: 'Bank Statement',
-      date: 'Jan 15, 2024',
-      status: 'completed',
-      transactions: 47,
-    },
-    {
-      id: '2',
-      name: 'Invoice_ACME_Corp_001.pdf',
-      type: 'Invoice',
-      date: 'Jan 12, 2024',
-      status: 'completed',
-      transactions: 1,
-    },
-    {
-      id: '3',
-      name: 'CIMB_Statement_Dec2023.pdf',
-      type: 'Bank Statement',
-      date: 'Jan 10, 2024',
-      status: 'processing',
-      transactions: undefined,
-    },
-    {
-      id: '4',
-      name: 'Receipt_Office_Supplies.jpg',
-      type: 'Receipt',
-      date: 'Jan 8, 2024',
-      status: 'completed',
-      transactions: 1,
-    },
-  ]
-
-  const setShowPaywall = useSetShowPaywall()
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Demo mode: Sample documents shown below
-      </p>
-
-      <ul className="border border-border divide-y divide-border" role="list">
-        {mockDocuments.map((doc) => (
-          <li
-            key={doc.id}
-            className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-secondary/20 transition-colors"
-          >
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <IconFileText size={20} className="text-muted-foreground flex-shrink-0 mt-0.5" aria-hidden="true" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{doc.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {doc.date}
-                  {doc.transactions !== undefined && (
-                    <span className="ml-1">· {doc.transactions} txns</span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <span className="text-xs text-muted-foreground hidden sm:inline">
-              {doc.type}
-            </span>
-
-            <span
-              className={cn(
-                'px-2 py-0.5 text-xs font-medium capitalize',
-                statusColors[doc.status]
-              )}
-            >
-              {doc.status}
-            </span>
-
-            <button
-              onClick={() => setShowPaywall(true)}
-              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-ring"
-              aria-label="View document"
-            >
-              <IconEye size={16} />
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      <div className="text-center py-4">
-        <button
-          onClick={() => setShowPaywall(true)}
-          className="px-4 py-2 text-sm bg-foreground text-background hover:bg-foreground/90 transition-colors focus-ring"
-        >
-          Sign up to manage your documents
-        </button>
-      </div>
     </div>
   )
 }

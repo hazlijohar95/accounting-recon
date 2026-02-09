@@ -96,8 +96,11 @@ describe('getMatchLayerLabel', () => {
     expect(getMatchLayerLabel(6)).toBe('Manual Match')
   })
 
+  it('returns correct label for partial match layer', () => {
+    expect(getMatchLayerLabel(7)).toBe('Partial Match')
+  })
+
   it('returns fallback for unknown layers', () => {
-    expect(getMatchLayerLabel(7)).toBe('Layer 7')
     expect(getMatchLayerLabel(99)).toBe('Layer 99')
   })
 })
@@ -112,8 +115,11 @@ describe('getMatchLayerShortLabel', () => {
     expect(getMatchLayerShortLabel(6)).toBe('Manual')
   })
 
+  it('returns correct short label for partial match layer', () => {
+    expect(getMatchLayerShortLabel(7)).toBe('Partial')
+  })
+
   it('returns fallback for unknown layers', () => {
-    expect(getMatchLayerShortLabel(7)).toBe('L7')
     expect(getMatchLayerShortLabel(99)).toBe('L99')
   })
 })

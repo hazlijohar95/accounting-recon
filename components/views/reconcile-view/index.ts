@@ -5,6 +5,10 @@ export { ReconcileView } from '../reconcile-view'
 export { MatchRow, type MatchRowProps } from './match-row'
 export { SuspenseRow, type SuspenseRowProps } from './suspense-row'
 export { KeyboardShortcutsModal } from './keyboard-shortcuts-modal'
+export { PartialMatchGroup, type PartialMatchGroupProps } from './partial-match-group'
+export { SkeletonMatchRow } from './skeleton-match-row'
+export { TabEmptyState, type TabEmptyStateProps } from './tab-empty-state'
+export { HistoryList } from './history-list'
 
 // State management hook
 export { useReconcileState } from './use-reconcile-state'

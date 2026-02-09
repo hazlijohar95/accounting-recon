@@ -7,6 +7,11 @@ import { IconX, IconCheckCircle, IconWarning, IconInfo, IconXCircle } from '@/co
 // Toast types and context
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
+export interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 export interface Toast {
   id: string
   type: ToastType
@@ -14,6 +19,7 @@ export interface Toast {
   description?: string
   duration?: number
   dismissible?: boolean
+  action?: ToastAction
 }
 
 interface ToastContextValue {
@@ -38,14 +44,14 @@ export function useToastHelpers() {
   const { addToast } = useToast()
 
   return {
-    success: (title: string, description?: string) =>
-      addToast({ type: 'success', title, description }),
-    error: (title: string, description?: string) =>
-      addToast({ type: 'error', title, description }),
-    warning: (title: string, description?: string) =>
-      addToast({ type: 'warning', title, description }),
-    info: (title: string, description?: string) =>
-      addToast({ type: 'info', title, description }),
+    success: (title: string, description?: string, action?: ToastAction) =>
+      addToast({ type: 'success', title, description, action }),
+    error: (title: string, description?: string, action?: ToastAction) =>
+      addToast({ type: 'error', title, description, action }),
+    warning: (title: string, description?: string, action?: ToastAction) =>
+      addToast({ type: 'warning', title, description, action }),
+    info: (title: string, description?: string, action?: ToastAction) =>
+      addToast({ type: 'info', title, description, action }),
   }
 }
 
@@ -145,6 +151,18 @@ function ToastItem({ toast }: { toast: Toast }) {
         {toast.description && (
           <p className="mt-1 text-sm text-muted-foreground">{toast.description}</p>
         )}
+        {toast.action && (
+          <button
+            onClick={() => {
+              toast.action?.onClick()
+              handleDismiss()
+            }}
+            className="mt-2 text-xs font-medium text-foreground hover:underline focus-ring inline-flex items-center gap-1"
+          >
+            {toast.action.label}
+            <span aria-hidden="true">&rarr;</span>
+          </button>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -214,14 +232,14 @@ const TOAST_EVENT = 'reconciled:toast'
 
 // Global toast trigger (for use outside React)
 export const toast = {
-  success: (title: string, description?: string) =>
-    dispatchToastEvent({ type: 'success', title, description }),
-  error: (title: string, description?: string) =>
-    dispatchToastEvent({ type: 'error', title, description }),
-  warning: (title: string, description?: string) =>
-    dispatchToastEvent({ type: 'warning', title, description }),
-  info: (title: string, description?: string) =>
-    dispatchToastEvent({ type: 'info', title, description }),
+  success: (title: string, description?: string, action?: ToastAction) =>
+    dispatchToastEvent({ type: 'success', title, description, action }),
+  error: (title: string, description?: string, action?: ToastAction) =>
+    dispatchToastEvent({ type: 'error', title, description, action }),
+  warning: (title: string, description?: string, action?: ToastAction) =>
+    dispatchToastEvent({ type: 'warning', title, description, action }),
+  info: (title: string, description?: string, action?: ToastAction) =>
+    dispatchToastEvent({ type: 'info', title, description, action }),
 }
 
 function dispatchToastEvent(toast: Omit<Toast, 'id'>) {

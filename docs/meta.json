@@ -1,0 +1,23 @@
+{
+  "title": "Documentation",
+  "root": true,
+  "pages": [
+    "---Get Started---",
+    "introduction",
+    "quickstart",
+    "---Getting Started---",
+    "getting-started",
+    "---Upload---",
+    "upload",
+    "---Reconciliation---",
+    "reconciliation",
+    "---Workspaces---",
+    "workspaces",
+    "---Reports---",
+    "reports",
+    "---Settings---",
+    "settings",
+    "---AI Features---",
+    "ai-features"
+  ]
+}

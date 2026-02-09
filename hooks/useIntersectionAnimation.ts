@@ -57,7 +57,13 @@ export function useIntersectionAnimation<T extends HTMLElement = HTMLDivElement>
   const shouldAnimate = animate && !prefersReducedMotion
   const [isVisible, setIsVisible] = useState(!shouldAnimate)
   const [hasAnimated, setHasAnimated] = useState(false)
+  const [element, setElement] = useState<T | null>(null)
   const ref = useRef<T>(null)
+
+  // Sync ref to state so the effect re-runs when the DOM element attaches
+  useEffect(() => {
+    setElement(ref.current)
+  })
 
   useEffect(() => {
     // If animation is disabled or reduced motion is preferred, show immediately
@@ -67,7 +73,6 @@ export function useIntersectionAnimation<T extends HTMLElement = HTMLDivElement>
       return
     }
 
-    const element = ref.current
     if (!element) return
 
     const observer = new IntersectionObserver(
@@ -88,7 +93,7 @@ export function useIntersectionAnimation<T extends HTMLElement = HTMLDivElement>
     observer.observe(element)
 
     return () => observer.disconnect()
-  }, [shouldAnimate, threshold, rootMargin, triggerOnce])
+  }, [shouldAnimate, threshold, rootMargin, triggerOnce, element])
 
   return { ref, isVisible, hasAnimated }
 }

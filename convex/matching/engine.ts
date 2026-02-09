@@ -12,9 +12,13 @@ import {
   formatForLLM,
   MatchCandidate,
   DEFAULT_CONFIG,
+  DEFAULT_PARTIAL_CONFIG,
   MatchingConfig,
+  PartialMatchingConfig,
   CashTransaction,
   AccrualDocument,
+  findPartialMatchCombination,
+  generatePartialMatchGroupId,
 } from "./layers";
 import { ValidationErrors } from "../lib/errors";
 import { transactionDocValidator, accrualDocValidator, sessionDocValidator, companyDocValidator, matchIdValidator, suspenseItemIdValidator } from "../lib/validators";
@@ -97,12 +101,23 @@ export const createMatchedPair = internalMutation({
       v.literal(2),
       v.literal(3),
       v.literal(4),
-      v.literal(5)
+      v.literal(5),
+      v.literal(7)  // Skip 6 (manual), 7 is partial
     ),
     matchReason: v.string(),
   },
   returns: matchIdValidator,
   handler: async (ctx, args) => {
+    // RACE CONDITION FIX: Verify both sides are still unmatched before creating
+    const cashTxn = await ctx.db.get(args.cashTransactionId);
+    if (!cashTxn || cashTxn.status !== "pending") {
+      throw new Error(`Cash transaction ${args.cashTransactionId} already matched or not found`);
+    }
+    const accrualDoc = await ctx.db.get(args.accrualDocumentId);
+    if (!accrualDoc || accrualDoc.status === "matched") {
+      throw new Error(`Accrual document ${args.accrualDocumentId} already matched or not found`);
+    }
+
     // Determine confidence category
     const confidence =
       args.confidenceScore >= 90
@@ -207,6 +222,101 @@ export const createSuspenseItem = internalMutation({
 });
 
 /**
+ * Create partial matched pair records (one cash transaction to multiple accrual documents)
+ */
+export const createPartialMatches = internalMutation({
+  args: {
+    sessionId: v.id("reconciliationSessions"),
+    cashTransactionId: v.id("transactions"),
+    accrualDocumentIds: v.array(v.id("accrualDocuments")),
+    matchedAmounts: v.array(v.number()), // Amount per document
+    totalMatchedAmount: v.number(),
+    confidenceScore: v.number(),
+    matchReason: v.string(),
+  },
+  returns: v.array(v.id("matchedPairs")),
+  handler: async (ctx, args) => {
+    // RACE CONDITION FIX: Re-read the cash transaction and accrual docs to validate
+    // they haven't been matched by a concurrent request since we last checked
+    const cashTxn = await ctx.db.get(args.cashTransactionId);
+    if (!cashTxn || cashTxn.status !== "pending") {
+      // Cash transaction already matched by another request — skip silently
+      return [];
+    }
+
+    // Generate unique group ID for this partial match
+    const partialMatchGroupId = `pm_${args.cashTransactionId.slice(-8)}_${Date.now()}`;
+
+    // Determine confidence category
+    const confidence =
+      args.confidenceScore >= 90
+        ? "high"
+        : args.confidenceScore >= 70
+          ? "medium"
+          : "low";
+
+    const matchIds: Id<"matchedPairs">[] = [];
+
+    // Create one matchedPair record per accrual document
+    for (let i = 0; i < args.accrualDocumentIds.length; i++) {
+      const accrualDocId = args.accrualDocumentIds[i];
+      const matchedAmount = args.matchedAmounts[i];
+
+      // RACE CONDITION FIX: Re-read accrual doc to check current state
+      const accrualDoc = await ctx.db.get(accrualDocId);
+      if (!accrualDoc || accrualDoc.status === "matched") {
+        // Skip this accrual doc if already fully matched by concurrent request
+        continue;
+      }
+
+      const matchId = await ctx.db.insert("matchedPairs", {
+        sessionId: args.sessionId,
+        cashTransactionId: args.cashTransactionId,
+        accrualDocumentId: accrualDocId,
+        confidence,
+        confidenceScore: args.confidenceScore,
+        matchLayer: 7, // Partial match layer
+        matchReason: args.matchReason,
+        status: "pending", // Always pending for partial matches - needs user review
+        isPartialMatch: true,
+        matchedAmount,
+        partialMatchGroupId,
+        createdAt: Date.now(),
+      });
+
+      matchIds.push(matchId);
+
+      // Update accrual document with partial match info using freshly-read values
+      const currentMatchedTotal = accrualDoc.matchedTotal || 0;
+      const currentMatchCount = accrualDoc.matchCount || 0;
+      const newMatchedTotal = currentMatchedTotal + matchedAmount;
+      const newMatchCount = currentMatchCount + 1;
+      // Use integer cents comparison to avoid floating-point drift
+      const isFullyMatched = Math.abs(
+        Math.round(newMatchedTotal * 100) - Math.round(Math.abs(accrualDoc.amount) * 100)
+      ) < 1;
+
+      await ctx.db.patch(accrualDocId, {
+        status: isFullyMatched ? "matched" : "partial",
+        matchId: accrualDoc.matchId || matchId, // Keep first match as primary
+        matchedTotal: newMatchedTotal,
+        matchCount: newMatchCount,
+      });
+    }
+
+    // Only update cash transaction if we actually created matches
+    if (matchIds.length > 0) {
+      await ctx.db.patch(args.cashTransactionId, {
+        status: "matched",
+        matchId: matchIds[0], // Link to first match record
+      });
+    }
+
+    return matchIds;
+  },
+});
+
+/**
  * Update session progress and stats
  */
 export const updateSessionStats = internalMutation({
@@ -233,6 +343,44 @@ export const updateSessionStats = internalMutation({
 
     await ctx.db.patch(sessionId, filteredUpdates);
     return null;
+  },
+});
+
+/**
+ * Reset suspense items for a re-run: delete suspense items and reset source statuses to "pending"
+ */
+export const resetSuspenseForRerun = internalMutation({
+  args: {
+    sessionId: v.id("reconciliationSessions"),
+  },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const suspenseItems = await ctx.db
+      .query("suspenseItems")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    let resetCount = 0;
+    for (const item of suspenseItems) {
+      // Reset the source transaction/document status back to "pending"
+      if (item.sourceType === "cash") {
+        const txn = await ctx.db.get(item.sourceId as Id<"transactions">);
+        if (txn && txn.status === "suspense") {
+          await ctx.db.patch(item.sourceId as Id<"transactions">, { status: "pending" });
+        }
+      } else if (item.sourceType === "accrual") {
+        const doc = await ctx.db.get(item.sourceId as Id<"accrualDocuments">);
+        if (doc && doc.status === "suspense") {
+          await ctx.db.patch(item.sourceId as Id<"accrualDocuments">, { status: "pending" });
+        }
+      }
+
+      // Delete the suspense item
+      await ctx.db.delete(item._id);
+      resetCount++;
+    }
+
+    return resetCount;
   },
 });
 
@@ -303,6 +451,15 @@ export const runMatchingEngine = action({
         progress: 5,
       });
 
+      // Reset any existing suspense items so re-runs work on fresh data
+      const resetCount = await ctx.runMutation(
+        internal.matching.engine.resetSuspenseForRerun,
+        { sessionId: args.sessionId }
+      );
+      if (resetCount > 0) {
+        console.log(`[Matching] Reset ${resetCount} suspense items for re-run`);
+      }
+
       // Load unmatched items
       const cashTxns = await ctx.runQuery(
         internal.matching.engine.getUnmatchedCashTransactions,
@@ -315,17 +472,45 @@ export const runMatchingEngine = action({
       );
 
       if (cashTxns.length === 0 || accrualDocs.length === 0) {
+        // Still create suspense items for whichever side has items
+        let suspenseCount = 0;
+        for (const txn of cashTxns) {
+          await ctx.runMutation(internal.matching.engine.createSuspenseItem, {
+            companyId: company._id,
+            sessionId: args.sessionId,
+            sourceType: "cash",
+            transactionId: txn._id,
+            amount: txn.amount,
+            transactionDate: txn.date,
+            description: txn.description,
+          });
+          suspenseCount++;
+        }
+        for (const doc of accrualDocs) {
+          await ctx.runMutation(internal.matching.engine.createSuspenseItem, {
+            companyId: company._id,
+            sessionId: args.sessionId,
+            sourceType: "accrual",
+            accrualDocId: doc._id,
+            amount: doc.amount,
+            transactionDate: doc.docDate,
+            description: doc.description || doc.counterparty || `Doc #${doc.docNumber}`,
+          });
+          suspenseCount++;
+        }
+
         await ctx.runMutation(internal.matching.engine.updateSessionStats, {
           sessionId: args.sessionId,
           status: "review",
           progress: 100,
+          suspenseCount,
         });
 
         return {
           success: true,
           totalMatches: 0,
           matchesByLayer: {},
-          suspenseItems: 0,
+          suspenseItems: suspenseCount,
           unmatchedCash: cashTxns.length,
           unmatchedAccrual: accrualDocs.length,
         };
@@ -445,6 +630,99 @@ export const runMatchingEngine = action({
         }
       }
 
+      // Progress: 75%
+      await ctx.runMutation(internal.matching.engine.updateSessionStats, {
+        sessionId: args.sessionId,
+        progress: 75,
+      });
+
+      // Track LLM matched IDs for filtering in subsequent layers
+      const llmMatchedCashIds = new Set(llmMatches.map((m) => m.cashTransactionId));
+      const llmMatchedAccrualIds = new Set(llmMatches.map((m) => m.accrualDocumentId));
+
+      // ============ LAYER 7: PARTIAL MATCHING ============
+      // Try to match unmatched cash transactions to combinations of accrual documents
+      const partialConfig: PartialMatchingConfig = {
+        ...DEFAULT_PARTIAL_CONFIG,
+        // Allow override from config if provided
+      };
+
+      let partialMatches: MatchCandidate[] = [];
+
+      // Get remaining unmatched after LLM layer
+      const afterLLMUnmatchedCash = unmatchedCash.filter(
+        (t) => !llmMatchedCashIds.has(t._id)
+      );
+      const afterLLMUnmatchedAccrual = unmatchedAccrual.filter(
+        (d) => !llmMatchedAccrualIds.has(d._id)
+      );
+
+      if (partialConfig.enabled && afterLLMUnmatchedCash.length > 0 && afterLLMUnmatchedAccrual.length > 1) {
+        console.log(`[Layer 7] Attempting partial matching with ${afterLLMUnmatchedCash.length} cash, ${afterLLMUnmatchedAccrual.length} accrual items`);
+
+        // Track which items get matched in partial matching
+        const partialMatchedCashIds = new Set<Id<"transactions">>();
+        const partialMatchedAccrualIds = new Set<Id<"accrualDocuments">>();
+
+        // Sort high-value unmatched cash transactions (partial matching works best for larger amounts)
+        const highValueCash = afterLLMUnmatchedCash
+          .filter((t) => Math.abs(t.amount) >= partialConfig.minCashAmount)
+          .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+
+        for (const cashTxn of highValueCash) {
+          // Skip if already matched in a previous partial match
+          if (partialMatchedCashIds.has(cashTxn._id)) continue;
+
+          // Get available accrual docs (not yet matched in partial)
+          const availableAccrual = afterLLMUnmatchedAccrual.filter(
+            (d) => !partialMatchedAccrualIds.has(d._id)
+          );
+
+          if (availableAccrual.length < 2) break; // Need at least 2 docs for partial match
+
+          // Find best combination
+          const combination = findPartialMatchCombination(
+            cashTxn,
+            availableAccrual,
+            partialConfig
+          );
+
+          if (combination && combination.confidence >= partialConfig.minConfidence) {
+            console.log(`[Layer 7] Found partial match for ${cashTxn._id}: ${combination.documents.length} docs, confidence=${combination.confidence}%`);
+
+            // Create partial match records
+            const matchedAmounts = combination.documents.map((d) => Math.abs(d.amount));
+            const accrualIds = combination.documents.map((d) => d._id);
+
+            await ctx.runMutation(internal.matching.engine.createPartialMatches, {
+              sessionId: args.sessionId,
+              cashTransactionId: cashTxn._id,
+              accrualDocumentIds: accrualIds,
+              matchedAmounts,
+              totalMatchedAmount: combination.totalAmount,
+              confidenceScore: combination.confidence,
+              matchReason: combination.matchReason,
+            });
+
+            // Track as matched
+            partialMatchedCashIds.add(cashTxn._id);
+            for (const doc of combination.documents) {
+              partialMatchedAccrualIds.add(doc._id);
+              partialMatches.push({
+                cashTransactionId: cashTxn._id,
+                accrualDocumentId: doc._id,
+                confidenceScore: combination.confidence,
+                matchLayer: 7,
+                matchReason: combination.matchReason,
+              });
+            }
+          }
+        }
+
+        matchesByLayer[7] = partialMatches.length;
+        console.log(`[Layer 7] Partial matching complete: ${partialMatches.length} matches created`);
+      }
+
       // Progress: 85%
       await ctx.runMutation(internal.matching.engine.updateSessionStats, {
         sessionId: args.sessionId,
@@ -452,14 +730,15 @@ export const runMatchingEngine = action({
       });
 
       // Create suspense items for remaining unmatched
-      const llmMatchedCashIds = new Set(llmMatches.map((m) => m.cashTransactionId));
-      const llmMatchedAccrualIds = new Set(llmMatches.map((m) => m.accrualDocumentId));
+      // Exclude items matched in LLM layer and partial match layer
+      const partialMatchedCashIdsSet = new Set(partialMatches.map((m) => m.cashTransactionId));
+      const partialMatchedAccrualIdsSet = new Set(partialMatches.map((m) => m.accrualDocumentId));
 
       const finalUnmatchedCash = unmatchedCash.filter(
-        (t) => !llmMatchedCashIds.has(t._id)
+        (t) => !llmMatchedCashIds.has(t._id) && !partialMatchedCashIdsSet.has(t._id)
       );
       const finalUnmatchedAccrual = unmatchedAccrual.filter(
-        (d) => !llmMatchedAccrualIds.has(d._id)
+        (d) => !llmMatchedAccrualIds.has(d._id) && !partialMatchedAccrualIdsSet.has(d._id)
       );
 
       let suspenseCount = 0;
@@ -493,7 +772,7 @@ export const runMatchingEngine = action({
       }
 
       // Update final session stats
-      const totalMatches = matches.length + llmMatches.length;
+      const totalMatches = matches.length + llmMatches.length + partialMatches.length;
       await ctx.runMutation(internal.matching.engine.updateSessionStats, {
         sessionId: args.sessionId,
         status: "review",
