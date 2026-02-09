@@ -15,6 +15,7 @@ export interface UploadedFile {
   type: DocumentType
   status: FileStatus
   progress: number
+  progressMessage?: string
   documentId?: string
   errorMessage?: string
   file?: File
@@ -84,13 +85,26 @@ export function getBatchProgress(files: UploadedFile[]): number {
 }
 
 /**
- * Detect document type from filename
+ * Detect document type from filename.
+ * Uses separator-aware matching to prevent false positives like "investment" matching "inv".
+ * Separators are: underscore, hyphen, dot, space, or string boundaries.
  */
 export function detectDocumentType(filename: string): DocumentType {
   const lower = filename.toLowerCase()
-  if (lower.includes('statement') || lower.includes('bank')) return 'bank_statement'
-  if (lower.includes('invoice') || lower.includes('inv')) return 'invoice'
-  if (lower.includes('receipt') || lower.includes('rcpt')) return 'receipt'
+  // Separator-aware pattern: word must be preceded/followed by a separator or string boundary
+  // \b doesn't work because JS treats _ as a word character
+  const sep = '(?:^|[\\s_\\-.])'  // start of string or separator
+  const sepEnd = '(?:$|[\\s_\\-.])'  // end of string or separator
+
+  if (new RegExp(`${sep}statement${sepEnd}`).test(lower) || new RegExp(`${sep}bank${sepEnd}`).test(lower)) {
+    return 'bank_statement'
+  }
+  if (new RegExp(`${sep}invoice${sepEnd}`).test(lower) || new RegExp(`${sep}inv${sepEnd}`).test(lower)) {
+    return 'invoice'
+  }
+  if (new RegExp(`${sep}receipt${sepEnd}`).test(lower) || new RegExp(`${sep}rcpt${sepEnd}`).test(lower)) {
+    return 'receipt'
+  }
   return 'other'
 }
 

@@ -743,32 +743,29 @@ export const storeExtractedText = internalMutation({
 export const clearDocumentExtractions = internalMutation({
   args: {
     documentId: v.id("documents"),
-    companyId: v.id("companies"),
+    // companyId kept for backward compatibility but no longer needed for queries
+    companyId: v.optional(v.id("companies")),
   },
   returns: v.null(),
-  handler: async (ctx, { documentId, companyId }) => {
-    // Delete transactions linked to this document
+  handler: async (ctx, { documentId }) => {
+    // Delete transactions linked to this document (using index for O(1) lookup)
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_company", (q) => q.eq("companyId", companyId))
+      .withIndex("by_source_document", (q) => q.eq("sourceDocumentId", documentId))
       .collect();
 
     for (const tx of transactions) {
-      if (tx.sourceDocumentId === documentId) {
-        await ctx.db.delete(tx._id);
-      }
+      await ctx.db.delete(tx._id);
     }
 
-    // Delete accrual documents linked to this document
+    // Delete accrual documents linked to this document (using index for O(1) lookup)
     const accrualDocs = await ctx.db
       .query("accrualDocuments")
-      .withIndex("by_company", (q) => q.eq("companyId", companyId))
+      .withIndex("by_source_document", (q) => q.eq("sourceDocumentId", documentId))
       .collect();
 
     for (const doc of accrualDocs) {
-      if (doc.sourceDocumentId === documentId) {
-        await ctx.db.delete(doc._id);
-      }
+      await ctx.db.delete(doc._id);
     }
 
     // Reset extraction fields on the document
@@ -827,15 +824,10 @@ export const reExtractDocument = action({
 
 /**
  * Convert ArrayBuffer to base64 string.
- * Works in Convex action runtime (Node.js-like).
+ * Uses Buffer.from() for efficient conversion in the Convex Node.js runtime.
  */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
+  return Buffer.from(buffer).toString("base64");
 }
 
 /**

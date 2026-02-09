@@ -328,11 +328,17 @@ export const extractPageWithBedrock = action({
 
       const errorMessage = error instanceof Error ? error.message : "Unknown extraction error";
 
-      // Update phase to failed
+      // Update progress to reflect the failure but don't mark the whole document as failed.
+      // The client will decide whether to continue or stop based on how many pages succeeded.
       await ctx.runMutation(internal.nativePdfExtraction.updatePhaseInternal, {
         documentId,
-        phase: "failed",
-        errorMessage: getUserFriendlyError(errorMessage),
+        phase: "extracting",
+        progress: {
+          currentPage: pageNumber,
+          totalPages,
+          pagesCompleted: pageNumber,
+          phaseMessage: `Page ${pageNumber} failed: ${getUserFriendlyError(errorMessage)}`,
+        },
       });
 
       return {
@@ -621,6 +627,37 @@ export const insertAccrualDocument = internalMutation({
     });
 
     return null;
+  },
+});
+
+/**
+ * Clean up temporary page images from Convex storage after extraction completes.
+ * Called by the client hook after all pages have been extracted to free storage space.
+ */
+export const cleanupPageImages = mutation({
+  args: {
+    documentId: v.id("documents"),
+    storageIds: v.array(v.id("_storage")),
+    workosUserId: v.optional(v.string()),
+  },
+  returns: v.object({ deleted: v.number() }),
+  handler: async (ctx, { documentId, storageIds, workosUserId }) => {
+    // Verify ownership before deleting storage items
+    const document = await ctx.db.get(documentId);
+    if (!document) return { deleted: 0 };
+    await requireCompanyAccess(ctx, document.companyId, workosUserId);
+
+    let deleted = 0;
+    for (const storageId of storageIds) {
+      try {
+        await ctx.storage.delete(storageId);
+        deleted++;
+      } catch (error) {
+        // Non-critical: log but don't fail the operation
+        console.warn(`[NativeExtraction] Failed to delete page image ${storageId}:`, error);
+      }
+    }
+    return { deleted };
   },
 });
 

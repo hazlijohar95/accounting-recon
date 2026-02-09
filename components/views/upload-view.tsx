@@ -3,14 +3,12 @@
 import { useRouter } from 'next/navigation'
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
-  useAppStore,
-  useSetProcessingDocumentsCount,
   useIsDemo,
   useSelectedCompanyId,
   useSetShowPaywall,
   useActiveSession,
   useCompanies,
-  useCurrentUser,
+  useSetProcessingDocumentsCount,
 } from '@/lib/store'
 import {
   IconCloudUpload,
@@ -22,69 +20,21 @@ import { useCreateDocument, useTriggerExtraction, useCompanyDocuments, useGenera
 import { usePdfExtraction, isPdfFile } from '@/hooks/usePdfExtraction'
 import { useGeminiExtraction } from '@/hooks/useGeminiExtraction'
 import { useUploadAnalysis } from '@/hooks/useUploadAnalysis'
+import { useFileUploadState } from '@/hooks/useFileUploadState'
 import { UploadAnalysisPanel } from './upload-view/upload-analysis-panel'
+import { mapErrorMessage } from '@/lib/constants/upload'
 
 const EXTRACTION_PROVIDER = process.env.NEXT_PUBLIC_EXTRACTION_PROVIDER || 'bedrock'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useToast } from '@/components/ui/toast'
 import { TabNav, TabPanel } from '@/components/ui/tab-nav'
-import type { UploadedFile, FileStatus, UploadTab } from './upload-view/types'
+import type { UploadTab } from './upload-view/types'
 import { FileItem } from './upload-view/file-item'
 import { BatchProgressBar } from './upload-view/batch-progress-bar'
 import { DocumentsSection } from './upload-view/documents-section'
 
-// SECURITY: File validation constants (must match convex/documents.ts)
-const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-const ALLOWED_CONTENT_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'text/csv',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-]
-const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'csv', 'xls', 'xlsx']
-
-/**
- * SECURITY: Sanitize filename to prevent path traversal and injection attacks
- * - Removes directory separators (/, \, ..)
- * - Removes null bytes and control characters
- * - Limits length to 255 characters
- * - Preserves file extension
- */
-function sanitizeFilename(filename: string): string {
-  // Remove path separators and parent directory references
-  let sanitized = filename
-    .replace(/[/\\]/g, '_')
-    .replace(/\.\./g, '_')
-    // Remove null bytes and control characters (ASCII 0-31)
-    .replace(/[\x00-\x1f]/g, '')
-    // Remove other potentially dangerous characters
-    .replace(/[<>:"|?*]/g, '_')
-    .trim()
-
-  // Limit filename length (preserve extension if possible)
-  if (sanitized.length > 255) {
-    const lastDot = sanitized.lastIndexOf('.')
-    if (lastDot > 0 && sanitized.length - lastDot <= 10) {
-      // Has a reasonable extension (1-10 chars after last dot)
-      const ext = sanitized.substring(lastDot)
-      const baseName = sanitized.slice(0, 255 - ext.length)
-      sanitized = `${baseName}${ext}`
-    } else {
-      // No extension or extension too long - just truncate
-      sanitized = sanitized.slice(0, 255)
-    }
-  }
-
-  // Fallback for empty filenames
-  if (!sanitized || sanitized === '.') {
-    sanitized = 'unnamed_file'
-  }
-
-  return sanitized
-}
+/** Maximum number of concurrent uploads/extractions */
+const MAX_CONCURRENT_UPLOADS = 3
 
 export function UploadView() {
   return (
@@ -96,22 +46,21 @@ export function UploadView() {
 
 function UploadViewContent() {
   const router = useRouter()
-  // Use individual selectors to prevent unnecessary re-renders
   const isDemo = useIsDemo()
   const selectedCompanyId = useSelectedCompanyId()
   const activeSession = useActiveSession()
   const companies = useCompanies()
   const setShowPaywall = useSetShowPaywall()
-  const currentUser = useCurrentUser()
-  const [files, setFiles] = useState<UploadedFile[]>([])
+
+  // Centralized file state management (validation, deduplication, XHR tracking, memory cleanup)
+  const fileState = useFileUploadState()
+
   const [isDragging, setIsDragging] = useState(false)
   const [activeTab, setActiveTab] = useState<UploadTab>('upload')
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Store XHR objects in ref to avoid storing non-serializable objects in state
-  const xhrMapRef = useRef<Map<string, XMLHttpRequest>>(new Map())
 
-  // Query documents for the Documents tab (using wrapper hook for consistency)
+  // Query documents for the Documents tab
   const documents = useCompanyDocuments(
     selectedCompanyId as Id<"companies"> | undefined
   )
@@ -119,14 +68,6 @@ function UploadViewContent() {
     if (!selectedCompanyId) return 'No company selected'
     return companies.find((c) => c.id === selectedCompanyId)?.name || 'Selected company'
   }, [companies, selectedCompanyId])
-
-  // SECURITY: Cleanup XHR connections on unmount to prevent resource leaks
-  useEffect(() => {
-    return () => {
-      xhrMapRef.current.forEach((xhr) => xhr.abort())
-      xhrMapRef.current.clear()
-    }
-  }, [])
 
   // Upload analysis hook (AI classification + company verification)
   const uploadAnalysis = useUploadAnalysis({
@@ -138,54 +79,36 @@ function UploadViewContent() {
   // Toast notifications
   const toast = useToast()
 
-  // Convex hooks (wrapper hooks for consistency)
+  // Convex hooks
   const generateUploadUrl = useGenerateUploadUrl()
   const createDocument = useCreateDocument()
   const triggerExtraction = useTriggerExtraction()
 
-  // Extraction callbacks (shared between Bedrock and Gemini)
+  // Extraction callbacks -- use documentId to target the correct file
   const extractionCallbacks = useMemo(() => ({
     onProgress: (progress: { currentPage?: number; totalPages?: number; phase: string; message?: string }) => {
-      setFiles((prev) =>
-        prev.map((f) => {
-          if (f.status === 'processing' && f.file && isPdfFile(f.file)) {
-            const pct = progress.currentPage && progress.totalPages
-              ? Math.round((progress.currentPage / progress.totalPages) * 100)
-              : undefined
-            return {
-              ...f,
-              progress: pct ?? f.progress,
-              progressMessage: progress.message || f.progressMessage,
-            }
-          }
-          return f
-        })
-      )
+      // Note: This callback doesn't know which file it belongs to.
+      // The extractPdf function in upload-view handles file-specific progress
+      // via setFileProgress. This is a secondary broadcast for global status.
     },
     onComplete: (documentId: Id<"documents">, transactionCount: number) => {
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.documentId === documentId
-            ? { ...f, status: 'complete' as FileStatus, progressMessage: undefined }
-            : f
-        )
-      )
+      fileState.updateFileByDocumentId(documentId, {
+        status: 'complete',
+        progressMessage: undefined,
+      })
       toast.addToast({
         type: 'success',
         title: 'Extraction complete',
         description: `${transactionCount} transactions extracted.`,
       })
-      // No auto-redirect — analysis panel handles navigation after user review
     },
     onError: (documentId: Id<"documents"> | null, error: string) => {
       if (documentId) {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.documentId === documentId
-              ? { ...f, status: 'failed' as FileStatus, errorMessage: error, progressMessage: undefined }
-              : f
-          )
-        )
+        fileState.updateFileByDocumentId(documentId, {
+          status: 'failed',
+          errorMessage: error,
+          progressMessage: undefined,
+        })
       }
       toast.addToast({
         type: 'error',
@@ -193,76 +116,22 @@ function UploadViewContent() {
         description: error,
       })
     },
-    skipSessionCreation: true, // Session creation handled by analysis approval
-  }), [toast])
+    skipSessionCreation: true,
+  }), [toast, fileState])
 
   // Both hooks are always called (React rules of hooks), but only the active one is used
   const bedrockExtraction = usePdfExtraction(extractionCallbacks)
   const geminiExtraction = useGeminiExtraction(extractionCallbacks)
-
   const { extractPdf } = EXTRACTION_PROVIDER === 'gemini' ? geminiExtraction : bedrockExtraction
 
-  // Detect document type from filename
-  const detectDocumentType = (filename: string): UploadedFile['type'] => {
-    const lower = filename.toLowerCase()
-    if (lower.includes('statement') || lower.includes('bank')) return 'bank_statement'
-    if (lower.includes('invoice') || lower.includes('inv')) return 'invoice'
-    if (lower.includes('receipt') || lower.includes('rcpt')) return 'receipt'
-    return 'other'
-  }
-
   const handleFiles = useCallback((fileList: FileList) => {
-    const newFiles: UploadedFile[] = []
-    const rejectedFiles: { name: string; reason: string }[] = []
+    const { rejected } = fileState.addFiles(fileList)
 
-    Array.from(fileList).forEach((file) => {
-      // SECURITY: Validate file size before upload
-      if (file.size > MAX_FILE_SIZE) {
-        rejectedFiles.push({
-          name: file.name,
-          reason: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`,
-        })
-        return
-      }
-
-      // SECURITY: Validate file type by extension and MIME type
-      const extension = file.name.split('.').pop()?.toLowerCase() || ''
-      if (!ALLOWED_EXTENSIONS.includes(extension)) {
-        rejectedFiles.push({
-          name: file.name,
-          reason: `Invalid file type (.${extension})`,
-        })
-        return
-      }
-
-      // Also check MIME type (can be spoofed, but adds defense in depth)
-      if (!ALLOWED_CONTENT_TYPES.includes(file.type) && file.type !== '') {
-        rejectedFiles.push({
-          name: file.name,
-          reason: `Invalid content type (${file.type})`,
-        })
-        return
-      }
-
-      // SECURITY: Sanitize filename
-      const sanitizedName = sanitizeFilename(file.name)
-
-      newFiles.push({
-        id: crypto.randomUUID(),
-        name: sanitizedName,
-        size: file.size,
-        type: detectDocumentType(sanitizedName),
-        status: 'idle' as FileStatus,
-        progress: 0,
-        file,
-      })
-    })
-
-    // Show error toast for rejected files
-    if (rejectedFiles.length > 0) {
-      const message = rejectedFiles.length === 1
-        ? `${rejectedFiles[0].name}: ${rejectedFiles[0].reason}`
-        : `${rejectedFiles.length} files rejected`
+    // Show error toast for rejected files (includes duplicates)
+    if (rejected.length > 0) {
+      const message = rejected.length === 1
+        ? `${rejected[0].name}: ${rejected[0].reason}`
+        : `${rejected.length} files rejected`
       toast.addToast({
         type: 'error',
         title: 'Files rejected',
@@ -270,11 +139,7 @@ function UploadViewContent() {
         duration: 8000,
       })
     }
-
-    if (newFiles.length > 0) {
-      setFiles((prev) => [...prev, ...newFiles])
-    }
-  }, [toast])
+  }, [toast, fileState])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -285,7 +150,6 @@ function UploadViewContent() {
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // Only set dragging to false if we're leaving the drop zone entirely
     if (!dropZoneRef.current?.contains(e.relatedTarget as Node)) {
       setIsDragging(false)
     }
@@ -300,7 +164,6 @@ function UploadViewContent() {
     }
   }, [handleFiles])
 
-  // Keyboard handler for drop zone
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
@@ -308,30 +171,19 @@ function UploadViewContent() {
     }
   }, [])
 
-  // Upload file using Convex file storage
-  const uploadFile = async (fileId: string) => {
+  // Upload a single file
+  const uploadFile = useCallback(async (fileId: string) => {
+    const fileData = fileState.files.find((f) => f.id === fileId)
+    if (!fileData?.file) return
+
     // Demo mode: simulate upload progress then show paywall
     if (isDemo) {
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === fileId ? { ...f, status: 'uploading' as FileStatus, progress: 0 } : f
-        )
-      )
-
-      // Simulate upload progress
+      fileState.setFileUploading(fileId)
       for (let i = 0; i <= 100; i += 10) {
         await new Promise((r) => setTimeout(r, 50))
-        setFiles((prev) =>
-          prev.map((f) => (f.id === fileId ? { ...f, progress: i } : f))
-        )
+        fileState.setFileProgress(fileId, i)
       }
-
-      // Reset file and show paywall
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === fileId ? { ...f, status: 'idle' as FileStatus, progress: 0 } : f
-        )
-      )
+      fileState.setFileIdle(fileId)
       setShowPaywall(true)
       toast.addToast({
         type: 'info',
@@ -342,13 +194,7 @@ function UploadViewContent() {
     }
 
     if (!selectedCompanyId) {
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === fileId
-            ? { ...f, status: 'failed' as FileStatus, errorMessage: 'No company selected' }
-            : f
-        )
-      )
+      fileState.setFileFailed(fileId, 'No company selected')
       toast.addToast({
         type: 'error',
         title: 'Upload failed',
@@ -357,25 +203,12 @@ function UploadViewContent() {
       return
     }
 
-    const fileData = files.find((f) => f.id === fileId)
-    if (!fileData?.file) return
-
-    // Update to uploading state
-    setFiles((prev) =>
-      prev.map((f) => (f.id === fileId ? { ...f, status: 'uploading' as FileStatus, progress: 0 } : f))
-    )
+    fileState.setFileUploading(fileId)
 
     try {
-      // Check if this is a PDF - use native extraction (Gemini or Bedrock)
+      // PDF path: use native extraction (Gemini or Bedrock)
       if (isPdfFile(fileData.file)) {
-        setFiles((prev) =>
-          prev.map((f) => (f.id === fileId ? {
-            ...f,
-            status: 'processing' as FileStatus,
-            progress: 0,
-            progressMessage: 'Starting extraction...',
-          } : f))
-        )
+        fileState.setFileProcessing(fileId, { progressMessage: 'Starting extraction...' })
 
         const documentId = await extractPdf(
           fileData.file,
@@ -384,44 +217,32 @@ function UploadViewContent() {
         )
 
         if (documentId) {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === fileId
-                ? { ...f, documentId, status: 'complete' as FileStatus, progressMessage: undefined }
-                : f
-            )
-          )
-          // Auto-switch to Documents tab after successful extraction
+          fileState.updateFile(fileId, {
+            documentId: documentId,
+            status: 'complete',
+            progressMessage: undefined,
+          })
           setActiveTab('documents')
         }
         // Error handling is done in extraction hook's onError callback
         return
       }
 
-      // For non-PDF files (images, CSV, Excel), use the standard upload flow
-      // Step 1: Get upload URL from Convex
+      // Non-PDF path (images, CSV, Excel): standard XHR upload
       const uploadUrl = await generateUploadUrl({
         companyId: selectedCompanyId as Id<"companies">,
       })
 
-      // Step 2: Upload file directly to Convex storage using fetch with progress
-      // Note: fetch doesn't support upload progress, so we use XHR for progress tracking
       const storageId = await new Promise<Id<"_storage">>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
 
-        // Track upload progress
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
             const percentComplete = Math.round((e.loaded / e.total) * 100)
-            setFiles((prev) =>
-              prev.map((f) =>
-                f.id === fileId ? { ...f, progress: percentComplete } : f
-              )
-            )
+            fileState.setFileProgress(fileId, percentComplete)
           }
         })
 
-        // Handle completion
         xhr.addEventListener('load', () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
@@ -439,26 +260,17 @@ function UploadViewContent() {
           }
         })
 
-        xhr.addEventListener('error', () => {
-          reject(new Error('Network error during upload'))
-        })
+        xhr.addEventListener('error', () => reject(new Error('Network error during upload')))
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')))
 
-        xhr.addEventListener('abort', () => {
-          reject(new Error('Upload cancelled'))
-        })
-
-        // Store xhr reference for potential cancellation
-        xhrMapRef.current.set(fileId, xhr)
-
+        fileState.registerXhr(fileId, xhr)
         xhr.open('POST', uploadUrl)
         xhr.setRequestHeader('Content-Type', fileData.file!.type)
         xhr.send(fileData.file)
       })
 
-      // Get file extension
       const fileExtension = fileData.name.split('.').pop()?.toLowerCase() || ''
 
-      // Step 3: Create document record in Convex
       const documentId = await createDocument({
         companyId: selectedCompanyId as Id<"companies">,
         fileName: fileData.name,
@@ -469,17 +281,9 @@ function UploadViewContent() {
         documentType: fileData.type,
       })
 
-      // Clear XHR reference and update file with document ID, switch to processing
-      xhrMapRef.current.delete(fileId)
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === fileId
-            ? { ...f, status: 'processing' as FileStatus, documentId }
-            : f
-        )
-      )
+      fileState.abortXhr(fileId) // Clear XHR reference
+      fileState.setFileProcessing(fileId, { documentId })
 
-      // Step 4: Trigger extraction (Cloudinary for images only now)
       await triggerExtraction(documentId)
 
       toast.addToast({
@@ -491,149 +295,156 @@ function UploadViewContent() {
     } catch (error) {
       console.error('Upload error:', error)
       const rawMessage = error instanceof Error ? error.message : 'Upload failed'
+      const { title, description } = mapErrorMessage(rawMessage)
 
-      // SECURITY: Provide user-friendly error messages without leaking internals
-      let errorTitle = 'Upload failed'
-      let errorMessage = rawMessage
-
-      if (rawMessage.includes('Rate limit exceeded')) {
-        errorTitle = 'Too many uploads'
-        errorMessage = 'Please wait a moment before uploading more files'
-      } else if (rawMessage.includes('File type not allowed')) {
-        errorTitle = 'Invalid file type'
-        errorMessage = 'Please upload PDF, CSV, Excel, or image files only'
-      } else if (rawMessage.includes('File too large')) {
-        errorTitle = 'File too large'
-        errorMessage = 'Maximum file size is 50MB'
-      } else if (rawMessage.includes('Authentication') || rawMessage.includes('Unauthorized')) {
-        errorTitle = 'Session expired'
-        errorMessage = 'Please refresh the page and try again'
-      }
-
-      // Clear XHR reference on error
-      xhrMapRef.current.delete(fileId)
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === fileId
-            ? { ...f, status: 'failed' as FileStatus, errorMessage }
-            : f
-        )
-      )
-      toast.addToast({
-        type: 'error',
-        title: errorTitle,
-        description: errorMessage,
-      })
+      fileState.abortXhr(fileId) // Clear XHR reference
+      fileState.setFileFailed(fileId, description)
+      toast.addToast({ type: 'error', title, description })
     }
-  }
+  }, [
+    fileState, isDemo, selectedCompanyId, setShowPaywall, toast,
+    extractPdf, generateUploadUrl, createDocument, triggerExtraction,
+  ])
 
-  const cancelUpload = (fileId: string) => {
-    // Abort XHR from ref (not state)
-    const xhr = xhrMapRef.current.get(fileId)
-    if (xhr) {
-      xhr.abort()
-      xhrMapRef.current.delete(fileId)
-    }
-    setFiles((prev) =>
-      prev.map((f) =>
-        f.id === fileId
-          ? { ...f, status: 'idle' as FileStatus, progress: 0 }
-          : f
-      )
-    )
-  }
+  const cancelUpload = useCallback((fileId: string) => {
+    fileState.abortXhr(fileId)
+    fileState.setFileIdle(fileId)
+  }, [fileState])
 
-  const removeFile = (fileId: string) => {
-    // Abort XHR from ref (not state) if upload is in progress
-    const xhr = xhrMapRef.current.get(fileId)
-    if (xhr) {
-      xhr.abort()
-      xhrMapRef.current.delete(fileId)
-    }
-    setFiles((prev) => prev.filter((f) => f.id !== fileId))
-  }
+  const removeFile = useCallback((fileId: string) => {
+    fileState.removeFile(fileId)
+  }, [fileState])
 
-  const retryUpload = (fileId: string) => {
-    setFiles((prev) =>
-      prev.map((f) =>
-        f.id === fileId
-          ? { ...f, status: 'idle' as FileStatus, progress: 0, errorMessage: undefined }
-          : f
-      )
-    )
+  const retryUpload = useCallback((fileId: string) => {
+    fileState.setFileIdle(fileId)
     uploadFile(fileId)
-  }
+  }, [fileState, uploadFile])
 
-  const processAll = async () => {
+  // Process all idle files with concurrency limiting
+  const processAll = useCallback(async () => {
     if (isDemo) {
       setShowPaywall(true)
       return
     }
-    const pendingFiles = files.filter((f) => f.status === 'idle')
-    pendingFiles.forEach((f) => uploadFile(f.id))
+    const pendingFiles = fileState.files.filter((f) => f.status === 'idle')
+    if (pendingFiles.length === 0) return
 
-    // Create analysis batch after kicking off uploads
-    // Document IDs will be collected as extractions complete
-    // For now, we'll create the batch after first file gets a documentId
-  }
+    // Process in batches of MAX_CONCURRENT_UPLOADS
+    const queue = [...pendingFiles]
+    const activePromises = new Set<Promise<void>>()
 
-  // Track document IDs and create/update analysis batch
-  const analysisDocIdsRef = useRef<Set<string>>(new Set())
-  const analysisBatchCreatedRef = useRef(false)
+    const processNext = async () => {
+      while (queue.length > 0) {
+        if (activePromises.size >= MAX_CONCURRENT_UPLOADS) {
+          // Wait for any one to finish before starting the next
+          await Promise.race(activePromises)
+        }
+
+        const file = queue.shift()
+        if (!file) break
+
+        const promise = uploadFile(file.id).finally(() => {
+          activePromises.delete(promise)
+        })
+        activePromises.add(promise)
+      }
+
+      // Wait for all remaining
+      if (activePromises.size > 0) {
+        await Promise.all(activePromises)
+      }
+    }
+
+    // Fire and forget -- don't block the UI
+    processNext().catch((err) => {
+      console.error('[UploadView] processAll error:', err)
+    })
+  }, [isDemo, setShowPaywall, fileState.files, uploadFile])
+
+  // ================================================================
+  // Analysis batch tracking (fixes race condition)
+  // ================================================================
+  // Use a single ref to track analysis state, avoiding split-brain between two refs
+  const analysisStateRef = useRef<{
+    createdBatch: boolean
+    trackedDocIds: Set<string>
+    createInFlight: boolean
+  }>({ createdBatch: false, trackedDocIds: new Set(), createInFlight: false })
 
   useEffect(() => {
     if (isDemo || !selectedCompanyId) return
 
-    // Collect document IDs from completed files
-    const completedDocIds = files
+    const state = analysisStateRef.current
+
+    // Collect document IDs from files that have a documentId
+    const completedDocIds = fileState.files
       .filter((f) => f.documentId && (f.status === 'complete' || f.status === 'processing'))
       .map((f) => f.documentId!)
 
     if (completedDocIds.length === 0) return
 
-    // Check for new document IDs
-    const newDocIds = completedDocIds.filter((id) => !analysisDocIdsRef.current.has(id))
+    // Find new document IDs not yet tracked
+    const newDocIds = completedDocIds.filter((id) => !state.trackedDocIds.has(id))
     if (newDocIds.length === 0) return
 
-    // Track them
-    newDocIds.forEach((id) => analysisDocIdsRef.current.add(id))
+    // Track them immediately (before async work) to prevent double-processing
+    newDocIds.forEach((id) => state.trackedDocIds.add(id))
 
-    // Create or update analysis batch
-    if (!analysisBatchCreatedRef.current) {
-      analysisBatchCreatedRef.current = true
-      uploadAnalysis.createBatch(completedDocIds).then(() => {
+    if (!state.createdBatch && !state.createInFlight) {
+      // First batch creation
+      state.createInFlight = true
+      uploadAnalysis.createBatch(completedDocIds as Id<"documents">[]).then(() => {
+        state.createdBatch = true
+        state.createInFlight = false
         setActiveTab('analysis')
       }).catch((err) => {
         console.error('[UploadView] Failed to create analysis batch:', err)
-        analysisBatchCreatedRef.current = false
+        state.createInFlight = false
+        // Remove tracked IDs so they can be retried
+        newDocIds.forEach((id) => state.trackedDocIds.delete(id))
       })
-    } else if (uploadAnalysis.analysisId) {
-      uploadAnalysis.addDocuments(newDocIds).catch((err) => {
+    } else if (state.createdBatch && uploadAnalysis.analysisId) {
+      // Add to existing batch
+      uploadAnalysis.addDocuments(newDocIds as Id<"documents">[]).catch((err) => {
         console.error('[UploadView] Failed to add documents to analysis:', err)
+        // Remove tracked IDs so they can be retried
+        newDocIds.forEach((id) => state.trackedDocIds.delete(id))
       })
     }
-  }, [files, isDemo, selectedCompanyId, uploadAnalysis.analysisId])
+  }, [fileState.files, isDemo, selectedCompanyId, uploadAnalysis])
 
   // Reset analysis tracking when files are cleared
   useEffect(() => {
-    if (files.length === 0) {
-      analysisDocIdsRef.current.clear()
-      analysisBatchCreatedRef.current = false
+    if (fileState.files.length === 0) {
+      analysisStateRef.current = { createdBatch: false, trackedDocIds: new Set(), createInFlight: false }
     }
-  }, [files.length])
+  }, [fileState.files.length])
 
-  const idleCount = files.filter((f) => f.status === 'idle').length
-  const processingCount = files.filter((f) => f.status === 'uploading' || f.status === 'processing').length
   const setProcessingDocumentsCount = useSetProcessingDocumentsCount()
 
   // Update global processing count for sidebar badge
   useEffect(() => {
-    setProcessingDocumentsCount(processingCount)
-    return () => setProcessingDocumentsCount(0) // Clear on unmount
-  }, [processingCount, setProcessingDocumentsCount])
+    setProcessingDocumentsCount(fileState.stats.active)
+    return () => setProcessingDocumentsCount(0)
+  }, [fileState.stats.active, setProcessingDocumentsCount])
 
   // Compute pending file count for tab badge
-  const pendingFilesCount = files.filter((f) => f.status !== 'complete').length
+  const pendingFilesCount = fileState.stats.pending
+
+  // Convert fileState files to the types expected by FileItem
+  // The types are compatible since both have the same shape
+  const uploadViewFiles = fileState.files as Array<{
+    id: string
+    name: string
+    size: number
+    type: 'bank_statement' | 'invoice' | 'receipt' | 'other'
+    status: 'idle' | 'uploading' | 'processing' | 'complete' | 'failed'
+    progress: number
+    progressMessage?: string
+    documentId?: Id<"documents">
+    errorMessage?: string
+    file?: File
+  }>
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -645,7 +456,7 @@ function UploadViewContent() {
         </p>
       </header>
 
-      {/* Context bar - compact single row */}
+      {/* Context bar */}
       <div className="border border-border bg-secondary/20 px-4 py-2.5 flex items-center gap-6 text-xs">
         <div className="flex items-center gap-1.5">
           <span className="text-muted-foreground">Company:</span>
@@ -674,9 +485,9 @@ function UploadViewContent() {
       {/* Upload Tab */}
       <TabPanel tabId="upload" activeTab={activeTab} className="space-y-6">
         {/* Batch Progress Bar */}
-        <BatchProgressBar files={files} />
+        <BatchProgressBar files={uploadViewFiles} />
 
-        {/* Upload Zone - Fully accessible */}
+        {/* Upload Zone */}
         <div
         ref={dropZoneRef}
         role="button"
@@ -700,7 +511,6 @@ function UploadViewContent() {
           <LogoMark size={160} />
         </div>
 
-        {/* Upload icon with animation on drag */}
         <div className={cn(
           'relative transition-transform duration-200',
           isDragging && 'scale-110 -translate-y-1'
@@ -715,14 +525,12 @@ function UploadViewContent() {
           PDF, CSV, XLS, or images up to 50MB
         </p>
 
-        {/* Browse button - visual only, click handled by parent */}
         <div className="mt-4 relative">
           <span className="px-4 py-2 bg-foreground text-background text-sm inline-block">
             Browse Files
           </span>
         </div>
 
-        {/* Hidden file input */}
         <input
           ref={fileInputRef}
           type="file"
@@ -736,32 +544,31 @@ function UploadViewContent() {
       </div>
 
       {/* File List */}
-      {files.length > 0 && (
+      {uploadViewFiles.length > 0 && (
         <section aria-label="Uploaded files">
           <div className="border border-border">
-            {/* Header */}
             <div className="px-4 py-3 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-secondary/30">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium">
-                  {files.length} {files.length === 1 ? 'File' : 'Files'}
+                  {uploadViewFiles.length} {uploadViewFiles.length === 1 ? 'File' : 'Files'}
                 </span>
-                {processingCount > 0 && (
+                {fileState.stats.active > 0 && (
                   <span className="text-xs text-muted-foreground">
-                    {processingCount} processing
+                    {fileState.stats.active} processing
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {idleCount > 0 && (
+                {fileState.stats.idle > 0 && (
                   <button
                     onClick={processAll}
                     className="px-4 py-2 bg-foreground text-background text-xs font-medium hover:bg-foreground/90 transition-colors focus-ring"
                   >
-                    Process All ({idleCount})
+                    Process All ({fileState.stats.idle})
                   </button>
                 )}
                 <button
-                  onClick={() => setFiles([])}
+                  onClick={fileState.clearFiles}
                   className="px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors focus-ring"
                 >
                   Clear
@@ -769,9 +576,8 @@ function UploadViewContent() {
               </div>
             </div>
 
-            {/* File items */}
             <ul className="divide-y divide-border" role="list">
-              {files.map((file) => (
+              {uploadViewFiles.map((file) => (
                 <FileItem
                   key={file.id}
                   file={file}

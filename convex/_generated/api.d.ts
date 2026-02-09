@@ -1869,6 +1869,16 @@ export declare const api: {
     };
   };
   nativePdfExtraction: {
+    cleanupPageImages: FunctionReference<
+      "mutation",
+      "public",
+      {
+        documentId: Id<"documents">;
+        storageIds: Array<Id<"_storage">>;
+        workosUserId?: string;
+      },
+      { deleted: number }
+    >;
     completeExtraction: FunctionReference<
       "mutation",
       "public",
@@ -3936,7 +3946,7 @@ export declare const internal: {
     clearDocumentExtractions: FunctionReference<
       "mutation",
       "internal",
-      { companyId: Id<"companies">; documentId: Id<"documents"> },
+      { companyId?: Id<"companies">; documentId: Id<"documents"> },
       null
     >;
     getCompanyOwner: FunctionReference<

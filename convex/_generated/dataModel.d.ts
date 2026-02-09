@@ -86,6 +86,7 @@ export type DataModel = {
       by_session_date: ["sessionId", "docDate", "_creationTime"];
       by_session_status: ["sessionId", "status", "_creationTime"];
       by_session_type: ["sessionId", "docType", "_creationTime"];
+      by_source_document: ["sourceDocumentId", "_creationTime"];
       by_status: ["companyId", "status", "_creationTime"];
     };
     searchIndexes: {};

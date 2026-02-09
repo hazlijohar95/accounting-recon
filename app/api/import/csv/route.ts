@@ -259,13 +259,44 @@ export async function POST(request: NextRequest) {
 
     // Transform rows to records
     if (type === "cash") {
-      const records = rows.map((row) => ({
-        date: row[mappedColumns.date!] || "",
-        description: row[mappedColumns.description!] || "",
-        amount: parseAmount(row[mappedColumns.amount!]) || 0,
-        reference: mappedColumns.reference ? row[mappedColumns.reference] : undefined,
-        category: mappedColumns.category ? row[mappedColumns.category] : undefined,
-      })).filter((r) => r.date && r.description);
+      const records: Array<{
+        date: string;
+        description: string;
+        amount: number;
+        reference?: string;
+        category?: string;
+      }> = [];
+      const skippedRows: string[] = [];
+
+      rows.forEach((row, index) => {
+        const date = row[mappedColumns.date!] || "";
+        const description = row[mappedColumns.description!] || "";
+        const amount = parseAmount(row[mappedColumns.amount!]);
+
+        if (!date || !description) return; // Skip rows missing required text fields
+
+        if (amount === null) {
+          skippedRows.push(`Row ${index + 2}: Could not parse amount "${row[mappedColumns.amount!]}"`);
+          return;
+        }
+
+        records.push({
+          date,
+          description,
+          amount,
+          reference: mappedColumns.reference ? row[mappedColumns.reference] : undefined,
+          category: mappedColumns.category ? row[mappedColumns.category] : undefined,
+        });
+      });
+
+      if (records.length === 0) {
+        return NextResponse.json({
+          error: "No valid records found",
+          hint: skippedRows.length > 0
+            ? `${skippedRows.length} rows had unparseable amounts. First: ${skippedRows[0]}`
+            : "All rows were missing required fields (date, description)",
+        }, { status: 400 });
+      }
 
       // Import via Convex
       const result = await convex.mutation(api.import.importCashTransactions, {
@@ -273,18 +304,57 @@ export async function POST(request: NextRequest) {
         records,
       });
 
-      return NextResponse.json(result);
+      return NextResponse.json({
+        ...result,
+        warnings: skippedRows.length > 0 ? skippedRows.slice(0, 10) : undefined,
+      });
     } else {
-      const records = rows.map((row) => ({
-        date: row[mappedColumns.date!] || "",
-        description: row[mappedColumns.description!] || "",
-        amount: parseAmount(row[mappedColumns.amount!]) || 0,
-        docNumber: mappedColumns.docNumber ? row[mappedColumns.docNumber] : undefined,
-        counterparty: mappedColumns.counterparty ? row[mappedColumns.counterparty] : undefined,
-        docType: mappedColumns.docType ? row[mappedColumns.docType] : undefined,
-        dueDate: mappedColumns.dueDate ? row[mappedColumns.dueDate] : undefined,
-        taxAmount: mappedColumns.taxAmount ? parseAmount(row[mappedColumns.taxAmount]) ?? undefined : undefined,
-      })).filter((r) => r.date && r.description);
+      const records: Array<{
+        date: string;
+        description: string;
+        amount: number;
+        docNumber?: string;
+        counterparty?: string;
+        docType?: string;
+        dueDate?: string;
+        taxAmount?: number;
+      }> = [];
+      const skippedRows: string[] = [];
+
+      rows.forEach((row, index) => {
+        const date = row[mappedColumns.date!] || "";
+        const description = row[mappedColumns.description!] || "";
+        const amount = parseAmount(row[mappedColumns.amount!]);
+
+        if (!date || !description) return; // Skip rows missing required text fields
+
+        if (amount === null) {
+          skippedRows.push(`Row ${index + 2}: Could not parse amount "${row[mappedColumns.amount!]}"`);
+          return;
+        }
+
+        const taxAmountRaw = mappedColumns.taxAmount ? parseAmount(row[mappedColumns.taxAmount]) : undefined;
+
+        records.push({
+          date,
+          description,
+          amount,
+          docNumber: mappedColumns.docNumber ? row[mappedColumns.docNumber] : undefined,
+          counterparty: mappedColumns.counterparty ? row[mappedColumns.counterparty] : undefined,
+          docType: mappedColumns.docType ? row[mappedColumns.docType] : undefined,
+          dueDate: mappedColumns.dueDate ? row[mappedColumns.dueDate] : undefined,
+          taxAmount: taxAmountRaw ?? undefined,
+        });
+      });
+
+      if (records.length === 0) {
+        return NextResponse.json({
+          error: "No valid records found",
+          hint: skippedRows.length > 0
+            ? `${skippedRows.length} rows had unparseable amounts. First: ${skippedRows[0]}`
+            : "All rows were missing required fields (date, description)",
+        }, { status: 400 });
+      }
 
       // Import via Convex
       const result = await convex.mutation(api.import.importAccrualDocuments, {
@@ -292,7 +362,10 @@ export async function POST(request: NextRequest) {
         records,
       });
 
-      return NextResponse.json(result);
+      return NextResponse.json({
+        ...result,
+        warnings: skippedRows.length > 0 ? skippedRows.slice(0, 10) : undefined,
+      });
     }
   } catch (error) {
     console.error("CSV import error:", error);

@@ -371,8 +371,7 @@ export const remove = mutation({
     // 1. Find and clean up transactions referencing this document
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_company", (q) => q.eq("companyId", document.companyId))
-      .filter((q) => q.eq(q.field("sourceDocumentId"), args.id))
+      .withIndex("by_source_document", (q) => q.eq("sourceDocumentId", args.id))
       .collect();
 
     for (const txn of transactions) {
@@ -429,8 +428,7 @@ export const remove = mutation({
     // 2. Find and clean up accrualDocuments referencing this document
     const accrualDocs = await ctx.db
       .query("accrualDocuments")
-      .withIndex("by_company", (q) => q.eq("companyId", document.companyId))
-      .filter((q) => q.eq(q.field("sourceDocumentId"), args.id))
+      .withIndex("by_source_document", (q) => q.eq("sourceDocumentId", args.id))
       .collect();
 
     for (const doc of accrualDocs) {

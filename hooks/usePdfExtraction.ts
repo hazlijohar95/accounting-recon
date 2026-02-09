@@ -102,6 +102,7 @@ export function usePdfExtraction(options: PdfExtractionOptions = {}): UsePdfExtr
   const completeExtraction = useMutation(api.nativePdfExtraction.completeExtraction);
   const finalizeExtraction = useAction(api.nativePdfExtraction.finalizeExtraction);
   const failExtraction = useMutation(api.nativePdfExtraction.failExtraction);
+  const cleanupPageImages = useMutation(api.nativePdfExtraction.cleanupPageImages);
 
   // State
   const [progress, setProgress] = useState<ExtractionProgress>({
@@ -289,6 +290,7 @@ export function usePdfExtraction(options: PdfExtractionOptions = {}): UsePdfExtr
         });
 
         let totalTransactions = 0;
+        let failedPages: number[] = [];
 
         // Process pages sequentially to respect rate limits
         for (const { pageNumber, storageId: pageStorageId } of pageStorageIds) {
@@ -316,15 +318,30 @@ export function usePdfExtraction(options: PdfExtractionOptions = {}): UsePdfExtr
 
           if (result.success) {
             totalTransactions += result.transactionCount;
+          } else {
+            // Track failed pages but continue extracting remaining pages
+            failedPages.push(pageNumber);
+            console.warn(
+              `[PdfExtraction] Page ${pageNumber}/${totalPages} failed: ${result.errorMessage}. Continuing with remaining pages.`
+            );
           }
 
           updateProgress({
             phase: "extracting",
-            message: `Extracted ${totalTransactions} transactions...`,
+            message: failedPages.length > 0
+              ? `Extracted ${totalTransactions} transactions (${failedPages.length} page${failedPages.length > 1 ? 's' : ''} failed)...`
+              : `Extracted ${totalTransactions} transactions...`,
             currentPage: pageNumber,
             totalPages,
             transactionCount: totalTransactions,
           });
+        }
+
+        // If ALL pages failed, treat as complete failure
+        if (failedPages.length === totalPages) {
+          throw new Error(
+            `All ${totalPages} pages failed extraction. Please try again or use a different file format.`
+          );
         }
 
         // ================================================================
@@ -335,6 +352,17 @@ export function usePdfExtraction(options: PdfExtractionOptions = {}): UsePdfExtr
           totalTransactions,
           workosUserId,
         });
+
+        // Clean up temporary page images from storage (non-blocking)
+        if (pageStorageIds.length > 0) {
+          cleanupPageImages({
+            documentId,
+            storageIds: pageStorageIds.map((p) => p.storageId),
+            workosUserId,
+          }).catch((err) => {
+            console.warn("[PdfExtraction] Page image cleanup failed (non-critical):", err);
+          });
+        }
 
         if (skipSessionCreation) {
           // Upload analysis flow: skip session creation, user reviews first
@@ -408,6 +436,7 @@ export function usePdfExtraction(options: PdfExtractionOptions = {}): UsePdfExtr
       completeExtraction,
       finalizeExtraction,
       failExtraction,
+      cleanupPageImages,
       workosUserId,
       updateProgress,
       onComplete,

@@ -1,6 +1,10 @@
 /**
  * Custom hook for managing file upload state
- * Centralizes file state, XHR tracking, and update patterns
+ *
+ * Centralizes file state, XHR tracking, validation, deduplication,
+ * and update patterns. Used by upload-view.tsx.
+ *
+ * @module hooks/useFileUploadState
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
@@ -37,26 +41,28 @@ interface UseFileUploadStateReturn {
   files: UploadedFile[]
   /** File statistics */
   stats: FileStats
-  /** Add new files from FileList (validates and sanitizes) */
+  /** Add new files from FileList (validates, sanitizes, deduplicates) */
   addFiles: (fileList: FileList) => FileValidationResult
   /** Update a single file by ID */
   updateFile: (fileId: string, updates: Partial<UploadedFile>) => void
+  /** Update a file matched by documentId (for extraction progress callbacks) */
+  updateFileByDocumentId: (documentId: string, updates: Partial<UploadedFile>) => void
   /** Remove a file by ID (aborts any active XHR) */
   removeFile: (fileId: string) => void
   /** Clear all files */
   clearFiles: () => void
   /** Set file to uploading state */
   setFileUploading: (fileId: string) => void
-  /** Set file to processing state */
-  setFileProcessing: (fileId: string, documentId?: string) => void
+  /** Set file to processing state with optional progress message */
+  setFileProcessing: (fileId: string, opts?: { documentId?: string; progressMessage?: string }) => void
   /** Set file to complete state */
   setFileComplete: (fileId: string, documentId?: string) => void
   /** Set file to failed state */
   setFileFailed: (fileId: string, errorMessage: string) => void
   /** Set file to idle state (for retry or cancel) */
   setFileIdle: (fileId: string) => void
-  /** Update file progress */
-  setFileProgress: (fileId: string, progress: number) => void
+  /** Update file progress (0-100) with optional message */
+  setFileProgress: (fileId: string, progress: number, progressMessage?: string) => void
   /** Register XHR for a file (for cancellation) */
   registerXhr: (fileId: string, xhr: XMLHttpRequest) => void
   /** Abort XHR for a file */
@@ -66,7 +72,7 @@ interface UseFileUploadStateReturn {
 }
 
 /**
- * Hook for managing file upload state with XHR tracking
+ * Hook for managing file upload state with XHR tracking and deduplication.
  */
 export function useFileUploadState(
   options: UseFileUploadStateOptions = {}
@@ -90,11 +96,18 @@ export function useFileUploadState(
   // Calculate stats from files
   const stats = getFileStats(files)
 
-  // Add new files with validation
+  // Add new files with validation and deduplication
   const addFiles = useCallback(
     (fileList: FileList): FileValidationResult => {
       const valid: UploadedFile[] = []
       const rejected: { name: string; reason: string }[] = []
+
+      // Build a Set of existing files for deduplication (name + size)
+      const existingFileKeys = new Set<string>()
+      setFiles((prev) => {
+        prev.forEach((f) => existingFileKeys.add(`${f.name}:${f.size}`))
+        return prev // Don't modify state, just read it
+      })
 
       Array.from(fileList).forEach((file) => {
         // Validate file size
@@ -128,6 +141,28 @@ export function useFileUploadState(
         // Sanitize filename
         const sanitizedName = sanitizeFilename(file.name)
 
+        // Deduplication: check if a file with same name and size already exists
+        const fileKey = `${sanitizedName}:${file.size}`
+        if (existingFileKeys.has(fileKey)) {
+          rejected.push({
+            name: file.name,
+            reason: 'Duplicate file (same name and size already added)',
+          })
+          return
+        }
+
+        // Also check within the current batch
+        const batchKey = `${sanitizedName}:${file.size}`
+        if (valid.some((v) => `${v.name}:${v.size}` === batchKey)) {
+          rejected.push({
+            name: file.name,
+            reason: 'Duplicate file in this batch',
+          })
+          return
+        }
+
+        existingFileKeys.add(fileKey)
+
         valid.push({
           id: crypto.randomUUID(),
           name: sanitizedName,
@@ -148,10 +183,17 @@ export function useFileUploadState(
     [defaultDocType]
   )
 
-  // Update a single file
+  // Update a single file by ID
   const updateFile = useCallback((fileId: string, updates: Partial<UploadedFile>) => {
     setFiles((prev) =>
       prev.map((f) => (f.id === fileId ? { ...f, ...updates } : f))
+    )
+  }, [])
+
+  // Update a file by documentId (for extraction callbacks that only know the documentId)
+  const updateFileByDocumentId = useCallback((documentId: string, updates: Partial<UploadedFile>) => {
+    setFiles((prev) =>
+      prev.map((f) => (f.documentId === documentId ? { ...f, ...updates } : f))
     )
   }, [])
 
@@ -177,21 +219,22 @@ export function useFileUploadState(
     setFiles((prev) =>
       prev.map((f) =>
         f.id === fileId
-          ? { ...f, status: FILE_STATUS.UPLOADING as FileStatus, progress: 0 }
+          ? { ...f, status: FILE_STATUS.UPLOADING as FileStatus, progress: 0, progressMessage: undefined }
           : f
       )
     )
   }, [])
 
-  const setFileProcessing = useCallback((fileId: string, documentId?: string) => {
+  const setFileProcessing = useCallback((fileId: string, opts?: { documentId?: string; progressMessage?: string }) => {
     setFiles((prev) =>
       prev.map((f) =>
         f.id === fileId
           ? {
               ...f,
               status: FILE_STATUS.PROCESSING as FileStatus,
-              ...(documentId && { documentId }),
-              // Clear File object to release memory
+              ...(opts?.documentId && { documentId: opts.documentId }),
+              ...(opts?.progressMessage !== undefined && { progressMessage: opts.progressMessage }),
+              // Clear File object to release memory once processing starts
               file: undefined,
             }
           : f
@@ -207,6 +250,7 @@ export function useFileUploadState(
               ...f,
               status: FILE_STATUS.COMPLETE as FileStatus,
               ...(documentId && { documentId }),
+              progressMessage: undefined,
               // Clear File object to release memory
               file: undefined,
             }
@@ -219,7 +263,7 @@ export function useFileUploadState(
     setFiles((prev) =>
       prev.map((f) =>
         f.id === fileId
-          ? { ...f, status: FILE_STATUS.FAILED as FileStatus, errorMessage }
+          ? { ...f, status: FILE_STATUS.FAILED as FileStatus, errorMessage, progressMessage: undefined }
           : f
       )
     )
@@ -234,15 +278,20 @@ export function useFileUploadState(
               status: FILE_STATUS.IDLE as FileStatus,
               progress: 0,
               errorMessage: undefined,
+              progressMessage: undefined,
             }
           : f
       )
     )
   }, [])
 
-  const setFileProgress = useCallback((fileId: string, progress: number) => {
+  const setFileProgress = useCallback((fileId: string, progress: number, progressMessage?: string) => {
     setFiles((prev) =>
-      prev.map((f) => (f.id === fileId ? { ...f, progress } : f))
+      prev.map((f) =>
+        f.id === fileId
+          ? { ...f, progress, ...(progressMessage !== undefined && { progressMessage }) }
+          : f
+      )
     )
   }, [])
 
@@ -270,6 +319,7 @@ export function useFileUploadState(
     stats,
     addFiles,
     updateFile,
+    updateFileByDocumentId,
     removeFile,
     clearFiles,
     setFileUploading,

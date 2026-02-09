@@ -284,7 +284,8 @@ export default defineSchema({
     .index("by_session_status", ["sessionId", "status"])
     .index("by_session_type", ["sessionId", "docType"])
     .index("by_session_date", ["sessionId", "docDate"])
-    .index("by_counterparty", ["sessionId", "counterparty"]),
+    .index("by_counterparty", ["sessionId", "counterparty"])
+    .index("by_source_document", ["sourceDocumentId"]),
 
   // Suspense items table - unmatched items requiring attention
   suspenseItems: defineTable({

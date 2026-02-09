@@ -41,7 +41,6 @@ export function useGeminiExtraction(options: PdfExtractionOptions = {}): UsePdfE
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const createDocument = useMutation(api.documents.create);
   const extractWithGemini = useAction(api.geminiExtraction.extractWithGemini);
-  const completeExtraction = useMutation(api.nativePdfExtraction.completeExtraction);
   const failExtraction = useMutation(api.nativePdfExtraction.failExtraction);
 
   // State
@@ -201,7 +200,6 @@ export function useGeminiExtraction(options: PdfExtractionOptions = {}): UsePdfE
       generateUploadUrl,
       createDocument,
       extractWithGemini,
-      completeExtraction,
       failExtraction,
       workosUserId,
       updateProgress,
