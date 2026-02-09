@@ -57,7 +57,13 @@ venv/
 target/
 Cargo.lock
 
+# Remotion (video generation - local dev only)
+remotion/
+remotion.config.ts
+
 # AI Coding Tools (skills/settings)
+skills/
+.github/skills/
 .agent/
 .agents/
 .claude/
