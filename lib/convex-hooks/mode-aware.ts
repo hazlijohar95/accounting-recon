@@ -21,6 +21,7 @@ import {
   type ReconciliationSession,
 } from "@/lib/store";
 
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { useCompanyAccrualDocs, useCompanySuspenseItems } from "./accrual";
 import { useCompanyTransactions } from "./transactions";
 import { useReconciliationStats } from "./analytics";
@@ -60,10 +61,9 @@ function useModeAwareData<TConvex, TStore>(
 // TRANSFORM FUNCTIONS (stable references via module scope)
 // ============================================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const transformAccrualDoc = (doc: any): AccrualDocument => ({
+const transformAccrualDoc = (doc: Doc<"accrualDocuments">): AccrualDocument => ({
   id: doc._id,
-  docType: (doc.docType ?? "sales_invoice") as AccrualDocType,
+  docType: doc.docType as AccrualDocType,
   docNumber: doc.docNumber,
   docDate: doc.docDate,
   dueDate: doc.dueDate,
@@ -71,47 +71,44 @@ const transformAccrualDoc = (doc: any): AccrualDocument => ({
   amount: doc.amount,
   taxAmount: doc.taxAmount,
   description: doc.description,
-  status: (doc.status ?? "pending") as AccrualDocStatus,
+  status: doc.status as AccrualDocStatus,
   matchId: doc.matchId,
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const transformSuspenseItem = (item: any): SuspenseItem => ({
+const transformSuspenseItem = (item: Doc<"suspenseItems">): SuspenseItem => ({
   id: item._id,
   sourceType: item.sourceType,
   sourceId: item.sourceId,
   amount: item.amount,
   transactionDate: item.transactionDate,
-  description: item.description ?? "",
-  reason: item.reason ?? "",
-  suggestedAction: item.suggestedAction ?? "",
-  status: (item.status ?? "open") as SuspenseStatus,
+  description: item.description,
+  reason: item.reason,
+  suggestedAction: item.suggestedAction,
+  status: item.status as SuspenseStatus,
   resolutionNotes: item.resolutionNotes,
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const transformTransaction = (tx: any): Transaction => ({
+const transformTransaction = (tx: Doc<"transactions">): Transaction => ({
   id: tx._id,
   date: tx.date,
   description: tx.description,
   amount: tx.amount,
-  type: tx.type as "cash" | "accrual",
-  status: (tx.status ?? "pending") as TransactionStatus,
+  type: tx.type,
+  status: tx.status as TransactionStatus,
   matchId: tx.matchId,
   category: tx.category,
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const transformSession = (session: any): ReconciliationSession => ({
+const transformSession = (session: Doc<"reconciliationSessions">): ReconciliationSession => ({
   id: session._id,
   name: session.name,
   createdAt: new Date(session._creationTime).toISOString().split("T")[0],
-  status: session.status as ReconciliationSession["status"],
-  progress: session.progress ?? 0,
-  totalCash: 0,
-  totalAccrual: 0,
-  matchedCount: session.matchedCount ?? 0,
-  suspenseCount: session.suspenseCount ?? 0,
+  status: session.status,
+  progress: session.progress,
+  totalCash: session.totalCashTransactions,
+  totalAccrual: session.totalAccrualTransactions,
+  matchedCount: session.matchedCount,
+  suspenseCount: session.suspenseCount,
 });
 
 // ============================================================================
@@ -267,7 +264,7 @@ export interface DashboardWorkflowData {
  * instead of returning empty arrays.
  */
 export function useDashboardWorkflow(
-  activeSessionId: string | null | undefined
+  activeSessionId: Id<"reconciliationSessions"> | string | null | undefined
 ): DashboardWorkflowData {
   const isDemo = useIsDemo();
   const demoCashTxns = useStoreCashTransactions();
@@ -276,9 +273,10 @@ export function useDashboardWorkflow(
   const demoActiveSession = useStoreActiveSession();
 
   // In real mode, fetch match counts for the active session via aggregates
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const matchCounts = useMatchCounts(
-    !isDemo && activeSessionId ? (activeSessionId as any) : undefined
+    !isDemo && activeSessionId
+      ? (activeSessionId as Id<"reconciliationSessions">)
+      : undefined
   );
 
   return useMemo(() => {

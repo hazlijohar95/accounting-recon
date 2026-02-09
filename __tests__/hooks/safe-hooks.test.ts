@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook } from "@testing-library/react";
+import type { Id } from "@/convex/_generated/dataModel";
 
 // ============ MOCKS ============
 
@@ -92,9 +93,9 @@ function createDemoAccrualDoc(overrides = {}) {
 
 function createConvexAccrualDoc(overrides = {}) {
   return {
-    _id: "conv-doc-1" as any,
+    _id: "conv-doc-1" as Id<"accrualDocuments">,
     _creationTime: Date.now(),
-    companyId: "company-1" as any,
+    companyId: "company-1" as Id<"companies">,
     docType: "invoice" as const,
     docNumber: "INV-002",
     docDate: "2025-01-20",
@@ -127,10 +128,10 @@ function createDemoSuspenseItem(overrides = {}) {
 
 function createConvexSuspenseItem(overrides = {}) {
   return {
-    _id: "conv-si-1" as any,
+    _id: "conv-si-1" as Id<"suspenseItems">,
     _creationTime: Date.now(),
-    companyId: "company-1" as any,
-    sessionId: "session-1" as any,
+    companyId: "company-1" as Id<"companies">,
+    sessionId: "session-1" as Id<"reconciliationSessions">,
     sourceType: "cash" as const,
     sourceId: "tx-conv-1",
     amount: 750,
@@ -160,9 +161,9 @@ function createDemoTransaction(overrides = {}) {
 
 function createConvexTransaction(overrides = {}) {
   return {
-    _id: "conv-tx-1" as any,
+    _id: "conv-tx-1" as Id<"transactions">,
     _creationTime: Date.now(),
-    companyId: "company-1" as any,
+    companyId: "company-1" as Id<"companies">,
     sessionId: undefined,
     date: "2025-01-20",
     description: "Wire transfer in",
@@ -192,12 +193,14 @@ function createDemoSession(overrides = {}) {
 
 function createConvexSession(overrides = {}) {
   return {
-    _id: "conv-session-1" as any,
+    _id: "conv-session-1" as Id<"reconciliationSessions">,
     _creationTime: Date.now(),
-    companyId: "company-1" as any,
+    companyId: "company-1" as Id<"companies">,
     name: "Real Mode Session",
     status: "processing" as const,
     progress: 50,
+    totalCashTransactions: 10,
+    totalAccrualTransactions: 8,
     matchedCount: 3,
     suspenseCount: 1,
     ...overrides,
@@ -268,7 +271,7 @@ describe("Safe Hooks", () => {
     describe("real mode", () => {
       beforeEach(() => {
         mockUseIsDemo.mockReturnValue(false);
-        mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+        mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       });
 
       it("queries Convex with companyId", () => {
@@ -326,7 +329,7 @@ describe("Safe Hooks", () => {
     describe("data transformation", () => {
       it("maps _id to id", () => {
         mockUseIsDemo.mockReturnValue(false);
-        mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+        mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
         mockUseQuery.mockReturnValue([
           createConvexAccrualDoc({ _id: "custom-id" }),
         ]);
@@ -338,7 +341,7 @@ describe("Safe Hooks", () => {
 
       it("preserves all required fields", () => {
         mockUseIsDemo.mockReturnValue(false);
-        mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+        mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
         const convexDoc = createConvexAccrualDoc();
         mockUseQuery.mockReturnValue([convexDoc]);
 
@@ -358,7 +361,7 @@ describe("Safe Hooks", () => {
 
       it("handles optional fields correctly", () => {
         mockUseIsDemo.mockReturnValue(false);
-        mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+        mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
         const convexDoc = createConvexAccrualDoc({
           matchId: undefined,
           description: undefined,
@@ -402,7 +405,7 @@ describe("Safe Hooks", () => {
     describe("real mode", () => {
       beforeEach(() => {
         mockUseIsDemo.mockReturnValue(false);
-        mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+        mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       });
 
       it("queries Convex with companyId", () => {
@@ -456,7 +459,7 @@ describe("Safe Hooks", () => {
     describe("real mode", () => {
       beforeEach(() => {
         mockUseIsDemo.mockReturnValue(false);
-        mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+        mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       });
 
       it("queries Convex with type filter", () => {
@@ -543,7 +546,7 @@ describe("Safe Hooks", () => {
     describe("real mode", () => {
       beforeEach(() => {
         mockUseIsDemo.mockReturnValue(false);
-        mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+        mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       });
 
       it("queries Convex with companyId", () => {
@@ -648,7 +651,7 @@ describe("Combined Hooks (with loading state)", () => {
 
     it("returns isLoading=true while loading in real mode", () => {
       mockUseIsDemo.mockReturnValue(false);
-      mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+      mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       mockUseQuery.mockReturnValue(undefined);
 
       const { result } = renderHook(() => useAccrualDocumentsCombined());
@@ -659,7 +662,7 @@ describe("Combined Hooks (with loading state)", () => {
 
     it("returns isLoading=false when data loaded in real mode", () => {
       mockUseIsDemo.mockReturnValue(false);
-      mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+      mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       mockUseQuery.mockReturnValue([createConvexAccrualDoc()]);
 
       const { result } = renderHook(() => useAccrualDocumentsCombined());
@@ -681,7 +684,7 @@ describe("Combined Hooks (with loading state)", () => {
 
     it("returns isLoading=true while loading in real mode", () => {
       mockUseIsDemo.mockReturnValue(false);
-      mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+      mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       mockUseQuery.mockReturnValue(undefined);
 
       const { result } = renderHook(() => useSuspenseItemsCombined());
@@ -702,7 +705,7 @@ describe("Combined Hooks (with loading state)", () => {
 
     it("returns isLoading=true while loading in real mode", () => {
       mockUseIsDemo.mockReturnValue(false);
-      mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+      mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       mockUseQuery.mockReturnValue(undefined);
 
       const { result } = renderHook(() => useCashTransactionsCombined());
@@ -723,7 +726,7 @@ describe("Combined Hooks (with loading state)", () => {
 
     it("returns isLoading=true while loading in real mode", () => {
       mockUseIsDemo.mockReturnValue(false);
-      mockUseSelectedCompanyId.mockReturnValue("company-1" as any);
+      mockUseSelectedCompanyId.mockReturnValue("company-1" as Id<"companies">);
       mockUseQuery.mockReturnValue(undefined);
 
       const { result } = renderHook(() => useSessionsCombined());
